@@ -13,7 +13,8 @@ const logfmt = require('./logs')
 const dockerfmt = require('./docker')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 const { autoUpdater } = require('electron-updater')
-const { isNewerVersion } = require('./update-version')
+const { isNewerVersion, selectUpdateAsset } = require('./update-version')
+const { hasCyberdogConfig, copyCyberdogConfig } = require('./config-path')
 
 const posix = path.posix
 const isMac = process.platform === 'darwin'
@@ -23,9 +24,15 @@ let servers = []
 let actions = []
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'system', configPath: '', defaultEditor: 'system', autoDownload: false }
+const currentConfigRoot = () => {
+  const custom = settings?.configPath?.trim()
+  return custom && fs.existsSync(custom) ? custom : app.getPath('userData')
+}
+
 // ---------- stockage : un fichier JSON par élément (userData/servers/, userData/actions/) ----------
 function createStore(name) {
-  const dir = () => path.join(app.getPath('userData'), name)
+  const dir = () => path.join(currentConfigRoot(), name)
   return {
     load() {
       const items = []
@@ -56,11 +63,14 @@ function load() {
 }
 // ---------- réglages (langue, thème) ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json')
-let settings = { lang: 'en', theme: 'system' }
+let settings = { ...DEFAULT_SETTINGS }
 function loadSettings() {
   const sys = app.getLocale().slice(0, 2)
-  settings = { lang: sys in i18n.LANGS ? sys : 'en', theme: 'system' }
+  settings = { ...DEFAULT_SETTINGS, lang: sys in i18n.LANGS ? sys : 'en' }
   try { Object.assign(settings, JSON.parse(fs.readFileSync(settingsFile(), 'utf8'))) } catch {}
+  if (settings.configPath && !fs.existsSync(settings.configPath)) settings.configPath = ''
+  if (!settings.defaultEditor) settings.defaultEditor = 'system'
+  autoUpdater.autoDownload = !!settings.autoDownload
   applyNativeTheme()
 }
 // thèmes clairs : seul 'light' ; les autres sont sombres (dialogues natifs, barres, champs)
@@ -68,10 +78,42 @@ const applyNativeTheme = () => { nativeTheme.themeSource = settings.theme === 's
 const t = (k, v) => i18n.t(settings.lang, k, v)
 ipcMain.handle('settings:get', () => settings)
 ipcMain.handle('settings:set', (_, patch) => {
+  const previousRoot = currentConfigRoot()
+  const previousPath = settings.configPath
   if (patch.lang in i18n.LANGS) settings.lang = patch.lang
   if (typeof patch.theme === 'string') settings.theme = patch.theme
+  if (typeof patch.defaultEditor === 'string') settings.defaultEditor = patch.defaultEditor.trim() || 'system'
+  if (typeof patch.autoDownload === 'boolean') settings.autoDownload = patch.autoDownload
+  if ('configPath' in patch) {
+    const nextPath = typeof patch.configPath === 'string' ? patch.configPath.trim() : ''
+    if (nextPath !== previousPath) {
+      if (nextPath) {
+        const target = path.resolve(nextPath)
+        fs.mkdirSync(target, { recursive: true })
+        if (!hasCyberdogConfig(target) && patch.copyConfigOnChange) copyCyberdogConfig(previousRoot, target)
+        settings.configPath = target
+      } else settings.configPath = ''
+      load()
+      loadGroups()
+      loadPaths()
+      loadFavs()
+    }
+  }
+  autoUpdater.autoDownload = !!settings.autoDownload
   fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2))
   applyNativeTheme()
+  return settings
+})
+ipcMain.handle('settings:config-status', (_, dir) => {
+  const target = path.resolve(String(dir || '').trim())
+  return { path: target, hasConfig: hasCyberdogConfig(target) }
+})
+ipcMain.handle('settings:pick-config', async () => {
+  const result = await dialog.showOpenDialog(win, {
+    defaultPath: settings.configPath || app.getPath('userData'),
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  return result.canceled ? null : result.filePaths[0]
 })
 
 const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass, group: s.group, favorite: !!s.favorite })
@@ -90,34 +132,113 @@ let updateReady = false
 let updateDownloadStarted = false
 let installAfterDownload = false
 let updateCheckPromise
+let updateNotes = ''
+let updateReleaseName = ''
+let updateAsset
+let updateFile
+let updatePercent = 0
+let lastUpdateState = 'current'
 
 ipcMain.handle('app:version', () => app.getVersion())
+const updateStatus = (state, extra = {}) => ({
+  state,
+  mode: updateMode,
+  version: updateVersion,
+  name: updateReleaseName,
+  notes: updateNotes,
+  url: releaseUrl,
+  percent: updatePercent,
+  ...extra,
+})
+const sendUpdate = (state, extra) => {
+  lastUpdateState = state
+  send('app:update', updateStatus(state, extra))
+}
+ipcMain.handle('app:update:status', () => updateStatus(lastUpdateState))
 
 function useManualUpdate(error) {
   if (error) console.error('Cyberdog update failed; opening the release page instead:', error)
   updateMode = 'manual'
   updateDownloadStarted = false
   installAfterDownload = false
-  send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+  sendUpdate('available')
 }
 
-ipcMain.handle('app:update:action', async () => {
+async function downloadReleaseAsset(openFallback = true) {
+  if (!updateAsset) {
+    if (openFallback) return shell.openExternal(releaseUrl)
+    throw new Error('The release does not contain a compatible update package.')
+  }
+  updateDownloadStarted = true
+  updatePercent = 0
+  sendUpdate('downloading')
+  const target = path.join(app.getPath('downloads'), updateAsset.name)
+  const temporary = target + '.download'
+  try {
+    const response = await fetch(updateAsset.url, {
+      headers: { Accept: 'application/octet-stream', 'User-Agent': 'Cyberdog' },
+      signal: AbortSignal.timeout(30 * 60 * 1000),
+    })
+    if (!response.ok || !response.body) throw new Error(`GitHub returned HTTP ${response.status}`)
+    const total = Number(response.headers.get('content-length')) || 0
+    const output = fs.openSync(temporary, 'w', 0o600)
+    const hash = crypto.createHash('sha256')
+    const reader = response.body.getReader()
+    let received = 0
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        hash.update(value)
+        received += value.length
+        fs.writeSync(output, value)
+        updatePercent = total ? Math.floor(received * 100 / total) : 0
+        sendUpdate('downloading')
+      }
+    } finally {
+      fs.closeSync(output)
+    }
+    if (updateAsset.digest && hash.digest('hex') !== updateAsset.digest) throw new Error('The downloaded update checksum is invalid.')
+    fs.rmSync(target, { force: true })
+    fs.renameSync(temporary, target)
+    updateFile = target
+    updateReady = true
+    updateDownloadStarted = false
+    updatePercent = 100
+    sendUpdate('ready')
+    if (installAfterDownload) await shell.openPath(target)
+  } catch (error) {
+    fs.rmSync(temporary, { force: true })
+    updateDownloadStarted = false
+    updatePercent = 0
+    useManualUpdate(error)
+    throw error
+  }
+}
+
+async function performUpdateAction(install) {
   if (!releaseUrl || !updateVersion) throw new Error('No Cyberdog update is available.')
-  if (updateMode !== 'install') return shell.openExternal(releaseUrl)
+  installAfterDownload = install
+  if (updateMode !== 'install') {
+    if (updateReady && updateFile) return install ? shell.openPath(updateFile) : undefined
+    if (updateDownloadStarted) return
+    return downloadReleaseAsset()
+  }
   try { await updateCheckPromise } catch (e) { useManualUpdate(e); return shell.openExternal(releaseUrl) }
   if (updateMode !== 'install') return shell.openExternal(releaseUrl)
-  installAfterDownload = true
-  if (updateReady) return autoUpdater.quitAndInstall()
+  if (updateReady) return install ? autoUpdater.quitAndInstall() : undefined
   if (updateDownloadStarted) return
   updateDownloadStarted = true
-  send('app:update', { state: 'downloading', mode: updateMode, version: updateVersion, percent: 0 })
+  sendUpdate('downloading', { percent: 0 })
   try {
     await autoUpdater.downloadUpdate()
   } catch (e) {
     useManualUpdate(e)
     return shell.openExternal(releaseUrl)
   }
-})
+}
+ipcMain.handle('app:update:action', () => performUpdateAction(true))
+ipcMain.handle('app:update:download', () => performUpdateAction(false))
 
 async function checkForAppUpdate() {
   if (!app.isPackaged) return
@@ -129,14 +250,26 @@ async function checkForAppUpdate() {
     if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`)
     const release = await response.json()
     if (!isNewerVersion(release.tag_name, app.getVersion())) {
-      send('app:update', { state: 'current' })
+      updateVersion = undefined
+      updateNotes = ''
+      updateReleaseName = ''
+      releaseUrl = undefined
+      updateAsset = undefined
+      updateFile = undefined
+      updateReady = false
+      updateDownloadStarted = false
+      updatePercent = 0
+      sendUpdate('current')
       return
     }
     updateVersion = String(release.tag_name).replace(/^v/, '')
+    updateReleaseName = String(release.name || release.tag_name)
+    updateNotes = String(release.body || '').trim().slice(0, 12000)
     releaseUrl = /^https:\/\/github\.com\/pickywawa\/cyberdog\/releases\//.test(release.html_url)
       ? release.html_url
       : 'https://github.com/pickywawa/cyberdog/releases/latest'
     updateMode = isWin && !process.env.PORTABLE_EXECUTABLE_DIR ? 'install' : 'manual'
+    updateAsset = selectUpdateAsset(release, process.platform, process.arch, updateVersion)
 
     if (updateMode === 'install') {
       let result
@@ -148,10 +281,12 @@ async function checkForAppUpdate() {
       }
       if (!result?.isUpdateAvailable) return useManualUpdate(new Error('No compatible Windows installer was found.'))
     }
-    send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+    if (settings.autoDownload) {
+      if (updateMode === 'manual') downloadReleaseAsset(false).catch(error => console.error('Unable to download Cyberdog update:', error))
+    } else sendUpdate(updateDownloadStarted ? 'downloading' : 'available')
   } catch (e) {
     console.error('Unable to check for Cyberdog updates:', e)
-    send('app:update', { state: 'error' })
+    sendUpdate('error')
   }
 }
 
@@ -159,14 +294,19 @@ autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = false
 autoUpdater.on('update-available', info => {
   updateVersion = info.version
-  send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+  if (settings.autoDownload && updateMode === 'install') updateDownloadStarted = true
+  sendUpdate(updateDownloadStarted ? 'downloading' : 'available')
 })
 autoUpdater.on('download-progress', progress => {
-  send('app:update', { state: 'downloading', mode: updateMode, version: updateVersion, percent: Math.floor(progress.percent) })
+  updateDownloadStarted = true
+  updatePercent = Math.floor(progress.percent)
+  sendUpdate('downloading')
 })
 autoUpdater.on('update-downloaded', info => {
   updateReady = true
-  send('app:update', { state: 'ready', mode: updateMode, version: info.version })
+  updateDownloadStarted = false
+  updatePercent = 100
+  sendUpdate('ready', { version: info.version })
   if (installAfterDownload) autoUpdater.quitAndInstall()
 })
 autoUpdater.on('update-not-available', () => {
@@ -250,7 +390,7 @@ ipcMain.handle('servers:update', (_, id, patch) => {
 })
 
 // ---------- groupes de serveurs (userData/groups.json) ----------
-const groupsFile = () => path.join(app.getPath('userData'), 'groups.json')
+const groupsFile = () => path.join(currentConfigRoot(), 'groups.json')
 let groups = []
 const loadGroups = () => { try { groups = JSON.parse(fs.readFileSync(groupsFile(), 'utf8')) } catch { groups = [] } }
 const saveGroups = () => fs.writeFileSync(groupsFile(), JSON.stringify(groups, null, 2))
@@ -286,7 +426,7 @@ ipcMain.handle('groups:delete', (_, id) => {
 
 // ---------- chemins enregistrés (userData/paths.json) ----------
 // { id, name, path, serverId } ; serverId absent = valable pour tous les serveurs
-const pathsFile = () => path.join(app.getPath('userData'), 'paths.json')
+const pathsFile = () => path.join(currentConfigRoot(), 'paths.json')
 let savedPaths = []
 const loadPaths = () => { try { savedPaths = JSON.parse(fs.readFileSync(pathsFile(), 'utf8')) } catch { savedPaths = [] } }
 const writePaths = () => fs.writeFileSync(pathsFile(), JSON.stringify(savedPaths, null, 2))
@@ -713,7 +853,7 @@ ipcMain.handle('log:stop', (_, id) => {
 })
 
 // recherches favorites (un fichier JSON pour toutes les sources)
-const favFile = () => path.join(app.getPath('userData'), 'log-favorites.json')
+const favFile = () => path.join(currentConfigRoot(), 'log-favorites.json')
 let favs = []
 const loadFavs = () => { try { favs = JSON.parse(fs.readFileSync(favFile(), 'utf8')) } catch { favs = [] } }
 const saveFavs = () => fs.writeFileSync(favFile(), JSON.stringify(favs, null, 2))
@@ -787,13 +927,34 @@ ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindo
 // ---------- Fenêtre ----------
 app.setName('Cyberdog')
 app.whenReady().then(() => {
+  loadSettings()
   load()
   loadGroups()
   loadPaths()
   loadFavs()
-  loadSettings()
   if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../build/icon.png'))
-  if (!isMac) Menu.setApplicationMenu(null)
+  if (isMac) {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      {
+        label: 'Cyberdog',
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { label: t('settings.title') + '…', accelerator: 'Cmd+,', click: () => win && win.webContents.send('app:open-settings') },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      { role: 'editMenu' },
+      { role: 'windowMenu' },
+    ]))
+  } else Menu.setApplicationMenu(null)
   win = new BrowserWindow({
     width: 1280,
     height: 800,

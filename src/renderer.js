@@ -29,6 +29,7 @@ const { LANGS } = i18n
 
 let lang = 'en'
 let theme = 'system'
+let settings = { lang: 'en', theme: 'system', defaultEditor: 'system', configPath: '', autoDownload: false }
 let servers = []
 let tabs = []
 let activeId = null
@@ -106,6 +107,7 @@ function toast(msg, err, ms = 3500) {
 api.on('toast', toast)
 
 let updateState
+let paintSettingsUpdate = () => {}
 function paintUpdateBadge() {
   const button = $('#app-update')
   const state = updateState
@@ -120,6 +122,7 @@ function paintUpdateBadge() {
 api.on('app:update', state => {
   updateState = state
   paintUpdateBadge()
+  paintSettingsUpdate()
 })
 $('#app-update').onclick = () => api.invoke('app:update:action').catch(e => toast(errText(e), true))
 
@@ -425,8 +428,146 @@ $('#btn-lang').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect()
   menu(r.left, r.top - 4, Object.entries(LANGS).map(([k, name]) => ({ label: name, checked: k === lang, fn: () => setLang(k) })), { up: true })
 }
-function setTheme(name) { theme = name; applyTheme(); api.invoke('settings:set', { theme }) }
-function setLang(code) { lang = code; refreshLanguage(); api.invoke('settings:set', { lang }) }
+$('#btn-settings').onclick = () => openSettingsModal()
+api.on('app:open-settings', openSettingsModal)
+function setTheme(name) { theme = name; settings.theme = name; applyTheme(); api.invoke('settings:set', { theme }) }
+function setLang(code) { lang = code; settings.lang = code; refreshLanguage(); api.invoke('settings:set', { lang }) }
+async function openSettingsModal() {
+  const [current, editors, currentUpdate] = await Promise.all([
+    api.invoke('settings:get'),
+    api.invoke('apps:list'),
+    api.invoke('app:update:status'),
+  ])
+  updateState = currentUpdate
+  const m = $('#modal')
+  const close = () => { paintSettingsUpdate = () => {}; m.hidden = true; m.replaceChildren() }
+
+  const langSel = h('select', { className: 'lsel full' }, ...Object.entries(LANGS).map(([k, label]) => h('option', { value: k, selected: k === current.lang, textContent: label })))
+  const themeSel = h('select', { className: 'lsel full' }, ...Object.keys(THEMES).map(k => h('option', { value: k, selected: k === (current.theme || 'system'), textContent: t('theme.' + k) })))
+  const configInput = h('input', { type: 'text', value: current.configPath || '', placeholder: t('settings.config_path_ph'), spellcheck: false })
+  const browseConfig = h('button', { type: 'button', textContent: t('settings.browse'), onclick: async () => { const dir = await api.invoke('settings:pick-config'); if (dir) configInput.value = dir } })
+  const editorValue = current.defaultEditor || 'system'
+  const editorOptions = [['system', t('settings.editor_system')], ...editors.map(editor => [editor.target, editor.label])]
+  if (!editorOptions.some(([value]) => value === editorValue)) editorOptions.push([editorValue, editorValue])
+  editorOptions.push(['__other__', t('settings.editor_other')])
+  const editorInput = h('select', { className: 'lsel full' }, ...editorOptions.map(([value, label]) => h('option', { value, textContent: label })))
+  editorInput.value = editorValue
+  editorInput.onchange = async () => {
+    if (editorInput.value !== '__other__') return
+    const target = await api.invoke('apps:pick')
+    if (!target) return (editorInput.value = editorValue)
+    editorInput.insertBefore(h('option', { value: target, textContent: target }), editorInput.lastElementChild)
+    editorInput.value = target
+  }
+  const autoDownloadInput = h('input', { type: 'checkbox', checked: !!current.autoDownload })
+  const settingsPage = (name, display, ...children) => {
+    const page = h('div', { className: 'settings-page', style: `display: ${display}; flex-direction: column; gap: 12px;` }, ...children)
+    page.dataset.page = name
+    return page
+  }
+
+  const generalPage = settingsPage('general', 'flex',
+    h('label', {}, t('settings.lang'), langSel),
+    h('label', {}, t('settings.theme'), themeSel),
+    h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
+    h('div', { className: 'note', textContent: t('settings.config_help') }))
+  const editorPage = settingsPage('editor', 'none',
+    h('label', {}, t('settings.editor'), editorInput),
+    h('div', { className: 'note', textContent: t('settings.editor_help') }))
+  const updateSummary = h('div', { className: 'update-summary' })
+  const updateNotes = h('div', { className: 'update-notes' })
+  const updateButton = h('button', {
+    type: 'button',
+    className: 'primary',
+    onclick: () => api.invoke('app:update:action').catch(e => toast(errText(e), true)),
+  })
+  const updatesPage = settingsPage('updates', 'none',
+    h('label', { className: 'check' }, autoDownloadInput, h('span', { textContent: t('settings.auto_download') })),
+    h('div', { className: 'note', textContent: t('settings.update_help') }),
+    updateSummary,
+    updateNotes,
+    h('div', { className: 'update-actions' }, updateButton))
+  paintSettingsUpdate = () => {
+    const state = updateState || { state: 'current' }
+    updateSummary.textContent = state.state === 'current'
+      ? t('settings.update_current', { version: $('#app-version').textContent })
+      : state.state === 'error'
+        ? t('settings.update_error')
+        : state.state === 'downloading'
+          ? t('settings.update_downloading', { percent: state.percent ?? 0 })
+          : state.state === 'ready'
+            ? t('settings.update_ready', { version: state.version })
+            : t('settings.update_available', { version: state.version })
+    updateNotes.hidden = !state.notes
+    updateNotes.textContent = state.notes || ''
+    updateButton.hidden = !['available', 'ready'].includes(state.state)
+    updateButton.textContent = t(state.state === 'ready'
+      ? state.mode === 'install' ? 'settings.update_install' : 'settings.update_open'
+      : 'settings.update_download')
+  }
+  paintSettingsUpdate()
+
+  const buttonGeneral = h('button', { type: 'button', className: 'tab active', textContent: t('settings.tab.general') })
+  const buttonEditor = h('button', { type: 'button', className: 'tab', textContent: t('settings.tab.editor') })
+  const buttonUpdate = h('button', { type: 'button', className: 'tab', textContent: t('settings.tab.updates') })
+  const switchTab = name => {
+    buttonGeneral.classList.toggle('active', name === 'general')
+    buttonEditor.classList.toggle('active', name === 'editor')
+    buttonUpdate.classList.toggle('active', name === 'updates')
+    ;[generalPage, editorPage, updatesPage].forEach(page => { page.style.display = page.dataset.page === name ? 'flex' : 'none' })
+  }
+  buttonGeneral.onclick = () => switchTab('general')
+  buttonEditor.onclick = () => switchTab('editor')
+  buttonUpdate.onclick = () => switchTab('updates')
+
+  const save = async () => {
+    try {
+      const patch = {
+        lang: langSel.value,
+        theme: themeSel.value,
+        configPath: configInput.value.trim(),
+        defaultEditor: editorInput.value,
+        autoDownload: autoDownloadInput.checked,
+      }
+      const configChanged = patch.configPath !== current.configPath
+      if (patch.configPath && configChanged) {
+        const status = await api.invoke('settings:config-status', patch.configPath)
+        patch.configPath = status.path
+        patch.copyConfigOnChange = !status.hasConfig && confirm(t('settings.copy_confirm'))
+      }
+      const next = await api.invoke('settings:set', patch)
+      settings = next
+      lang = next.lang || 'en'
+      theme = next.theme in THEMES ? next.theme : 'system'
+      if (configChanged) {
+        servers = await api.invoke('servers:list')
+        groups = await api.invoke('groups:list')
+        quickActions = await api.invoke('actions:list')
+        logFavs = await api.invoke('favs:list')
+        savedPaths = await api.invoke('paths:list')
+        renderServers()
+      }
+      if (!current.autoDownload && next.autoDownload && updateState?.state === 'available') {
+        api.invoke('app:update:download').catch(e => toast(errText(e), true))
+      }
+      applyTheme(); refreshLanguage(); close()
+    } catch (e) {
+      toast(errText(e), true)
+    }
+  }
+
+  const content = h('div', { className: 'card settings-card', style: 'width: 620px;' },
+    h('h3', { textContent: t('settings.title') }),
+    h('div', { className: 'set-tabs' }, buttonGeneral, buttonEditor, buttonUpdate),
+    h('div', { className: 'settings-panels' }, generalPage, editorPage, updatesPage),
+    h('div', { className: 'btns' },
+      h('button', { type: 'button', textContent: t('btn.cancel'), onclick: close }),
+      h('button', { type: 'button', className: 'primary', textContent: t('btn.save'), onclick: save })))
+
+  m.hidden = false
+  m.replaceChildren(content)
+  m.onmousedown = e => { if (e.target === m) close() }
+}
 
 // ---------- Onglets ----------
 function renderTabs() {
@@ -636,7 +777,11 @@ function draw(tab) {
       }
       paintSel(tab)
     }
-    row.ondblclick = () => { if (e.isDir) load(tab, join(tab.path, e.name)) }
+    row.ondblclick = () => {
+      if (e.isDir) return load(tab, join(tab.path, e.name))
+      const editor = settings.defaultEditor && settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
+      act(tab, () => api.invoke('sftp:edit', tab.connId, join(tab.path, e.name), editor), false)
+    }
     // glisser vers le Finder : préparation locale après 120 ms d'appui, drag natif au dragstart
     row.draggable = true
     row.onmousedown = ev => { if (ev.button === 0) { clearTimeout(tab.dragTimer); tab.dragTimer = setTimeout(() => prepareDrag(tab, e), 120) } }
@@ -945,6 +1090,7 @@ function openFiles(server, { terminal = false } = {}) {
   root.style.setProperty('--rpw', loadSize('rpw', 400) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
+  settings = s
   lang = s.lang
   theme = s.theme in THEMES ? s.theme : 'system'
   applyIcons(document)

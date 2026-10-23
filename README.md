@@ -33,6 +33,14 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ---
 
+## ⚙️ Settings
+
+The **Settings** button beside the language selector — or **Cyberdog → Settings…** on macOS — groups language, theme, default editor and update preferences. You can also select an external configuration folder to share servers, groups, quick actions, saved paths and favorite searches while keeping personal preferences local to each computer.
+
+Double-clicking a file opens it in the selected editor and uploads every saved change back to the server.
+
+---
+
 ## 📦 Install
 
 Download the latest installer from the **[Releases page](https://github.com/pickywawa/cyberdog/releases/latest)**.

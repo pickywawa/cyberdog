@@ -12,4 +12,17 @@ function isNewerVersion(latest, current) {
   return false
 }
 
-module.exports = { isNewerVersion }
+function selectUpdateAsset(release, platform, arch, version) {
+  const name = platform === 'darwin'
+    ? `Cyberdog-${version}-mac-${arch}.dmg`
+    : `Cyberdog-${version}-portable-x64.exe`
+  const asset = Array.isArray(release.assets) && release.assets.find(item => item.name === name)
+  if (!asset || !/^https:\/\/github\.com\/pickywawa\/cyberdog\/releases\/download\//.test(asset.browser_download_url)) return undefined
+  return {
+    name,
+    url: asset.browser_download_url,
+    digest: String(asset.digest || '').startsWith('sha256:') ? String(asset.digest).slice(7) : '',
+  }
+}
+
+module.exports = { isNewerVersion, selectUpdateAsset }

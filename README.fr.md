@@ -33,6 +33,14 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ---
 
+## ⚙️ Paramètres
+
+Le bouton **Paramètres** à côté de la langue — ou **Cyberdog → Paramètres…** sur macOS — regroupe la langue, le thème, l'éditeur par défaut et les mises à jour. Vous pouvez aussi choisir un dossier de configuration externe pour partager serveurs, groupes, actions rapides, chemins enregistrés et recherches favorites, tout en gardant les préférences personnelles sur chaque poste.
+
+Un double-clic sur un fichier l'ouvre dans l'éditeur choisi et chaque enregistrement le renvoie sur le serveur.
+
+---
+
 ## 📦 Installation
 
 Téléchargez le dernier installeur depuis la **[page des Releases](https://github.com/pickywawa/cyberdog/releases/latest)**.

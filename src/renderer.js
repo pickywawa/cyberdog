@@ -3,6 +3,28 @@ const h = (tag, props = {}, ...kids) => { const e = Object.assign(document.creat
 const uid = () => crypto.randomUUID()
 const join = (a, b) => (a === '/' ? '' : a) + '/' + b
 const { icon, fileIcon } = icons
+
+// Poignée de redimensionnement : get() lit la taille de départ, set(px) l'applique (bornée), dir = -1 si tirer vers la gauche/haut agrandit.
+function dragResize(handle, { axis = 'x', dir = 1, min, max, get, set, done }) {
+  handle.onmousedown = ev => {
+    ev.preventDefault()
+    const p0 = axis === 'x' ? ev.clientX : ev.clientY
+    const v0 = get()
+    document.body.classList.add('resizing', 'resizing-' + axis)
+    const move = e => set(Math.max(min, Math.min(typeof max === 'function' ? max() : max, v0 + dir * ((axis === 'x' ? e.clientX : e.clientY) - p0))))
+    const up = () => {
+      removeEventListener('mousemove', move)
+      removeEventListener('mouseup', up)
+      document.body.classList.remove('resizing', 'resizing-' + axis)
+      done?.()
+    }
+    addEventListener('mousemove', move)
+    addEventListener('mouseup', up)
+  }
+}
+const root = document.documentElement
+const saveSize = (key, v) => localStorage.setItem('cyberdog.' + key, v)
+const loadSize = (key, def) => +localStorage.getItem('cyberdog.' + key) || def
 const { LANGS } = i18n
 
 let lang = 'en'
@@ -52,10 +74,9 @@ function refreshLanguage() {
   renderServers()
   tabs.forEach(tb => {
     applyI18n(tb.el)
-    draw(tb)
+    tb.panes.forEach(p => { draw(p); paintSearch(p) })
     renderPanel(tb)
     updateBar(tb)
-    paintSearch(tb)
   })
 }
 
@@ -110,11 +131,11 @@ function menu(x, y, items, { up = false } = {}) {
 }
 addEventListener('mousedown', e => {
   if (!e.target.closest('#menu')) hideMenu()
-  if (!e.target.closest('.searchbox, .js-search-btn')) tabs.forEach(tb => (tb.searchBox.hidden = true))
+  if (!e.target.closest('.searchbox, .js-search-btn')) tabs.forEach(tb => tb.panes.forEach(p => (p.searchBox.hidden = true)))
 })
 addEventListener('keydown', e => {
   const tab = tabs.find(tb => tb.id === activeId)
-  if (tab && (e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); toggleSearch(tab, true) }
+  if (tab && (e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); toggleSearch(tab.active, true) }
 })
 addEventListener('blur', hideMenu)
 addEventListener('keydown', e => e.key === 'Escape' && hideMenu())
@@ -277,7 +298,8 @@ function closeTab(id) {
   const tb = tabs[i]
   if (tb.connId) api.invoke('conn:close', tb.connId)
   closeTerminal(tb)
-  dashStop(tb)
+  pollStop(tb)
+  leavePanel(tb)
   tb.el.remove()
   tabs.splice(i, 1)
   activate(activeId === id ? tabs[Math.min(i, tabs.length - 1)]?.id : activeId)
@@ -317,7 +339,7 @@ async function openTerminal(tab) {
   term.focus()
   term.write(t('term.connecting', { target: `${server.user}@${server.host}` }) + '\r\n')
   for (;;) {
-    try { await api.invoke('term:open', id, server.id, term.cols, term.rows, tab.path || undefined); break } catch (e) {
+    try { await api.invoke('term:open', id, server.id, term.cols, term.rows, tab.active?.path || undefined); break } catch (e) {
       if (tab.termId !== id) return
       if (AUTH_FAIL.test(e.message) && (await askPassword(server))) continue
       term.write(`\x1b[31m${errText(e)}\x1b[0m\r\n`)
@@ -338,7 +360,19 @@ function closeTerminal(tab) {
 const toggleTerminal = tab => (tab.term ? closeTerminal(tab) : openTerminal(tab))
 
 // ---------- Panneau de droite (un seul à la fois) ----------
+// Les fonctions render*/leave* vivent dans panels.js et ops.js (chargés après ce fichier).
+const PANELS = {
+  dashboard: { title: 'dash.title', render: t => renderDashboard(t) },
+  services: { title: 'svc.title', render: t => renderServices(t) },
+  logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
+  docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  actions: { title: 'qa.title', render: t => renderActions(t) },
+}
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['actions', 'zap', 'bar.actions']]
+
+const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
+  leavePanel(tab)
   tab.panel = tab.panel === name ? null : name
   renderPanel(tab)
   updateBar(tab)
@@ -348,15 +382,14 @@ function renderPanel(tab) {
   tab.rpanel.hidden = !tab.panel
   tab.rpanelActions.replaceChildren()
   tab.rpanelBody.replaceChildren()
+  tab.rpanelBody.classList.remove('flush')
   if (!tab.panel) return
-  tab.rpanelTitle.textContent = t(tab.panel === 'dashboard' ? 'dash.title' : 'qa.title')
-  if (tab.panel === 'dashboard') renderDashboard(tab)
-  else renderActions(tab)
+  tab.rpanelTitle.textContent = t(PANELS[tab.panel].title)
+  PANELS[tab.panel].render(tab)
 }
 function updateBar(tab) {
   tab.bar.term.classList.toggle('on', !!tab.term)
-  tab.bar.dashboard.classList.toggle('on', tab.panel === 'dashboard')
-  tab.bar.actions.classList.toggle('on', tab.panel === 'actions')
+  for (const [key] of BAR.slice(1)) tab.bar[key].classList.toggle('on', tab.panel === key)
   tab.termTitle.textContent = `${t('term.title')} — ${tab.server.user}@${tab.server.host}`
 }
 
@@ -370,15 +403,17 @@ const dateOf = ms => new Date(ms).toLocaleString(lang, { dateStyle: 'short', tim
 const cmp = (a, b) => (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), lang, { numeric: true, sensitivity: 'base' }))
 const nameCell = (iconHtml, kind, text) => h('div', { className: 'nm' }, h('span', { className: 'fi ic-' + kind, innerHTML: iconHtml }), h('span', { className: 'nt', textContent: text }))
 
+// la connexion SFTP est partagée par tout l'onglet : on l'écrit toujours sur l'onglet racine, jamais sur un volet
 async function ensure(tab) {
-  if (tab.connId) return
-  const r = await api.invoke('files:open', tab.server.id)
-  tab.connId = r.id
-  tab.home = r.home
+  const T = tab.root || tab
+  if (T.connId) return
+  const r = await api.invoke('files:open', T.server.id)
+  T.connId = r.id
+  T.home = r.home
 }
 
 async function load(tab, p, push = true) {
-  tab.el.classList.add('loading')
+  tab.explorer.classList.add('loading')
   try {
     await ensure(tab)
     const r = await api.invoke('sftp:list', tab.connId, p ?? tab.home)
@@ -390,7 +425,7 @@ async function load(tab, p, push = true) {
     if (tab.path) toast(errText(e), true)
     else tab.error = errText(e)
   } finally {
-    tab.el.classList.remove('loading')
+    tab.explorer.classList.remove('loading')
   }
   draw(tab)
 }
@@ -514,6 +549,13 @@ const appsMenu = (tab, remote) => async () => [
   { label: t('ctx.other'), fn: async () => { const p = await api.invoke('apps:pick'); if (p) act(tab, () => api.invoke('sftp:edit', tab.connId, remote, p), false) } },
 ]
 
+async function extractArchive(tab, file, toFolder) {
+  if (!toFolder && !confirm(t('dlg.confirm_extract', { name: file.name }))) return
+  toast(t('t.extracting', { name: file.name }), false, 600000)
+  await act(tab, async () => { await api.invoke('sftp:extract', tab.connId, join(tab.path, file.name), toFolder); toast(t('t.extracted', { name: file.name })) })
+  if ($('#toast').textContent.startsWith(t('t.extracting', { name: file.name }))) $('#toast').hidden = true
+}
+
 function ctxMenu(tab, e) {
   e.preventDefault()
   const base = [
@@ -532,6 +574,10 @@ function ctxMenu(tab, e) {
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
+    ...(one && !one.isDir && archive.kind(one.name)
+      ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
+         ...(archive.kind(one.name).single ? [] : [{ label: t('ctx.extract_to', { name: archive.folderName(one.name) }), icon: 'folder-plus', fn: () => extractArchive(tab, one, true) }])]
+      : []),
     ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', fn: async () => {
       const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
       const n = v?.name.trim()
@@ -624,86 +670,122 @@ function buildSearch(tab) {
     tab.searchList)
 }
 
-// ---------- Onglet serveur : explorateur + terminal (bas) + panneau (droite) + barre d'outils ----------
-function openFiles(server, { terminal = false } = {}) {
-  const tab = {
-    id: uid(), kind: 'files', server, connId: null, path: '', hist: [], entries: [], view: [], sel: new Set(), sort: { key: 'name', dir: 1 },
-    panel: null, term: null, termId: null, results: [], dash: newDash(),
-  }
-  const ib = (name, titleKey, onclick, cls = '') => { const b = h('button', { className: ('ib ' + cls).trim(), innerHTML: icon(name), onclick }); b.dataset.i18nTitle = titleKey; return b }
-  tab.back = ib('arrow-left', 'ex.back', () => load(tab, tab.hist.pop(), false))
-  tab.pathInput = h('input', { className: 'path', spellcheck: false, onkeydown: e => { if (e.key === 'Enter') load(tab, e.target.value.trim()) } })
-  tab.head = h('div', { className: 'row head' })
-  tab.body = h('div')
-  tab.statusL = h('span')
-  tab.statusR = h('span')
-  buildSearch(tab)
-  const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(tab, e), onclick: e => { if (!e.target.closest('.row')) { tab.sel.clear(); paintSel(tab) } } }, tab.head, tab.body)
-  tab.explorer = h('div', { className: 'explorer' },
+// ---------- Explorateur (un « volet » ; l'onglet peut en avoir deux côte à côte) ----------
+// Un volet hérite de l'onglet (connexion, serveur) mais possède son propre état : chemin, historique, sélection, tri, recherche.
+const ib = (name, titleKey, onclick, cls = '') => { const b = h('button', { className: ('ib ' + cls).trim(), innerHTML: icon(name), onclick }); b.dataset.i18nTitle = titleKey; return b }
+
+function makeExplorer(tab) {
+  const ex = Object.create(tab)
+  Object.assign(ex, { root: tab, path: '', hist: [], entries: [], view: [], sel: new Set(), sort: { key: 'name', dir: 1 } })
+  ex.back = ib('arrow-left', 'ex.back', () => load(ex, ex.hist.pop(), false))
+  ex.pathInput = h('input', { className: 'path', spellcheck: false, onkeydown: e => { if (e.key === 'Enter') load(ex, e.target.value.trim()) } })
+  ex.head = h('div', { className: 'row head' })
+  ex.body = h('div')
+  ex.statusL = h('span')
+  ex.statusR = h('span')
+  ex.splitBtn = ib('split', 'ex.split', () => toggleSplit(ex))
+  buildSearch(ex)
+  const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
+  ex.explorer = h('div', { className: 'explorer' },
     h('div', { className: 'toolbar' },
-      tab.back, tab.pathInput,
-      ib('search', 'ex.search', () => toggleSearch(tab), 'js-search-btn'),
-      ib('folder-plus', 'tb.new_folder', () => newItem(tab, 'dir')),
-      ib('file-plus', 'tb.new_file', () => newItem(tab, 'file')),
-      ib('refresh', 'tb.refresh', () => load(tab, tab.path || null, false))),
-    tab.searchBox,
+      ex.back, ex.pathInput,
+      ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn'),
+      ex.splitBtn,
+      ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
+      ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
+      ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false))),
+    ex.searchBox,
     table,
-    h('div', { className: 'status' }, tab.statusL, tab.statusR))
+    h('div', { className: 'status' }, ex.statusL, ex.statusR))
+  ex.explorer.addEventListener('mousedown', () => { tab.active = ex; tab.panes.forEach(p => p.explorer.classList.toggle('active', p === ex && tab.panes.length > 1)) })
+  ex.explorer.ondragover = e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); ex.explorer.classList.add('drop') } }
+  ex.explorer.ondragleave = e => { if (!ex.explorer.contains(e.relatedTarget)) ex.explorer.classList.remove('drop') }
+  ex.explorer.ondrop = e => {
+    e.preventDefault()
+    ex.explorer.classList.remove('drop')
+    const paths = [...e.dataTransfer.files].map(api.pathOf)
+    // retour d'un glisser sorti de ce volet : ne pas se renvoyer ses propres fichiers (l'autre volet, lui, les reçoit)
+    if (Date.now() - (ex.lastDragAt || 0) < 120000 && paths.every(p => p.includes('cyberdog-drag-'))) return
+    if (paths.length && ex.path) upload(ex, paths)
+  }
+  applyI18n(ex.explorer)
+  return ex
+}
+
+// Fenêtre scindée en deux explorateurs indépendants (comparer, copier d'un dossier à l'autre par glisser-déposer)
+function layoutExplorers(tab) {
+  const [a, b] = tab.panes
+  const split = !!b
+  const divider = h('div', { className: 'pane-rz' })
+  if (split) {
+    dragResize(divider, { axis: 'x', min: 240, max: () => tab.explorers.offsetWidth - 240, get: () => a.explorer.offsetWidth, set: w => (a.explorer.style.flex = `0 0 ${w}px`) })
+  }
+  a.explorer.style.flex = ''
+  tab.explorers.replaceChildren(...(split ? [a.explorer, divider, b.explorer] : [a.explorer]))
+  tab.panes.forEach(p => { p.splitBtn.classList.toggle('on', split); p.explorer.classList.toggle('active', split && p === tab.active) })
+}
+
+function toggleSplit(ex) {
+  const tab = ex.root
+  if (tab.panes.length === 1) {
+    const p = makeExplorer(tab)
+    p.sort = { ...ex.sort }
+    tab.panes.push(p)
+    tab.active = p
+    layoutExplorers(tab)
+    load(p, ex.path || null)
+  } else {
+    tab.panes.splice(tab.panes.indexOf(ex), 1)
+    tab.active = tab.panes[0]
+    layoutExplorers(tab)
+  }
+}
+
+// ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
+function openFiles(server, { terminal = false } = {}) {
+  const tab = { id: uid(), kind: 'files', server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
+  tab.panes.push((tab.active = makeExplorer(tab)))
+  tab.explorers = h('div', { className: 'explorers' })
+  layoutExplorers(tab)
 
   // terminal (bas)
   tab.termBody = h('div', { className: 'term-body' })
   tab.termTitle = h('span', { className: 'term-title' })
   const splitter = h('div', { className: 'splitter' })
-  splitter.onmousedown = ev => {
-    ev.preventDefault()
-    const y0 = ev.clientY
-    const h0 = tab.termWrap.offsetHeight
-    const move = e => { tab.termWrap.style.height = Math.max(120, Math.min(h0 + y0 - e.clientY, tab.wsMain.offsetHeight - 160)) + 'px' }
-    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); tab.fit?.fit() }
-    addEventListener('mousemove', move)
-    addEventListener('mouseup', up)
-  }
+  dragResize(splitter, { axis: 'y', dir: -1, min: 120, max: () => tab.wsMain.offsetHeight - 160, get: () => tab.termWrap.offsetHeight, set: v => (tab.termWrap.style.height = v + 'px'), done: () => tab.fit?.fit() })
   tab.termWrap = h('div', { className: 'term-wrap', hidden: true }, splitter,
     h('div', { className: 'term-head' }, tab.termTitle, ib('x', 'term.close', () => closeTerminal(tab))),
     tab.termBody)
-  tab.wsMain = h('div', { className: 'ws-main' }, tab.explorer, tab.termWrap)
+  tab.wsMain = h('div', { className: 'ws-main' }, tab.explorers, tab.termWrap)
 
-  // panneau de droite
+  // panneau de droite (largeur commune à tous les panneaux, redimensionnable)
   tab.rpanelTitle = h('span', { className: 'rp-title' })
   tab.rpanelActions = h('span', { className: 'rp-actions' })
   tab.rpanelBody = h('div', { className: 'rp-body' })
-  tab.rpanel = h('div', { className: 'rpanel', hidden: true },
+  const rz = h('div', { className: 'rz rz-left' })
+  dragResize(rz, { axis: 'x', dir: -1, min: 300, max: () => Math.max(400, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
+  tab.rpanel = h('div', { className: 'rpanel', hidden: true }, rz,
     h('div', { className: 'rp-head' }, tab.rpanelTitle, tab.rpanelActions, ib('x', 'panel.close', () => setPanel(tab, tab.panel))),
     tab.rpanelBody)
 
   // barre d'outils (tout à droite)
-  tab.bar = {
-    term: ib('terminal', 'bar.terminal', () => toggleTerminal(tab)),
-    dashboard: ib('activity', 'bar.dashboard', () => setPanel(tab, 'dashboard')),
-    actions: ib('zap', 'bar.actions', () => setPanel(tab, 'actions')),
-  }
-  tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, h('div', { className: 'rbar' }, tab.bar.term, tab.bar.dashboard, tab.bar.actions))
+  tab.bar = {}
+  for (const [key, ic, title] of BAR) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
+  tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, h('div', { className: 'rbar' }, ...BAR.map(([k]) => tab.bar[k])))
   applyI18n(tab.el)
   updateBar(tab)
 
-  tab.explorer.ondragover = e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); tab.explorer.classList.add('drop') } }
-  tab.explorer.ondragleave = e => { if (!tab.explorer.contains(e.relatedTarget)) tab.explorer.classList.remove('drop') }
-  tab.explorer.ondrop = e => {
-    e.preventDefault()
-    tab.explorer.classList.remove('drop')
-    const paths = [...e.dataTransfer.files].map(api.pathOf)
-    // retour d'un glisser sorti de cet onglet : ne pas se renvoyer ses propres fichiers
-    if (Date.now() - (tab.lastDragAt || 0) < 120000 && paths.every(p => p.includes('cyberdog-drag-'))) return
-    if (paths.length && tab.path) upload(tab, paths)
-  }
   addTab(tab)
-  load(tab, null)
+  load(tab.active, null)
   if (terminal) openTerminal(tab)
 }
 
 // ---------- Init ----------
 ;(async () => {
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
+  root.style.setProperty('--sbw', loadSize('sbw', 264) + 'px')
+  root.style.setProperty('--rpw', loadSize('rpw', 400) + 'px')
+  dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
   lang = s.lang
   theme = s.theme in THEMES ? s.theme : 'system'
@@ -712,5 +794,6 @@ function openFiles(server, { terminal = false } = {}) {
   refreshLanguage()
   servers = await api.invoke('servers:list')
   quickActions = await api.invoke('actions:list')
+  logFavs = await api.invoke('favs:list')
   renderServers()
 })()

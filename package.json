@@ -1,12 +1,12 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/import.test.js && node test/share.test.js && node test/i18n.test.js && node test/health.test.js && node test/gitlab-release.test.js",
+    "test": "node test/import.test.js && node test/share.test.js && node test/i18n.test.js && node test/health.test.js && node test/archive.test.js && node test/ops.test.js",
     "icons": "electron build/make-icons.js",
     "dist": "electron-builder --publish never",
     "dist:mac": "electron-builder --mac --publish never",

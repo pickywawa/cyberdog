@@ -1,4 +1,4 @@
-// Panneaux de droite : tableau de bord santé (+ services, vue globale) et actions rapides.
+// Panneaux de droite : tableau de bord santé et actions rapides (services, logs et docker : ops.js).
 // Chargé après renderer.js : réutilise h, t, icon, toast, ensure, tabs, servers, askPassword, modal, errText, sizeOf…
 
 // ---------- Utilitaires ----------
@@ -21,27 +21,32 @@ function gauge(pct, label, sub, level) {
 const bar = (pct, level) => h('div', { className: 'bar' }, h('i', { className: 'lv-' + level, style: `width:${Math.max(2, Math.min(100, pct))}%` }))
 
 // ---------- Tableau de bord ----------
-const newDash = () => ({
-  sub: 'health', status: 'checking', data: null, error: null, history: [], last: null, busy: false, timer: null,
-  svc: { list: [], filter: 'all', query: '', busy: new Set(), error: null, loaded: false }, svcUi: null,
-})
+const newDash = () => ({ status: 'checking', data: null, error: null, history: [], last: null, busy: false })
 
-function dashStart(tab) {
-  const D = tab.dash
-  if (D.timer) return
-  D.timer = -1
+// Sondage périodique du panneau affiché dans l'onglet actif (santé, services, docker) ; un seul sondage par onglet.
+const POLLS = {
+  dashboard: { every: 10000, run: t => dashCheck(t) },
+  services: { every: 10000, run: t => svcPoll(t) },
+  docker: { every: 6000, run: t => dockerPoll(t) },
+}
+function pollStop(tab) {
+  clearTimeout(tab.pollTimer)
+  tab.pollTimer = null
+  tab.pollKey = null
+}
+function pollStart(tab) {
+  const P = POLLS[tab.panel]
+  if (!P) return pollStop(tab)
+  if (tab.pollKey === tab.panel) return
+  pollStop(tab)
+  const key = (tab.pollKey = tab.panel)
   const loop = async () => {
-    await dashCheck(tab)
-    if (D.timer) D.timer = setTimeout(loop, 10000)
+    await P.run(tab)
+    if (tab.pollKey === key) tab.pollTimer = setTimeout(loop, P.every)
   }
   loop()
 }
-function dashStop(tab) {
-  clearTimeout(tab.dash.timer)
-  tab.dash.timer = null
-}
-// le tableau de bord ne sonde que s'il est affiché dans l'onglet actif
-const syncPanels = () => tabs.forEach(tb => (tb.panel === 'dashboard' && tb.id === activeId ? dashStart(tb) : dashStop(tb)))
+const syncPanels = () => tabs.forEach(tb => (tb.id === activeId ? pollStart(tb) : pollStop(tb)))
 
 async function dashCheck(tab) {
   const D = tab.dash
@@ -59,31 +64,17 @@ async function dashCheck(tab) {
   }
   D.history = D.history.slice(-40)
   D.last = ts
-  if (D.status === 'online' && D.sub === 'services') await svcLoad(tab)
   D.busy = false
   if (tab.panel === 'dashboard') paintDash(tab)
 }
 
 function renderDashboard(tab) {
-  const D = tab.dash
-  const seg = h('div', { className: 'seg' }, ...[['health', 'activity', 'dash.tab.health'], ['services', 'server', 'dash.tab.services'], ['overview', 'grid', 'dash.tab.overview']].map(([k, ic, key]) =>
-    h('button', {
-      className: k === D.sub ? 'on' : '',
-      innerHTML: icon(ic) + `<span>${t(key)}</span>`,
-      onclick: () => { D.sub = k; D.svcUi = null; renderPanel(tab); if (k === 'services') dashRefreshServices(tab) },
-    })))
   tab.dashView = h('div', { className: 'dash-view' })
-  tab.rpanelBody.append(seg, tab.dashView)
-  paintDash(tab)
+  tab.rpanelBody.append(tab.dashView)
+  tab.rpanelActions.append(hib('refresh', 'tb.refresh', () => dashCheck(tab)))
+  paintHealth(tab)
 }
-
-function paintDash(tab) {
-  if (!tab.dashView) return
-  const sub = tab.dash.sub
-  if (sub === 'health') paintHealth(tab)
-  else if (sub === 'services') paintServices(tab)
-  else paintOverview(tab)
-}
+const paintDash = tab => { if (tab.dashView && tab.panel === 'dashboard') paintHealth(tab) }
 
 function alertsOf(tab) {
   const D = tab.dash, d = D.data, out = []
@@ -151,120 +142,6 @@ function paintHealth(tab) {
       style: `height:${x.ok ? Math.max(4, Math.round((x.ms / max) * 34)) : 34}px`,
       title: `${new Date(x.ts).toLocaleTimeString(lang)} · ${x.ok ? msText(x.ms) : t('dash.offline')}`,
     })))))
-}
-
-// ----- Services systemctl -----
-async function svcLoad(tab) {
-  const S = tab.dash.svc
-  try { S.list = await api.invoke('svc:list', tab.connId); S.error = null } catch (e) { S.error = errText(e) }
-  S.loaded = true
-}
-async function dashRefreshServices(tab) {
-  await ensure(tab).catch(() => {})
-  if (tab.connId) await svcLoad(tab)
-  if (tab.panel === 'dashboard') paintDash(tab)
-}
-
-async function svcAct(tab, unit, action) {
-  if (action !== 'start' && !confirm(t('svc.confirm.' + action, { unit }))) return
-  const S = tab.dash.svc
-  S.busy.add(unit)
-  fillSvcList(tab)
-  try {
-    await api.invoke('svc:action', tab.connId, unit, action)
-    toast(t('svc.ok.' + action, { unit }))
-  } catch (e) { toast(t('svc.err', { action: t('svc.' + action), unit, error: errText(e) }), true) }
-  S.busy.delete(unit)
-  await svcLoad(tab)
-  if (tab.panel === 'dashboard' && tab.dash.sub === 'services') fillSvcList(tab)
-}
-
-const SVC_FILTERS = { all: () => true, running: s => s.active === 'active', failed: s => s.active === 'failed', stopped: s => s.active !== 'active' && s.active !== 'failed' }
-
-function paintServices(tab) {
-  const D = tab.dash, S = D.svc
-  if (!D.svcUi) {
-    const input = h('input', { className: 's-filter', spellcheck: false, value: S.query, oninput: () => { S.query = input.value; fillSvcList(tab) } })
-    input.placeholder = t('svc.search')
-    const chips = Object.keys(SVC_FILTERS).map(k => {
-      const b = h('button', { className: 'chip' + (S.filter === k ? ' on' : ''), onclick: () => { S.filter = k; chips.forEach(c => c.classList.toggle('on', c.dataset.k === k)); fillSvcList(tab) } })
-      b.dataset.k = k
-      return b
-    })
-    const list = h('div', { className: 'svc-list' })
-    D.svcUi = { input, chips, list }
-    tab.dashView.replaceChildren(h('div', { className: 'svc-tools' }, input, h('div', { className: 'chips' }, ...chips)), list)
-  }
-  fillSvcList(tab)
-}
-
-function fillSvcList(tab) {
-  const S = tab.dash.svc, ui = tab.dash.svcUi
-  if (!ui) return
-  ui.chips.forEach(c => { c.textContent = `${t('svc.' + c.dataset.k)} ${S.loaded ? S.list.filter(SVC_FILTERS[c.dataset.k]).length : ''}`.trim() })
-  ui.list.replaceChildren()
-  const msg = (text, cls = '') => ui.list.append(h('div', { className: 'msg small ' + cls, textContent: text }))
-  if (S.error) return msg(S.error, 'err')
-  if (!S.loaded) return msg(t('dash.checking'))
-  const q = S.query.toLowerCase()
-  const rank = s => (s.active === 'failed' ? 0 : s.active === 'active' ? 1 : 2)
-  const items = S.list.filter(s => SVC_FILTERS[S.filter](s) && (!q || s.unit.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q))).sort((a, b) => rank(a) - rank(b) || a.unit.localeCompare(b.unit))
-  if (!items.length) return msg(t('svc.none'))
-  for (const s of items) {
-    const busy = S.busy.has(s.unit)
-    const btn = (name, action) => h('button', { className: 'ib', innerHTML: icon(name), title: t('svc.' + action), disabled: busy, onclick: () => svcAct(tab, s.unit, action) })
-    ui.list.append(h('div', { className: 'svc' },
-      h('span', { className: 'dot lv-' + (s.active === 'active' ? 'ok' : s.active === 'failed' ? 'crit' : 'idle'), title: `${s.active} / ${s.sub}` }),
-      h('div', { className: 'svc-main' }, h('b', { textContent: s.unit.replace(/\.service$/, '') }), h('small', { className: 'dim', textContent: s.desc })),
-      h('span', { className: 'svc-btns' },
-        ...(s.active === 'active' ? [btn('refresh', 'restart'), btn('stop', 'stop')] : [btn('play', 'start'), ...(s.active === 'failed' ? [btn('refresh', 'restart')] : [])]))))
-  }
-}
-
-// ----- Vue globale -----
-const overview = new Map() // serverId -> résultat de health:overview
-const ovState = { running: false, done: 0, total: 0 }
-const repaintOverviews = () => tabs.forEach(tb => { if (tb.panel === 'dashboard' && tb.dash.sub === 'overview') paintOverview(tb) })
-
-async function runOverview() {
-  if (ovState.running) return
-  Object.assign(ovState, { running: true, done: 0, total: servers.length })
-  repaintOverviews()
-  const queue = [...servers]
-  const worker = async () => {
-    for (let s; (s = queue.shift()); ) {
-      overview.set(s.id, { ...(await api.invoke('health:overview', s.id)), ts: Date.now() })
-      ovState.done++
-      repaintOverviews()
-    }
-  }
-  await Promise.all(Array.from({ length: 4 }, worker))
-  ovState.running = false
-  repaintOverviews()
-}
-
-function paintOverview(tab) {
-  const view = tab.dashView
-  view.replaceChildren()
-  const res = servers.map(s => overview.get(s.id))
-  const online = res.filter(r => r?.ok).length
-  const offline = res.filter(r => r && !r.ok).length
-  view.append(h('div', { className: 'ov-head' },
-    h('span', { className: 'dim', textContent: ovState.running ? t('ov.checking', { done: ovState.done, total: ovState.total }) : res.some(Boolean) ? t('ov.summary', { online, offline }) : t('ov.hint') }),
-    h('button', { className: 'primary', textContent: t('ov.check_all'), disabled: ovState.running, onclick: runOverview })))
-  for (const s of servers) {
-    const r = overview.get(s.id)
-    const auth = r && !r.ok && AUTH_FAIL.test(r.error || '')
-    const st = !r ? 'idle' : r.ok ? 'ok' : auth ? 'warn' : 'crit'
-    const ram = r?.ok && r.mem ? Math.round((r.mem.used / r.mem.total) * 100) : null
-    const disk = r?.ok && r.disks?.length ? Math.max(...r.disks.map(k => k.pct)) : null
-    const chip = (label, v, w, c) => (v == null ? '' : h('span', { className: 'mchip lv-' + lvl(v, w, c), textContent: `${label} ${Math.round(v)}%` }))
-    const open = () => { const ex = tabs.find(tb => tb.server.id === s.id); if (ex) activate(ex.id); else openFiles(s) }
-    view.append(h('div', { className: 'ov-row', onclick: open, title: r && !r.ok ? errText({ message: r.error }) : '' },
-      h('span', { className: 'dot lv-' + st }),
-      h('div', { className: 'svc-main' }, h('b', { textContent: s.name }), h('small', { className: 'dim', textContent: !r ? t('ov.pending') : r.ok ? `${s.user}@${s.host}` : auth ? t('ov.auth') : t('dash.offline') })),
-      r?.ok ? h('span', { className: 'ov-metrics' }, h('span', { className: 'mchip lv-' + lvl(r.latencyMs, 150, 400), textContent: msText(r.latencyMs) }), chip('CPU', r.cpu, 80, 90), chip('RAM', ram, 80, 90), chip('Disk', disk, 80, 90)) : ''))
-  }
 }
 
 // ---------- Actions rapides ----------

@@ -8,6 +8,9 @@ const crypto = require('crypto')
 const { parseDuck } = require('./duck')
 const { exportZip, readZip } = require('./share')
 const i18n = require('./i18n')
+const archive = require('./archive')
+const logfmt = require('./logs')
+const dockerfmt = require('./docker')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 
 const posix = path.posix
@@ -355,14 +358,6 @@ const healthOf = async (client, connectMs) => {
 }
 ipcMain.handle('health:check', (_, id) => { const c = getConn(id); return healthOf(c.client, c.connectMs) })
 
-// connexion courte, une par serveur (vue globale)
-ipcMain.handle('health:overview', async (_, sid) => {
-  try {
-    const client = await connect(find(sid))
-    try { return { ok: true, ...(await healthOf(client, client.connectMs)) } } finally { client.end() }
-  } catch (e) { return { ok: false, error: e.message } }
-})
-
 ipcMain.handle('svc:list', async (_, id) => {
   const list = parseServices((await exec(getConn(id).client, SERVICES_CMD)).out)
   if (!list.length) throw new Error(t('svc.unavailable'))
@@ -473,6 +468,144 @@ ipcMain.on('drag:start', (e, files) => {
 })
 app.on('will-quit', () => { if (dragRoot) fs.rmSync(dragRoot, { recursive: true, force: true }) })
 
+// sudo : mot de passe enregistré sur stdin (jamais en argument), sinon `sudo -n`
+const sudoOf = c => {
+  const pw = c.server && secret(c.server)
+  return { prefix: pw ? "sudo -S -p ''" : 'sudo -n', input: pw ? pw + '\n' : undefined }
+}
+
+// ---------- Désarchivage sur le serveur ----------
+ipcMain.handle('sftp:extract', async (_, id, file, toFolder) => {
+  const c = getConn(id)
+  const name = posix.basename(file)
+  const k = archive.kind(name)
+  if (!k) throw new Error(t('err.archive_unknown'))
+  const dir = posix.dirname(file)
+  const target = toFolder && !k.single ? posix.join(dir, archive.folderName(name)) : dir
+  const r = await exec(c.client, 'sh -s', { input: archive.command(name, file, target, q), timeout: 600000 })
+  const missing = r.out.match(/MISSING:(\S+)/)
+  if (missing) throw new Error(t('err.tool_missing', { tool: missing[1] }))
+  if (r.code !== 0) throw new Error(r.out.trim().split('\n').slice(-3).join(' ') || `exit ${r.code}`)
+})
+
+// ---------- Logs en direct (journalctl, fichiers, docker) ----------
+const streams = new Map() // id -> { stream }
+const UNIT_NAME = /^[\w@:.\\-]+$/
+const DOCKER_ID = /^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$/
+
+ipcMain.handle('log:start', async (_, connId, spec) => {
+  const c = getConn(connId)
+  let cmd
+  if (spec.kind === 'journal') {
+    if (spec.unit && !UNIT_NAME.test(spec.unit)) throw new Error('invalid unit')
+    cmd = ['journalctl', '-f', '-n', '300', '-o', 'json', '--no-pager', ...(spec.unit ? ['-u', spec.unit] : [])]
+  } else if (spec.kind === 'file') {
+    if (typeof spec.path !== 'string' || !spec.path.startsWith('/')) throw new Error('invalid path')
+    cmd = ['tail', '-n', '300', '-F', spec.path]
+  } else if (spec.kind === 'docker') {
+    if (!DOCKER_ID.test(spec.id)) throw new Error('invalid id')
+    cmd = ['docker', 'logs', '-f', '--tail', '300', spec.id]
+  } else throw new Error('invalid source')
+
+  const s = spec.sudo || (spec.kind === 'docker' && c.dockerSudo) ? sudoOf(c) : null
+  const stream = await new Promise((res, rej) => c.client.exec(`exec ${s ? s.prefix + ' ' : ''}${cmd.map(q).join(' ')}`, (e, st) => (e ? rej(e) : res(st))))
+  if (s?.input) stream.write(s.input)
+
+  const id = crypto.randomUUID()
+  streams.set(id, { stream })
+  let pending = []
+  let timer
+  const flush = () => {
+    timer = null
+    if (pending.length) send('log:data', id, pending.slice(-2000))
+    pending = []
+  }
+  // découpe en lignes par canal ; envoi groupé toutes les 120 ms
+  const splitter = isErr => {
+    let buf = ''
+    stream.setEncoding?.('utf8')
+    return chunk => {
+      buf += chunk
+      const parts = buf.split('\n')
+      buf = parts.pop()
+      for (const l of parts) if (l.trim()) pending.push(logfmt.normalize(spec.kind, l.replace(/\r$/, ''), isErr))
+      timer ??= setTimeout(flush, 120)
+    }
+  }
+  stream.on('data', splitter(false))
+  stream.stderr.setEncoding('utf8')
+  stream.stderr.on('data', splitter(true))
+  stream.on('close', code => { clearTimeout(timer); flush(); streams.delete(id); send('log:end', id, code) })
+  return id
+})
+
+ipcMain.handle('log:stop', (_, id) => {
+  const s = streams.get(id)
+  if (!s) return
+  streams.delete(id)
+  try { s.stream.signal('TERM') } catch {} // le serveur peut ne pas supporter les signaux
+  s.stream.close()
+})
+
+// recherches favorites (un fichier JSON pour toutes les sources)
+const favFile = () => path.join(app.getPath('userData'), 'log-favorites.json')
+let favs = []
+const loadFavs = () => { try { favs = JSON.parse(fs.readFileSync(favFile(), 'utf8')) } catch { favs = [] } }
+const saveFavs = () => fs.writeFileSync(favFile(), JSON.stringify(favs, null, 2))
+ipcMain.handle('favs:list', () => favs)
+ipcMain.handle('favs:save', (_, f) => {
+  favs.push({ id: crypto.randomUUID(), name: String(f.name || f.text || 'Log').slice(0, 60), source: f.source, text: String(f.text || ''), level: f.level || 'all' })
+  saveFavs()
+  return favs
+})
+ipcMain.handle('favs:delete', (_, id) => { favs = favs.filter(f => f.id !== id); saveFavs(); return favs })
+
+// ---------- Docker ----------
+// docker direct ; si « permission denied » (pas dans le groupe docker) on réessaie avec sudo et on s'en souvient pour la connexion
+async function docker(c, args, { timeout = 30000 } = {}) {
+  const run = sudo => {
+    const s = sudo ? sudoOf(c) : null
+    return exec(c.client, `${s ? s.prefix + ' ' : ''}docker ${args.map(q).join(' ')}`, { timeout, input: s?.input })
+  }
+  let r = await run(!!c.dockerSudo)
+  if (!c.dockerSudo && r.code !== 0 && /permission denied/i.test(r.out)) { c.dockerSudo = true; r = await run(true) }
+  if (r.code === 127 || /docker: (command )?not found/i.test(r.out)) throw new Error(t('docker.unavailable'))
+  return r
+}
+const jsonLines = out => out.split('\n').map(l => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
+const lastLines = out => out.trim().split('\n').slice(-2).join(' ')
+
+ipcMain.handle('docker:list', async (_, id) => {
+  const c = getConn(id)
+  const [ps, st] = await Promise.all([docker(c, ['ps', '-a', '--format', '{{json .}}']), docker(c, ['stats', '--no-stream', '--format', '{{json .}}'])])
+  if (ps.code !== 0) throw new Error(lastLines(ps.out))
+  const stats = new Map(jsonLines(st.out).map(s => [s.ID ?? s.Container, s]))
+  return jsonLines(ps.out).map(p => {
+    const s = stats.get(p.ID)
+    return { id: p.ID, name: p.Names, image: p.Image, state: p.State, status: p.Status, ports: p.Ports, cpu: s ? parseFloat(s.CPUPerc) : null, mem: s ? parseFloat(s.MemPerc) : null, memUsage: s?.MemUsage }
+  })
+})
+
+ipcMain.handle('docker:images', async (_, id) => {
+  const r = await docker(getConn(id), ['images', '--format', '{{json .}}'])
+  if (r.code !== 0) throw new Error(lastLines(r.out))
+  return jsonLines(r.out).map(i => ({ id: i.ID, repo: i.Repository, tag: i.Tag, size: i.Size, created: i.CreatedSince }))
+})
+
+ipcMain.handle('docker:inspect', async (_, id, kind, target) => {
+  if (!DOCKER_ID.test(target) || !['image', 'container'].includes(kind)) throw new Error('invalid')
+  const r = await docker(getConn(id), kind === 'image' ? ['image', 'inspect', target] : ['inspect', target])
+  if (r.code !== 0) throw new Error(lastLines(r.out))
+  const json = JSON.parse(r.out)
+  return { rows: dockerfmt.summarize(kind, json), raw: JSON.stringify(json, null, 2).slice(0, 200000) }
+})
+
+ipcMain.handle('docker:action', async (_, id, target, action) => {
+  if (!DOCKER_ID.test(target) || !['start', 'stop', 'restart'].includes(action)) throw new Error('invalid')
+  const r = await docker(getConn(id), [action, target], { timeout: 90000 })
+  if (r.code !== 0) throw new Error(lastLines(r.out))
+})
+
 // ---------- Terminal ----------
 ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
   const client = await connect(find(sid))
@@ -490,6 +623,7 @@ ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindo
 app.setName('Cyberdog')
 app.whenReady().then(() => {
   load()
+  loadFavs()
   loadSettings()
   if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../build/icon.png'))
   if (!isMac) Menu.setApplicationMenu(null)

@@ -164,6 +164,7 @@ Les installeurs sont produits dans `dist/`. Les icônes se régénèrent depuis 
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | chaque push / pull request | lance les tests sous Linux et macOS |
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | compile le `.dmg` macOS et les `.exe` Windows, puis publie une Release GitHub avec les checksums |
+| [`.gitlab-ci.yml`](.gitlab-ci.yml) | push, tag `v*` | même pipeline pour GitLab : tests, build Windows (Linux + wine), build macOS optionnel sur un runner `macos`, Release via le Package Registry |
 
 Pour publier une nouvelle version :
 

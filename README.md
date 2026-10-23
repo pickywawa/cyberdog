@@ -164,6 +164,7 @@ Installers are written to `dist/`. Icons are generated from `src/assets/icon.svg
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | every push / pull request | runs the tests on Linux and macOS |
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` (or manual run) | builds the macOS `.dmg` and Windows `.exe` files, then publishes a GitHub Release with checksums |
+| [`.gitlab-ci.yml`](.gitlab-ci.yml) | push, tag `v*` | same pipeline for GitLab: tests, Windows build (Linux + wine), optional macOS build on a `macos` runner, Release via the Package Registry |
 
 To publish a new version:
 

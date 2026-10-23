@@ -23,9 +23,10 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 | | |
 |---|---|
-| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables (nom, taille, date, propriétaire, groupe, permissions, type, extension), glisser-déposer depuis le bureau, actions au clic droit, **recherche distante instantanée**. |
+| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables (nom, taille, date, propriétaire, groupe, permissions, type, extension), glisser-déposer depuis le bureau, actions au clic droit, **recherche distante instantanée**, **vue scindée** et **désarchivage** en un clic. |
 | 🖥️ **Terminal inclus** | Un clic ouvre un terminal SSH *sous* l'explorateur, déjà placé dans le dossier que vous parcourez. Fini la jonglerie entre fenêtres. |
-| 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime, latence SSH — et les services `systemctl` à démarrer, arrêter, redémarrer. |
+| 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
+| ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. |
 | 🔁 **Partagez votre configuration** | Un fichier JSON par serveur. Exportez/importez un zip (jamais de mot de passe dedans) ou importez vos favoris **Cyberduck**. |
 | 🎨 **Pensé pour être beau** | 7 thèmes, 4 langues, barres de défilement discrètes, autant d'onglets de serveurs que vous voulez. |
@@ -66,7 +67,7 @@ Ajoutez un serveur avec un nom, un hôte, un login et un mot de passe (ou utilis
 
 ### Un explorateur de fichiers moderne
 
-Dossiers d'abord, icônes colorées selon le type de fichier, sélection multiple (⌘/Ctrl-clic, Maj-clic) et un menu clic droit : *Télécharger sous…, Copier le nom, Copier le chemin complet, Éditer avec…, Renommer, Supprimer, Nouveau dossier, Nouveau fichier*.
+Dossiers d'abord, icônes colorées selon le type de fichier, sélection multiple (⌘/Ctrl-clic, Maj-clic) et un menu clic droit : *Télécharger sous…, Copier le nom, Copier le chemin complet, Éditer avec…, Désarchiver, Renommer, Supprimer, Nouveau dossier, Nouveau fichier*.
 
 <img src="docs/screenshots/explorer.png" alt="Explorateur de fichiers" width="100%">
 
@@ -78,7 +79,15 @@ Dossiers d'abord, icônes colorées selon le type de fichier, sélection multipl
 
 <img src="docs/screenshots/search.png" alt="Recherche distante avec autocomplétion" width="100%">
 
+**Désarchivez sur place** : clic droit sur un `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… puis *Désarchiver ici* ou *Désarchiver dans « nom/ »* — l'opération s'exécute sur le serveur, rien n'est téléchargé.
+
+**Vue scindée** : le bouton ⧉ de la barre de l'explorateur le scinde en **deux explorateurs indépendants** (chemin, historique, sélection, tri et recherche propres) pour comparer des dossiers ou travailler à deux endroits en même temps. Glissez des fichiers d'un côté à l'autre pour les copier, même entre dossiers distants. Recliquez sur ⧉ pour fusionner.
+
+<img src="docs/screenshots/split.png" alt="Vue scindée avec deux explorateurs" width="100%">
+
 **Glisser-déposer** : déposez des fichiers du bureau pour les envoyer (dossiers compris), ou glissez des fichiers de Cyberdog vers votre bureau pour les télécharger.
+
+**Tout est redimensionnable** : tirez le bord de la liste des serveurs, du panneau de droite, du terminal ou la séparation entre les deux explorateurs. Les tailles sont mémorisées.
 
 ### Le terminal, là où vous travaillez
 
@@ -86,7 +95,7 @@ Le terminal s'ouvre sous l'explorateur, démarre dans le dossier courant et rest
 
 ### Tableau de bord de santé
 
-Cliquez sur le bouton 📈 de la barre d'outils de droite. Toutes les 10 secondes :
+Cliquez sur le bouton 📈 de la barre d'outils de droite (terminal, santé, services, logs, Docker et actions rapides s'y trouvent). Toutes les 10 secondes :
 
 - Statut **en ligne / hors ligne** et heure de la dernière vérification
 - **CPU, mémoire, swap et charge système**
@@ -95,13 +104,24 @@ Cliquez sur le bouton 📈 de la barre d'outils de droite. Toutes les 10 seconde
 
 <img src="docs/screenshots/dashboard.png" alt="Tableau de bord de santé" width="100%">
 
-L'onglet **Services** liste vos services `systemctl` avec leur état, une recherche et des filtres. Démarrez un service arrêté, redémarrez ou arrêtez un service actif — `sudo` est géré pour vous si vous n'êtes pas root.
+### Services
+
+Le bouton ⚙️ liste vos services `systemctl` avec leur état, une recherche et des filtres (actifs / en échec / arrêtés). Démarrez un service arrêté, redémarrez ou arrêtez un service actif — `sudo` est géré pour vous si vous n'êtes pas root — ou ouvrez ses logs en un clic.
 
 <img src="docs/screenshots/services.png" alt="Services systemd" width="100%">
 
-L'onglet **Vue globale** vérifie *tous* vos serveurs enregistrés d'un coup, pour voir en un regard lesquels sont sains, surchargés ou hors ligne.
+### Logs en direct
 
-<img src="docs/screenshots/overview.png" alt="Vue globale des serveurs" width="100%">
+Le bouton 📜 suit vos logs en temps réel : le **journal système** (`journalctl -f`), **une unité**, les logs **Nginx** (erreurs/accès), `syslog`, `auth.log` ou **n'importe quel fichier**. Filtrez par texte et par niveau, repérez les erreurs et avertissements **en surbrillance** (avec compteurs), mettez en pause en remontant, et gardez vos **recherches favorites** à un clic.
+
+<img src="docs/screenshots/logs.png" alt="Logs système en direct avec erreurs en surbrillance" width="100%">
+
+### Docker
+
+Le bouton 📦 liste vos conteneurs avec leur **utilisation CPU / RAM en direct**, permet de les **démarrer, arrêter et redémarrer**, de **suivre leurs logs en direct** et d'**inspecter** conteneurs et images (ports, volumes, variables, couches…). Idéal si vos serveurs hébergent des applications conteneurisées.
+
+<img src="docs/screenshots/docker.png" alt="Conteneurs Docker" width="100%">
+<img src="docs/screenshots/docker-logs.png" alt="Logs d'un conteneur en direct" width="100%">
 
 ### Actions rapides
 
@@ -164,14 +184,6 @@ Les installeurs sont produits dans `dist/`. Les icônes se régénèrent depuis 
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | chaque push / pull request | lance les tests sous Linux et macOS |
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | compile le `.dmg` macOS et les `.exe` Windows, puis publie une Release GitHub avec les checksums |
-| [`.gitlab-ci.yml`](.gitlab-ci.yml) | push, tag `v*` | même pipeline pour GitLab : tests, build Windows (Linux + wine), build macOS optionnel sur un runner `macos`, Release via le Package Registry |
-
-Pas de runner macOS sur votre GitLab ? Construisez le `.dmg` sur votre Mac et rattachez-le à la release :
-
-```sh
-export GITLAB_TOKEN=<jeton personnel, scope api> CI_API_V4_URL=<gitlab>/api/v4 CI_PROJECT_ID=<id> CI_COMMIT_TAG=v1.2.3
-npm run dist:mac && sh ci/upload.sh dist/*.dmg && node ci/publish-release.mjs
-```
 
 Pour publier une nouvelle version :
 
@@ -189,7 +201,9 @@ Electron · [ssh2](https://github.com/mscdex/ssh2) (SFTP, shell, exec) · [xterm
 ```
 src/main.js        process principal : SSH/SFTP, stockage, IPC
 src/renderer.js    explorateur, onglets, terminal, recherche
-src/panels.js      tableau de bord santé, services, actions rapides
+src/panels.js      tableau de bord santé, actions rapides
+src/ops.js         services, logs en direct, Docker
+src/archive.js     détection des archives + commandes de désarchivage
 src/health.js      script de santé distant + parseurs
 src/i18n.js        traductions (EN/FR/DE/IT)
 ```

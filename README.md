@@ -23,9 +23,10 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 | | |
 |---|---|
-| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns (name, size, date, owner, group, permissions, type, extension), drag & drop from your desktop, right-click actions, **instant remote search**. |
+| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns (name, size, date, owner, group, permissions, type, extension), drag & drop from your desktop, right-click actions, **instant remote search**, **split view** and one-click **archive extraction**. |
 | 🖥️ **Terminal included** | One click opens an SSH terminal *under* the explorer, already `cd`'d into the folder you are browsing. No more juggling windows. |
-| 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime, SSH latency — plus `systemctl` services you can start, stop and restart. |
+| 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
+| ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. |
 | 🔁 **Share your setup** | One JSON file per server. Export/import a zip (passwords never included) or import your **Cyberduck** bookmarks. |
 | 🎨 **Made to look good** | 7 themes, 4 languages, discreet scrollbars, tabs for as many servers as you like. |
@@ -66,7 +67,7 @@ Add servers with a name, host, login and password (or rely on your SSH agent / k
 
 ### A modern file explorer
 
-Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shift-click), and a right-click menu with *Download as…, Copy name, Copy full path, Edit with…, Rename, Delete, New folder, New file*.
+Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shift-click), and a right-click menu with *Download as…, Copy name, Copy full path, Edit with…, Extract, Rename, Delete, New folder, New file*.
 
 <img src="docs/screenshots/explorer.png" alt="File explorer" width="100%">
 
@@ -78,7 +79,15 @@ Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shif
 
 <img src="docs/screenshots/search.png" alt="Remote search with autocomplete" width="100%">
 
+**Extract archives in place**: right-click a `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… and choose *Extract here* or *Extract to "name/"* — it runs on the server, nothing is downloaded.
+
+**Split view**: the ⧉ button in the explorer toolbar splits it into **two independent explorers** (own path, history, selection, sort and search) to compare folders or work in two places at once. Drag files from one side to the other to copy them, even across folders. Click ⧉ again to merge.
+
+<img src="docs/screenshots/split.png" alt="Split view with two explorers" width="100%">
+
 **Drag & drop** files from your desktop to upload them (folders included), or drag files from Cyberdog to your desktop to download them.
+
+**Everything is resizable**: drag the edge of the server list, of the right-hand panel, of the terminal or between the two explorers. Sizes are remembered.
 
 ### Terminal, right where you work
 
@@ -86,7 +95,7 @@ The terminal opens under the explorer, starts in the current folder and stays op
 
 ### Server health dashboard
 
-Click the 📈 button in the right-hand toolbar. Every 10 seconds you get:
+Click the 📈 button in the right-hand toolbar (the terminal, health, services, logs, Docker and quick-action buttons all live there). Every 10 seconds you get:
 
 - **Online / offline** status and the time of the last check
 - **CPU, memory, swap and system load**
@@ -95,13 +104,24 @@ Click the 📈 button in the right-hand toolbar. Every 10 seconds you get:
 
 <img src="docs/screenshots/dashboard.png" alt="Server health dashboard" width="100%">
 
-The **Services** tab lists your `systemctl` services with their state, a search box and filters. Start a stopped service, restart or stop a running one — with `sudo` handled for you when you are not root.
+### Services
+
+The ⚙️ button lists your `systemctl` services with their state, a search box and filters (running / failed / stopped). Start a stopped service, restart or stop a running one — `sudo` is handled for you when you are not root — or jump to its logs in one click.
 
 <img src="docs/screenshots/services.png" alt="systemd services" width="100%">
 
-The **Overview** tab checks *all* your saved servers at once, so you can see in one glance which ones are healthy, overloaded or down.
+### Live logs
 
-<img src="docs/screenshots/overview.png" alt="All servers overview" width="100%">
+The 📜 button follows your logs in real time: the **system journal** (`journalctl -f`), a **single unit**, **Nginx** error/access logs, `syslog`, `auth.log` or **any file**. Filter by text and by level, see errors and warnings **highlighted** (with counters), pause by scrolling, and keep **favorite searches** one click away.
+
+<img src="docs/screenshots/logs.png" alt="Live system logs with highlighted errors" width="100%">
+
+### Docker
+
+The 📦 button lists your containers with live **CPU / RAM usage**, lets you **start, stop and restart** them, **tail their logs live** and **inspect** containers and images (ports, mounts, env, layers…). Ideal when your servers host containerized apps.
+
+<img src="docs/screenshots/docker.png" alt="Docker containers" width="100%">
+<img src="docs/screenshots/docker-logs.png" alt="Live container logs" width="100%">
 
 ### Quick actions
 
@@ -164,14 +184,6 @@ Installers are written to `dist/`. Icons are generated from `src/assets/icon.svg
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | every push / pull request | runs the tests on Linux and macOS |
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` (or manual run) | builds the macOS `.dmg` and Windows `.exe` files, then publishes a GitHub Release with checksums |
-| [`.gitlab-ci.yml`](.gitlab-ci.yml) | push, tag `v*` | same pipeline for GitLab: tests, Windows build (Linux + wine), optional macOS build on a `macos` runner, Release via the Package Registry |
-
-No macOS runner on your GitLab? Build the `.dmg` on your Mac and attach it to the release:
-
-```sh
-export GITLAB_TOKEN=<personal token, scope api> CI_API_V4_URL=<gitlab>/api/v4 CI_PROJECT_ID=<id> CI_COMMIT_TAG=v1.2.3
-npm run dist:mac && sh ci/upload.sh dist/*.dmg && node ci/publish-release.mjs
-```
 
 To publish a new version:
 
@@ -189,7 +201,9 @@ Electron · [ssh2](https://github.com/mscdex/ssh2) (SFTP, shell, exec) · [xterm
 ```
 src/main.js        main process: SSH/SFTP, storage, IPC
 src/renderer.js    explorer, tabs, terminal, search
-src/panels.js      health dashboard, services, quick actions
+src/panels.js      health dashboard, quick actions
+src/ops.js         services, live logs, Docker
+src/archive.js     archive detection + extraction commands
 src/health.js      remote health script + parsers
 src/i18n.js        translations (EN/FR/DE/IT)
 ```

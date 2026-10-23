@@ -389,3 +389,87 @@ function paintDocker(tab) {
           : [btn('play', 'svc.start', () => dockerAct(tab, c, 'start'))]))))
   }
 }
+
+// ============================================================ Chemins enregistrés
+// { id, name, path, serverId } ; sans serverId = valable pour tous les serveurs
+let savedPaths = []
+const pathsOf = tab => ({ here: savedPaths.filter(p => p.serverId === tab.server.id), all: savedPaths.filter(p => !p.serverId) })
+
+async function pathForm(tab, entry, scope) {
+  const v = await modal(entry ? t('paths.edit_title') : t('paths.new_title'), [
+    { name: 'name', label: t('paths.name'), value: entry?.name, placeholder: t('paths.name_ph') },
+    { name: 'path', label: t('paths.path'), value: entry?.path ?? (tab.path || tab.active?.path || ''), placeholder: '/var/log/app' },
+  ], entry ? t('btn.save') : t('btn.add_ok'))
+  if (!v) return
+  try {
+    const serverId = entry ? entry.serverId : scope === 'here' ? tab.server.id : null
+    savedPaths = await api.invoke('paths:save', { id: entry?.id, name: v.name, path: v.path, serverId })
+    repaintPaths()
+  } catch (e) { toast(errText(e), true) }
+}
+
+async function deletePath(p) {
+  if (!confirm(t('paths.confirm_delete', { name: p.name || p.path }))) return
+  savedPaths = await api.invoke('paths:delete', p.id)
+  repaintPaths()
+}
+
+// emmène un volet de l'explorateur sur le chemin enregistré
+function gotoPath(pane, p) {
+  hidePathsBoxes()
+  load(pane, p.path)
+}
+
+function repaintPaths() {
+  tabs.forEach(tb => {
+    if (tb.panel === 'paths') paintPaths(tb)
+    tb.panes.forEach(paintPathsBox)
+  })
+}
+const hidePathsBoxes = () => tabs.forEach(tb => tb.panes.forEach(p => (p.pathsBox.hidden = true)))
+
+// panneau de droite : deux sections (ce serveur / tous les serveurs)
+function renderPaths(tab) {
+  tab.rpanelActions.append(hib('bookmark', 'paths.current', () => pathForm(tab, null, 'here')))
+  paintPaths(tab)
+}
+
+function paintPaths(tab) {
+  if (tab.panel !== 'paths') return
+  const body = tab.rpanelBody
+  body.replaceChildren()
+  const { here, all } = pathsOf(tab)
+  const section = (titleKey, list, scope) => {
+    body.append(h('div', { className: 'ps-head' }, h('h4', { textContent: t(titleKey) }), hib('plus', 'paths.add', () => pathForm(tab, null, scope))))
+    if (!list.length) body.append(h('div', { className: 'msg small', textContent: t('paths.none') }))
+    for (const p of list) {
+      body.append(h('div', { className: 'ps-row', title: p.path, onclick: () => gotoPath(tab.active, p) },
+        h('span', { className: 'ps-ic', innerHTML: icon('folder') }),
+        h('div', { className: 'svc-main' }, h('b', { textContent: p.name || p.path }), p.name ? h('small', { className: 'dim mono', textContent: p.path }) : ''),
+        h('span', { className: 'svc-btns' },
+          hib('pencil', 'qa.edit', e => { e.stopPropagation(); pathForm(tab, p) }),
+          hib('trash', 'qa.delete', e => { e.stopPropagation(); deletePath(p) }))))
+    }
+  }
+  section('paths.this', here, 'here')
+  section('paths.all', all, 'all')
+}
+
+// liste déroulante accrochée à la barre de chemin de chaque volet
+function paintPathsBox(ex) {
+  const box = ex.pathsBox
+  if (!box) return
+  box.replaceChildren()
+  const { here, all } = pathsOf(ex)
+  const rows = [...here, ...all]
+  if (!rows.length) box.append(h('div', { className: 'msg small', textContent: t('paths.none') }))
+  for (const p of rows) {
+    box.append(h('div', { className: 'pb-row', title: p.path, onclick: () => gotoPath(ex, p) },
+      h('span', { className: 'ps-ic', innerHTML: icon(p.serverId ? 'bookmark' : 'globe') }),
+      h('b', { textContent: p.name || p.path }),
+      p.name ? h('span', { className: 'pb-path', textContent: p.path }) : ''))
+  }
+  box.append(h('hr'),
+    h('div', { className: 'pb-act', onclick: () => { hidePathsBoxes(); pathForm(ex, null, 'here') } }, h('span', { innerHTML: icon('plus') }), h('span', { textContent: t('paths.current') })),
+    h('div', { className: 'pb-act', onclick: () => { hidePathsBoxes(); if (ex.root.panel !== 'paths') setPanel(ex.root, 'paths') } }, h('span', { innerHTML: icon('cog') }), h('span', { textContent: t('paths.manage') })))
+}

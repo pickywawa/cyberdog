@@ -74,7 +74,7 @@ function refreshLanguage() {
   renderServers()
   tabs.forEach(tb => {
     applyI18n(tb.el)
-    tb.panes.forEach(p => { draw(p); paintSearch(p) })
+    tb.panes.forEach(p => { draw(p); paintSearch(p); paintPathsBox(p) })
     renderPanel(tb)
     updateBar(tb)
   })
@@ -132,6 +132,7 @@ function menu(x, y, items, { up = false } = {}) {
 addEventListener('mousedown', e => {
   if (!e.target.closest('#menu')) hideMenu()
   if (!e.target.closest('.searchbox, .js-search-btn')) tabs.forEach(tb => tb.panes.forEach(p => (p.searchBox.hidden = true)))
+  if (!e.target.closest('.pathsbox, .js-paths-btn')) hidePathsBoxes()
 })
 addEventListener('keydown', e => {
   const tab = tabs.find(tb => tb.id === activeId)
@@ -147,9 +148,15 @@ addEventListener('drop', e => e.preventDefault())
 function modal(title, fields, okLabel, { wide = false } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
-    const inputs = fields.map(f => f.type === 'textarea'
-      ? h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false })
-      : h('input', { type: f.type || 'text', value: f.value || '', placeholder: f.placeholder || '' }))
+    const inputs = fields.map(f => {
+      if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false })
+      if (f.type === 'select') {
+        const sel = h('select', { className: 'lsel full' }, ...f.options.map(([v, label]) => h('option', { value: v, textContent: label })))
+        sel.value = f.value || ''
+        return sel
+      }
+      return h('input', { type: f.type || 'text', value: f.value || '', placeholder: f.placeholder || '' })
+    })
     const close = v => { m.hidden = true; m.replaceChildren(); resolve(v) }
     const form = h('form', {
       className: 'card' + (wide ? ' wide' : ''),
@@ -170,16 +177,22 @@ function modal(title, fields, okLabel, { wide = false } = {}) {
 }
 
 // ---------- Serveurs ----------
-async function serverForm(s) {
-  const v = await modal(s ? t('form.edit_title') : t('form.add_title'), [
-    { name: 'name', label: t('f.name'), value: s?.name, placeholder: t('f.name_ph') },
+let groups = []
+let srvQuery = ''
+
+// s : serveur à modifier ; duplicate : s sert de modèle pour un NOUVEAU serveur (mot de passe repris si laissé vide)
+async function serverForm(s, { duplicate = false } = {}) {
+  const edit = s && !duplicate
+  const v = await modal(edit ? t('form.edit_title') : t('form.add_title'), [
+    { name: 'name', label: t('f.name'), value: duplicate ? t('srv.copy_name', { name: s.name }) : s?.name, placeholder: t('f.name_ph') },
     { name: 'host', label: t('f.host'), value: s?.host, placeholder: '192.168.1.10' },
     { name: 'port', label: t('f.port'), value: s?.port ?? 22 },
     { name: 'user', label: t('f.user'), value: s?.user, placeholder: 'root' },
-    { name: 'pass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? t('f.pass_keep') : t('f.pass_ph') },
-  ], s ? t('btn.save') : t('btn.add_ok'))
+    { name: 'pass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph') },
+    ...(groups.length ? [{ name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(g => [g.id, g.name])] }] : []),
+  ], edit ? t('btn.save') : t('btn.add_ok'))
   if (!v) return
-  try { servers = await api.invoke('servers:save', { ...v, id: s?.id }); renderServers() } catch (e) { toast(errText(e), true) }
+  try { servers = await api.invoke('servers:save', { ...v, id: edit ? s.id : undefined, copyFrom: duplicate ? s.id : undefined }); renderServers() } catch (e) { toast(errText(e), true) }
 }
 
 // mot de passe manquant ou refusé : on le demande, on l'enregistre, l'appelant réessaie
@@ -191,49 +204,170 @@ async function askPassword(s) {
 
 const hue = name => Math.abs([...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7)) % 360
 let dragId = null
+let dragGroup = null
+const groupOf = s => groups.find(g => g.id === s.group)
+
+const setFavorite = async (s, on) => { servers = await api.invoke('servers:update', s.id, { favorite: on }); renderServers() }
+const setGroupFav = async (g, on) => { groups = await api.invoke('groups:update', g.id, { favorite: on }); renderServers() }
+const moveToGroup = async (s, gid) => { servers = await api.invoke('servers:update', s.id, { group: gid }); renderServers() }
+
+async function groupForm(g) {
+  const v = await modal(g ? t('grp.rename') : t('grp.new'), [{ name: 'name', label: t('grp.name'), value: g?.name }], g ? t('btn.save') : t('btn.create'))
+  if (!v) return
+  try { groups = await api.invoke('groups:save', { id: g?.id, name: v.name }); renderServers() } catch (e) { toast(errText(e), true) }
+}
+async function deleteGroup(g) {
+  if (!confirm(t('grp.confirm_delete', { name: g.name }))) return
+  const r = await api.invoke('groups:delete', g.id)
+  groups = r.groups
+  servers = r.servers
+  renderServers()
+}
+
+const starBtn = (on, onclick) => h('button', { className: 'ib fav' + (on ? ' favon' : ''), innerHTML: icon('star'), title: t(on ? 'fav.remove' : 'fav.add'), onclick: e => { e.stopPropagation(); onclick() } })
+
+function serverRow(s, activeServer) {
+  const hh = hue(s.name)
+  const li = h('li', { className: 'srv' + (s.id === activeServer ? ' active' : ''), draggable: true },
+    h('span', { className: 'tile', innerHTML: icon('server'), style: `background: linear-gradient(135deg, hsl(${hh} 75% 58%), hsl(${(hh + 45) % 360} 75% 48%))` }),
+    h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
+    starBtn(s.favorite, () => setFavorite(s, !s.favorite)),
+    h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('srv.edit_tip'), onclick: e => { e.stopPropagation(); serverForm(s) } }))
+  li.onclick = () => openFiles(s)
+  li.oncontextmenu = e => {
+    e.preventDefault()
+    menu(e.clientX, e.clientY, [
+      { label: t('srv.open'), icon: 'folder', fn: () => openFiles(s) },
+      { label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) },
+      '-',
+      { label: t(s.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setFavorite(s, !s.favorite) },
+      ...(groups.length ? [{ label: t('f.group'), icon: 'folder', children: async () => [{ label: t('f.group_none'), checked: !groupOf(s), fn: () => moveToGroup(s, '') }, ...groups.map(g => ({ label: g.name, checked: s.group === g.id, fn: () => moveToGroup(s, g.id) }))] }] : []),
+      '-',
+      { label: t('srv.edit'), icon: 'pencil', fn: () => serverForm(s) },
+      { label: t('srv.duplicate'), icon: 'copy', fn: () => serverForm(s, { duplicate: true }) },
+      { label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { servers = await api.invoke('servers:delete', s.id); renderServers() } } },
+    ])
+  }
+  li.ondragstart = e => { dragId = s.id; dragGroup = null; e.dataTransfer.effectAllowed = 'move' }
+  li.ondragend = () => { dragId = null }
+  li.ondragover = e => { if (dragId) { e.preventDefault(); li.classList.add('over') } }
+  li.ondragleave = () => li.classList.remove('over')
+  li.ondrop = async e => {
+    e.preventDefault()
+    e.stopPropagation()
+    li.classList.remove('over')
+    if (!dragId || dragId === s.id) return
+    const dragged = servers.find(x => x.id === dragId)
+    const ids = servers.map(x => x.id)
+    ids.splice(ids.indexOf(s.id), 0, ...ids.splice(ids.indexOf(dragId), 1))
+    servers = await api.invoke('servers:reorder', ids)
+    // déposé sur un serveur d'un autre groupe : il rejoint ce groupe
+    if ((dragged.group || '') !== (s.group || '')) servers = await api.invoke('servers:update', dragId, { group: s.group || '' })
+    renderServers()
+  }
+  return li
+}
+
+function groupRow(g, count, q) {
+  const collapsed = g.collapsed && !q // une recherche déplie les groupes pour montrer les résultats
+  const li = h('li', { className: 'grp' + (collapsed ? ' collapsed' : ''), draggable: true },
+    h('span', { className: 'chev', innerHTML: icon('chevron-right') }),
+    h('span', { className: 'gname', textContent: g.name }),
+    h('span', { className: 'gcount', textContent: String(count) }),
+    starBtn(g.favorite, () => setGroupFav(g, !g.favorite)),
+    h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('grp.rename'), onclick: e => { e.stopPropagation(); groupForm(g) } }))
+  li.title = t('grp.collapse')
+  li.onclick = async () => { groups = await api.invoke('groups:update', g.id, { collapsed: !g.collapsed }); renderServers() }
+  li.oncontextmenu = e => {
+    e.preventDefault()
+    menu(e.clientX, e.clientY, [
+      { label: t(g.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setGroupFav(g, !g.favorite) },
+      { label: t('grp.rename'), icon: 'pencil', fn: () => groupForm(g) },
+      '-',
+      { label: t('grp.delete'), icon: 'trash', danger: true, fn: () => deleteGroup(g) },
+    ])
+  }
+  li.ondragstart = e => { dragGroup = g.id; dragId = null; e.dataTransfer.effectAllowed = 'move' }
+  li.ondragend = () => { dragGroup = null }
+  li.ondragover = e => { if (dragId || (dragGroup && dragGroup !== g.id)) { e.preventDefault(); li.classList.add('over') } }
+  li.ondragleave = () => li.classList.remove('over')
+  li.ondrop = async e => {
+    e.preventDefault()
+    li.classList.remove('over')
+    if (dragId) return moveToGroup(servers.find(x => x.id === dragId), g.id) // un serveur déposé sur un groupe y entre
+    if (dragGroup && dragGroup !== g.id) {
+      const ids = groups.map(x => x.id)
+      ids.splice(ids.indexOf(g.id), 0, ...ids.splice(ids.indexOf(dragGroup), 1))
+      groups = await api.invoke('groups:reorder', ids)
+      renderServers()
+    }
+  }
+  return li
+}
+
+// Liste : favoris (groupes puis serveurs) en tête, puis groupes, puis serveurs sans groupe. Le filtre de recherche agit en direct.
 function renderServers() {
   const ul = $('#servers')
   ul.replaceChildren()
   const activeServer = tabs.find(tb => tb.id === activeId)?.server.id
-  for (const s of servers) {
-    const hh = hue(s.name)
-    const li = h('li', { className: s.id === activeServer ? 'active' : '', draggable: true },
-      h('span', { className: 'tile', innerHTML: icon('server'), style: `background: linear-gradient(135deg, hsl(${hh} 75% 58%), hsl(${(hh + 45) % 360} 75% 48%))` }),
-      h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
-      h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('srv.edit_tip'), onclick: e => { e.stopPropagation(); serverForm(s) } }))
-    li.onclick = () => openFiles(s)
-    li.oncontextmenu = e => {
-      e.preventDefault()
-      menu(e.clientX, e.clientY, [
-        { label: t('srv.open'), icon: 'folder', fn: () => openFiles(s) },
-        { label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) },
-        '-',
-        { label: t('srv.edit'), icon: 'pencil', fn: () => serverForm(s) },
-        { label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { servers = await api.invoke('servers:delete', s.id); renderServers() } } },
-      ])
-    }
-    li.ondragstart = e => { dragId = s.id; e.dataTransfer.effectAllowed = 'move' }
-    li.ondragend = () => { dragId = null }
-    li.ondragover = e => { if (dragId) { e.preventDefault(); li.classList.add('over') } }
-    li.ondragleave = () => li.classList.remove('over')
-    li.ondrop = async e => {
-      e.preventDefault()
-      li.classList.remove('over')
-      if (!dragId || dragId === s.id) return
-      const ids = servers.map(x => x.id)
-      ids.splice(ids.indexOf(s.id), 0, ...ids.splice(ids.indexOf(dragId), 1))
-      servers = await api.invoke('servers:reorder', ids)
-      renderServers()
-    }
-    ul.append(li)
+  const q = srvQuery.trim().toLowerCase()
+  const has = (x, str) => str.toLowerCase().includes(x)
+  const srvMatch = s => !q || [s.name, s.host, s.user, groupOf(s)?.name || ''].some(x => has(q, x))
+  const grpMatch = g => !!q && has(q, g.name)
+  const inGroup = g => servers.filter(s => s.group === g.id)
+  const visibleIn = g => (grpMatch(g) ? inGroup(g) : inGroup(g).filter(srvMatch))
+  const showGroup = g => !q || grpMatch(g) || visibleIn(g).length > 0
+
+  const pushGroup = g => {
+    // les serveurs favoris d'un groupe non favori remontent dans « Favoris » : on ne les répète pas ici
+    const kids = visibleIn(g).filter(s => g.favorite || !s.favorite)
+    ul.append(groupRow(g, kids.length, q))
+    if (!g.collapsed || q) kids.forEach(s => { const li = serverRow(s, activeServer); li.classList.add('in-group'); ul.append(li) })
   }
+
+  const favGroups = groups.filter(g => g.favorite && showGroup(g))
+  const favServers = servers.filter(s => s.favorite && !groupOf(s)?.favorite && srvMatch(s))
+  const restGroups = groups.filter(g => !g.favorite && showGroup(g))
+  const loose = servers.filter(s => !s.favorite && !groupOf(s) && srvMatch(s))
+
+  if (favGroups.length || favServers.length) {
+    ul.append(h('li', { className: 'sep-label', innerHTML: icon('star') + `<span>${t('fav.title')}</span>` }))
+    favGroups.forEach(pushGroup)
+    favServers.forEach(s => ul.append(serverRow(s, activeServer)))
+    if (restGroups.length || loose.length) ul.append(h('li', { className: 'sep-line' }))
+  }
+  restGroups.forEach(pushGroup)
+  if (loose.length) {
+    if (groups.length) {
+      const lab = h('li', { className: 'sep-label plain' }, h('span', { textContent: t('grp.none') }))
+      lab.ondragover = e => { if (dragId) { e.preventDefault(); lab.classList.add('over') } }
+      lab.ondragleave = () => lab.classList.remove('over')
+      lab.ondrop = e => { e.preventDefault(); if (dragId) moveToGroup(servers.find(x => x.id === dragId), '') }
+      ul.append(lab)
+    }
+    loose.forEach(s => ul.append(serverRow(s, activeServer)))
+  }
+  if (q && !ul.childElementCount) ul.append(h('li', { className: 'srv-empty', textContent: t('srvs.no_match') }))
   $('#card-export').hidden = !servers.length
 }
 
 async function sortServers() {
+  if (groups.length) groups = await api.invoke('groups:reorder', [...groups].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map(g => g.id))
   servers = await api.invoke('servers:reorder', [...servers].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).map(s => s.id))
   renderServers()
 }
+
+function toggleSrvSearch(open = $('#srv-search').hidden) {
+  $('#srv-search').hidden = !open
+  $('#btn-search').classList.toggle('on', open)
+  if (open) $('#srv-q').focus()
+  else { srvQuery = ''; $('#srv-q').value = ''; renderServers() }
+}
+$('#btn-search').onclick = () => toggleSrvSearch()
+$('#btn-group').onclick = () => groupForm()
+$('#srv-q').oninput = e => { srvQuery = e.target.value; renderServers() }
+$('#srv-q').onkeydown = e => { if (e.key === 'Escape') toggleSrvSearch(false) }
+
 const importFrom = ch => async () => {
   try {
     const r = await api.invoke(ch)
@@ -366,9 +500,10 @@ const PANELS = {
   services: { title: 'svc.title', render: t => renderServices(t) },
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
   docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  paths: { title: 'paths.title', render: t => renderPaths(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
 
 const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
@@ -684,17 +819,20 @@ function makeExplorer(tab) {
   ex.statusL = h('span')
   ex.statusR = h('span')
   ex.splitBtn = ib('split', 'ex.split', () => toggleSplit(ex))
+  ex.pathsBtn = ib('bookmark', 'paths.title', () => { ex.pathsBox.hidden = !ex.pathsBox.hidden; if (!ex.pathsBox.hidden) paintPathsBox(ex) }, 'pbtn js-paths-btn')
+  ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
   buildSearch(ex)
   const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
   ex.explorer = h('div', { className: 'explorer' },
     h('div', { className: 'toolbar' },
-      ex.back, ex.pathInput,
+      ex.back, h('div', { className: 'pathbox' }, ex.pathInput, ex.pathsBtn),
       ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn'),
       ex.splitBtn,
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
       ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false))),
     ex.searchBox,
+    ex.pathsBox,
     table,
     h('div', { className: 'status' }, ex.statusL, ex.statusR))
   ex.explorer.addEventListener('mousedown', () => { tab.active = ex; tab.panes.forEach(p => p.explorer.classList.toggle('active', p === ex && tab.panes.length > 1)) })
@@ -783,7 +921,7 @@ function openFiles(server, { terminal = false } = {}) {
 // ---------- Init ----------
 ;(async () => {
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
-  root.style.setProperty('--sbw', loadSize('sbw', 264) + 'px')
+  root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')
   root.style.setProperty('--rpw', loadSize('rpw', 400) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
@@ -795,5 +933,7 @@ function openFiles(server, { terminal = false } = {}) {
   servers = await api.invoke('servers:list')
   quickActions = await api.invoke('actions:list')
   logFavs = await api.invoke('favs:list')
+  groups = await api.invoke('groups:list')
+  savedPaths = await api.invoke('paths:list')
   renderServers()
 })()

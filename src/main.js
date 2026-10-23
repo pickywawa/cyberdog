@@ -72,7 +72,7 @@ ipcMain.handle('settings:set', (_, patch) => {
   applyNativeTheme()
 })
 
-const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass })
+const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass, group: s.group, favorite: !!s.favorite })
 const list = () => servers.map(pub)
 const secret = s => (s.pass ? safeStorage.decryptString(Buffer.from(s.pass, 'base64')) : undefined)
 const find = id => servers.find(s => s.id === id) ?? (() => { throw new Error(t('err.server_not_found')) })()
@@ -129,6 +129,10 @@ ipcMain.handle('servers:save', (_, d) => {
   let s = servers.find(x => x.id === d.id)
   if (!s) servers.push((s = { id: crypto.randomUUID() }))
   Object.assign(s, { name: name || host, host, port: +d.port || 22, user, fp: undefined })
+  if ('group' in d) { if (d.group && groups.some(g => g.id === d.group)) s.group = d.group; else delete s.group }
+  // duplication : sans nouveau mot de passe, on reprend celui (chiffré) du serveur d'origine
+  const src = d.copyFrom && servers.find(x => x.id === d.copyFrom)
+  if (src && !d.pass) Object.assign(s, { pass: src.pass, key: src.key })
   if (d.pass) {
     if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
     s.pass = safeStorage.encryptString(d.pass).toString('base64')
@@ -145,11 +149,81 @@ ipcMain.handle('servers:reorder', (_, ids) => {
   return list()
 })
 
+// mise à jour légère d'un serveur (favori, groupe) sans toucher à la connexion
+ipcMain.handle('servers:update', (_, id, patch) => {
+  const s = find(id)
+  if ('favorite' in patch) { if (patch.favorite) s.favorite = true; else delete s.favorite }
+  if ('group' in patch) { if (patch.group && groups.some(g => g.id === patch.group)) s.group = patch.group; else delete s.group }
+  persist()
+  return list()
+})
+
+// ---------- groupes de serveurs (userData/groups.json) ----------
+const groupsFile = () => path.join(app.getPath('userData'), 'groups.json')
+let groups = []
+const loadGroups = () => { try { groups = JSON.parse(fs.readFileSync(groupsFile(), 'utf8')) } catch { groups = [] } }
+const saveGroups = () => fs.writeFileSync(groupsFile(), JSON.stringify(groups, null, 2))
+const groupByName = name => groups.find(g => g.name.toLowerCase() === name.toLowerCase())
+const groupName = id => groups.find(g => g.id === id)?.name
+
+ipcMain.handle('groups:list', () => groups)
+ipcMain.handle('groups:save', (_, d) => {
+  const name = d.name?.trim()
+  if (!name) throw new Error(t('err.group_name_required'))
+  const clash = groupByName(name)
+  if (clash && clash.id !== d.id) throw new Error(t('err.group_exists'))
+  const g = groups.find(x => x.id === d.id) ?? (groups.push({ id: crypto.randomUUID(), name }), groups.at(-1))
+  g.name = name
+  saveGroups()
+  return groups
+})
+ipcMain.handle('groups:update', (_, id, patch) => {
+  const g = groups.find(x => x.id === id)
+  if (!g) return groups
+  for (const k of ['collapsed', 'favorite']) if (k in patch) { if (patch[k]) g[k] = true; else delete g[k] }
+  saveGroups()
+  return groups
+})
+ipcMain.handle('groups:reorder', (_, ids) => { groups.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); saveGroups(); return groups })
+ipcMain.handle('groups:delete', (_, id) => {
+  groups = groups.filter(g => g.id !== id)
+  servers.forEach(s => { if (s.group === id) delete s.group })
+  saveGroups()
+  persist()
+  return { groups, servers: list() }
+})
+
+// ---------- chemins enregistrés (userData/paths.json) ----------
+// { id, name, path, serverId } ; serverId absent = valable pour tous les serveurs
+const pathsFile = () => path.join(app.getPath('userData'), 'paths.json')
+let savedPaths = []
+const loadPaths = () => { try { savedPaths = JSON.parse(fs.readFileSync(pathsFile(), 'utf8')) } catch { savedPaths = [] } }
+const writePaths = () => fs.writeFileSync(pathsFile(), JSON.stringify(savedPaths, null, 2))
+ipcMain.handle('paths:list', () => savedPaths)
+ipcMain.handle('paths:save', (_, d) => {
+  const p = String(d.path || '').trim()
+  if (!p.startsWith('/')) throw new Error(t('err.path_required'))
+  let e = savedPaths.find(x => x.id === d.id)
+  if (!e) savedPaths.push((e = { id: crypto.randomUUID() }))
+  Object.assign(e, { name: String(d.name || '').trim(), path: p })
+  if (d.serverId) e.serverId = d.serverId
+  else delete e.serverId
+  writePaths()
+  return savedPaths
+})
+ipcMain.handle('paths:delete', (_, id) => { savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return savedPaths })
+
 // ajoute un serveur venant d'un import (Cyberduck ou zip) sauf doublon host/port/user
 function addImported(b) {
   if (typeof b?.host !== 'string' || !b.host.trim()) return false
   const s = { name: String(b.name || b.host), host: b.host.trim(), port: +b.port || 22, user: String(b.user ?? ''), key: typeof b.key === 'string' ? b.key : undefined }
   if (servers.some(x => x.host === s.host && x.port === s.port && x.user === s.user)) return false
+  const gname = typeof b.group === 'string' ? b.group.trim() : ''
+  if (gname) {
+    const g = groupByName(gname) ?? (groups.push({ id: crypto.randomUUID(), name: gname }), groups.at(-1))
+    s.group = g.id
+    saveGroups()
+  }
   servers.push({ id: crypto.randomUUID(), ...s })
   return true
 }
@@ -191,7 +265,7 @@ ipcMain.handle('servers:exportZip', async () => {
   if (!servers.length) throw new Error(t('err.no_export'))
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), 'cyberdog-servers.zip'), filters: [{ name: 'Zip', extensions: ['zip'] }] })
   if (r.canceled) return null
-  await exportZip(servers, r.filePath)
+  await exportZip(servers.map(s => ({ ...s, group: groupName(s.group) })), r.filePath, ['name', 'host', 'port', 'user', 'key', 'group'])
   return { path: r.filePath, count: servers.length }
 })
 
@@ -623,6 +697,8 @@ ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindo
 app.setName('Cyberdog')
 app.whenReady().then(() => {
   load()
+  loadGroups()
+  loadPaths()
   loadFavs()
   loadSettings()
   if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '../build/icon.png'))

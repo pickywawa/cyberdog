@@ -13,12 +13,15 @@
     <div class="side-head">
       <span data-i18n="app.servers"></span>
       <div class="actions">
+        <button class="ib" id="btn-search" data-icon="search" data-i18n-title="srvs.search"></button>
+        <button class="ib" id="btn-group" data-icon="folder-plus" data-i18n-title="grp.new"></button>
         <button class="ib" id="btn-sort" data-icon="sort" data-i18n-title="btn.sort"></button>
         <button class="ib" id="btn-export" data-icon="upload" data-i18n-title="btn.export"></button>
         <button class="ib" id="btn-import" data-icon="download" data-i18n-title="btn.import"></button>
         <button class="ib accent" id="btn-add" data-icon="plus" data-i18n-title="btn.add"></button>
       </div>
     </div>
+    <div class="srv-search" id="srv-search" hidden><input id="srv-q" spellcheck="false" data-i18n-ph="srvs.search_ph"></div>
     <ul id="servers"></ul>
     <div class="side-foot">
       <button class="ib lab" id="btn-theme"><span data-icon="palette"></span><span class="lbl"></span></button>

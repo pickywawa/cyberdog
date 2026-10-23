@@ -63,6 +63,14 @@ Each release also ships a `SHA256SUMS.txt` so you can verify your download.
 
 Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import everything from Cyberduck** in one click. The welcome page walks you through the options.
 
+Keep a long list tidy: **groups** (collapsible, remembered between launches), **favorites** (★ on a server or a whole group: they float to the top under a *Favorites* separator), a **live search** box (🔍) that filters servers and groups as you type, and **Duplicate** in the right-click menu to create a new server pre-filled from an existing one. Drag a server onto a group to move it.
+
+<img src="docs/screenshots/groups.png" alt="Server list organized into groups and favorites" width="100%">
+
+Right-click a server and choose **Duplicate** to open a prefilled form without creating a connection or copying its identity.
+
+<img src="docs/screenshots/server-menu.png" alt="Server context menu with the Duplicate action" width="100%">
+
 <img src="docs/screenshots/home.png" alt="Welcome page with import options" width="100%">
 
 ### A modern file explorer
@@ -74,6 +82,8 @@ Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shif
 **Edit with…** downloads the file, opens it in VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (whatever is installed) and **uploads it back every time you save**.
 
 <img src="docs/screenshots/menu.png" alt="Context menu with Edit with submenu" width="100%">
+
+**Saved paths**: the 🔖 button inside the path bar drops down your favorite folders (per server or for all servers) — click one to jump there. Manage them from the 🔖 button of the right-hand toolbar.
 
 **Search the server** (🔍 or ⌘/Ctrl-F): type a few letters, get live suggestions — in the current folder or on the whole server — and jump straight to the file's parent folder with the file selected.
 

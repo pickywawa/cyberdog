@@ -63,6 +63,14 @@ Chaque release contient aussi un fichier `SHA256SUMS.txt` pour vérifier votre t
 
 Ajoutez un serveur avec un nom, un hôte, un login et un mot de passe (ou utilisez votre agent / clé SSH). Réorganisez-les par glisser-déposer, triez de A à Z et **importez tout depuis Cyberduck** en un clic. La page d'accueil vous guide parmi les options.
 
+Gardez une longue liste lisible : **groupes** repliables (l'état est mémorisé d'un lancement à l'autre), **favoris** (★ sur un serveur ou un groupe entier : ils remontent en tête sous un séparateur *Favoris*), **recherche en direct** (🔍) qui filtre serveurs et groupes pendant la frappe, et **Dupliquer** dans le menu clic droit pour créer un serveur pré-rempli à partir d'un autre. Glissez un serveur sur un groupe pour l'y ranger.
+
+<img src="docs/screenshots/groups.png" alt="Liste des serveurs organisée en groupes et favoris" width="100%">
+
+Le menu clic droit permet aussi de dupliquer un serveur : les champs sont préremplis, sans créer de connexion ni recopier son identifiant.
+
+<img src="docs/screenshots/server-menu.png" alt="Menu d'un serveur avec l'action Dupliquer" width="100%">
+
 <img src="docs/screenshots/home.png" alt="Page d'accueil et options d'import" width="100%">
 
 ### Un explorateur de fichiers moderne
@@ -74,6 +82,8 @@ Dossiers d'abord, icônes colorées selon le type de fichier, sélection multipl
 **Éditer avec…** télécharge le fichier, l'ouvre dans VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (ce qui est installé) et **le renvoie sur le serveur à chaque enregistrement**.
 
 <img src="docs/screenshots/menu.png" alt="Menu contextuel avec le sous-menu Éditer avec" width="100%">
+
+**Chemins enregistrés** : le bouton 🔖 dans la barre de chemin déroule vos dossiers favoris (par serveur ou pour tous) — un clic et l'explorateur s'y rend. Gérez-les depuis le bouton 🔖 de la barre d'outils de droite.
 
 **Recherchez sur le serveur** (🔍 ou ⌘/Ctrl-F) : tapez quelques lettres, obtenez des suggestions en direct — dans le dossier courant ou sur tout le serveur — et allez directement dans le dossier parent du fichier, déjà sélectionné.
 

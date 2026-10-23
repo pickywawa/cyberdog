@@ -67,6 +67,7 @@ function applyI18n(root) {
 function refreshLanguage() {
   document.documentElement.lang = lang
   applyI18n(document)
+  paintUpdateBadge()
   $('#btn-theme').title = t('theme')
   $('#btn-lang').title = t('language')
   $('#btn-theme .lbl').textContent = t('theme.' + theme)
@@ -103,6 +104,24 @@ function toast(msg, err, ms = 3500) {
   toastTimer = setTimeout(() => (el.hidden = true), ms)
 }
 api.on('toast', toast)
+
+let updateState
+function paintUpdateBadge() {
+  const button = $('#app-update')
+  const state = updateState
+  button.hidden = !state || state.state === 'current' || state.state === 'error'
+  if (button.hidden) return
+  button.textContent = state.state === 'downloading'
+    ? t('update.downloading', { percent: state.percent ?? 0 })
+    : t('update.new')
+  button.title = t('update.title', { version: state.version })
+  button.disabled = state.state === 'downloading'
+}
+api.on('app:update', state => {
+  updateState = state
+  paintUpdateBadge()
+})
+$('#app-update').onclick = () => api.invoke('app:update:action').catch(e => toast(errText(e), true))
 
 const hideMenu = () => ($('#menu').hidden = true)
 // items : { label, icon?, swatch?, checked?, danger?, fn | children } ou '-'
@@ -921,6 +940,7 @@ function openFiles(server, { terminal = false } = {}) {
 // ---------- Init ----------
 ;(async () => {
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
+  $('#app-version').textContent = 'v' + await api.invoke('app:version')
   root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')
   root.style.setProperty('--rpw', loadSize('rpw', 400) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })

@@ -12,6 +12,8 @@ const archive = require('./archive')
 const logfmt = require('./logs')
 const dockerfmt = require('./docker')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
+const { autoUpdater } = require('electron-updater')
+const { isNewerVersion } = require('./update-version')
 
 const posix = path.posix
 const isMac = process.platform === 'darwin'
@@ -81,6 +83,95 @@ const find = id => servers.find(s => s.id === id) ?? (() => { throw new Error(t(
 const P = (o, m, ...a) => new Promise((res, rej) => o[m](...a, (e, r) => (e ? rej(e) : res(r))))
 const q = p => `'${p.replace(/'/g, `'\\''`)}'`
 const send = (...a) => win && !win.isDestroyed() && win.webContents.send(...a)
+let releaseUrl
+let updateVersion
+let updateMode = 'manual'
+let updateReady = false
+let updateDownloadStarted = false
+let installAfterDownload = false
+let updateCheckPromise
+
+ipcMain.handle('app:version', () => app.getVersion())
+
+function useManualUpdate(error) {
+  if (error) console.error('Cyberdog update failed; opening the release page instead:', error)
+  updateMode = 'manual'
+  updateDownloadStarted = false
+  installAfterDownload = false
+  send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+}
+
+ipcMain.handle('app:update:action', async () => {
+  if (!releaseUrl || !updateVersion) throw new Error('No Cyberdog update is available.')
+  if (updateMode !== 'install') return shell.openExternal(releaseUrl)
+  try { await updateCheckPromise } catch (e) { useManualUpdate(e); return shell.openExternal(releaseUrl) }
+  if (updateMode !== 'install') return shell.openExternal(releaseUrl)
+  installAfterDownload = true
+  if (updateReady) return autoUpdater.quitAndInstall()
+  if (updateDownloadStarted) return
+  updateDownloadStarted = true
+  send('app:update', { state: 'downloading', mode: updateMode, version: updateVersion, percent: 0 })
+  try {
+    await autoUpdater.downloadUpdate()
+  } catch (e) {
+    useManualUpdate(e)
+    return shell.openExternal(releaseUrl)
+  }
+})
+
+async function checkForAppUpdate() {
+  if (!app.isPackaged) return
+  try {
+    const response = await fetch('https://api.github.com/repos/pickywawa/cyberdog/releases/latest', {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cyberdog' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`)
+    const release = await response.json()
+    if (!isNewerVersion(release.tag_name, app.getVersion())) {
+      send('app:update', { state: 'current' })
+      return
+    }
+    updateVersion = String(release.tag_name).replace(/^v/, '')
+    releaseUrl = /^https:\/\/github\.com\/pickywawa\/cyberdog\/releases\//.test(release.html_url)
+      ? release.html_url
+      : 'https://github.com/pickywawa/cyberdog/releases/latest'
+    updateMode = isWin && !process.env.PORTABLE_EXECUTABLE_DIR ? 'install' : 'manual'
+
+    if (updateMode === 'install') {
+      let result
+      try {
+        updateCheckPromise = autoUpdater.checkForUpdates()
+        result = await updateCheckPromise
+      } catch (e) {
+        return useManualUpdate(e)
+      }
+      if (!result?.isUpdateAvailable) return useManualUpdate(new Error('No compatible Windows installer was found.'))
+    }
+    send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+  } catch (e) {
+    console.error('Unable to check for Cyberdog updates:', e)
+    send('app:update', { state: 'error' })
+  }
+}
+
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = false
+autoUpdater.on('update-available', info => {
+  updateVersion = info.version
+  send('app:update', { state: 'available', mode: updateMode, version: updateVersion })
+})
+autoUpdater.on('download-progress', progress => {
+  send('app:update', { state: 'downloading', mode: updateMode, version: updateVersion, percent: Math.floor(progress.percent) })
+})
+autoUpdater.on('update-downloaded', info => {
+  updateReady = true
+  send('app:update', { state: 'ready', mode: updateMode, version: info.version })
+  if (installAfterDownload) autoUpdater.quitAndInstall()
+})
+autoUpdater.on('update-not-available', () => {
+  if (updateMode === 'install' && updateVersion) useManualUpdate(new Error('The release does not contain a compatible update package.'))
+})
 
 function connect(s) {
   return new Promise((resolve, reject) => {
@@ -714,6 +805,10 @@ app.whenReady().then(() => {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   })
   win.once('ready-to-show', () => win.show())
+  win.webContents.once('did-finish-load', () => {
+    checkForAppUpdate()
+    setInterval(checkForAppUpdate, 6 * 60 * 60 * 1000).unref()
+  })
   win.loadFile(path.join(__dirname, 'index.html'))
 })
 app.on('window-all-closed', () => app.quit())

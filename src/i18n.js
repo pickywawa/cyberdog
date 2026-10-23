@@ -6,6 +6,9 @@
   const D = {
     en: {
       'app.servers': 'Servers',
+      'update.new': 'New',
+      'update.downloading': 'Downloading {percent}%',
+      'update.title': 'Version {version} is available. Click to install or download.',
       'btn.add': 'Add a server',
       'btn.sort': 'Sort A → Z',
       'btn.import': 'Import…',
@@ -312,6 +315,9 @@
 
     fr: {
       'app.servers': 'Serveurs',
+      'update.new': 'Nouveau',
+      'update.downloading': 'Téléchargement {percent} %',
+      'update.title': 'La version {version} est disponible. Cliquez pour l’installer ou la télécharger.',
       'btn.add': 'Ajouter un serveur',
       'btn.sort': 'Trier A → Z',
       'btn.import': 'Importer…',
@@ -618,6 +624,9 @@
 
     de: {
       'app.servers': 'Server',
+      'update.new': 'Neu',
+      'update.downloading': 'Download {percent} %',
+      'update.title': 'Version {version} ist verfügbar. Zum Installieren oder Herunterladen klicken.',
       'btn.add': 'Server hinzufügen',
       'btn.sort': 'A → Z sortieren',
       'btn.import': 'Importieren…',
@@ -924,6 +933,9 @@
 
     it: {
       'app.servers': 'Server',
+      'update.new': 'Nuovo',
+      'update.downloading': 'Download {percent}%',
+      'update.title': 'La versione {version} è disponibile. Fai clic per installarla o scaricarla.',
       'btn.add': 'Aggiungi server',
       'btn.sort': 'Ordina A → Z',
       'btn.import': 'Importa…',

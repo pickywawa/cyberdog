@@ -37,6 +37,8 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 Téléchargez le dernier installeur depuis la **[page des Releases](https://github.com/pickywawa/cyberdog/releases/latest)**.
 
+Cyberdog affiche sa version près du logo et signale les nouvelles versions avec un badge animé **Nouveau**. Sur Windows (installation classique), cliquez dessus pour télécharger puis installer la mise à jour et relancer l'app. Sur macOS et dans la version Windows portable, le bouton ouvre la release : l'installation macOS reste manuelle car l'app n'est pas signée/notarisée.
+
 ### macOS (Apple Silicon et Intel)
 
 1. Téléchargez `Cyberdog-<version>-mac-arm64.dmg` (Apple Silicon : M1/M2/M3/M4) ou `Cyberdog-<version>-mac-x64.dmg` (Intel).

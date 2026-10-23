@@ -541,6 +541,10 @@ ipcMain.handle('sftp:mkdir', (_, id, p) => P(S(id), 'mkdir', p))
 // flag wx: ne jamais écraser un fichier existant
 ipcMain.handle('sftp:touch', (_, id, p) => P(S(id), 'writeFile', p, '', { flag: 'wx' }))
 ipcMain.handle('sftp:rename', (_, id, from, to) => P(S(id), 'rename', from, to))
+ipcMain.handle('sftp:chmod', (_, id, p, value) => {
+  if (typeof value !== 'string' || !/^[0-7]{3,4}$/.test(value) || parseInt(value, 8) > 0o7777) throw new Error(i18n.t(settings.lang, 'err.permissions'))
+  return P(S(id), 'chmod', p, parseInt(value, 8))
+})
 
 async function rmr(s, p) {
   if ((await P(s, 'lstat', p)).isDirectory()) {

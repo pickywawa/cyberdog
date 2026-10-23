@@ -152,7 +152,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .hero .tip { margin: 20px 0 0; color: var(--dim); font-size: 12px; }
 
 /* ---------- Explorateur ---------- */
-.toolbar { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--line); align-items: center; }
+.toolbar { display: flex; gap: 4px; height: 45px; padding: 8px 10px; border-bottom: 1px solid var(--line); align-items: center; flex: none; }
 .pathbox { flex: 1; position: relative; margin: 0 6px; display: flex; min-width: 0; }
 .toolbar .path { flex: 1; width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; padding-right: 34px; }
 .pbtn { position: absolute; right: 3px; top: 2px; width: 24px; height: 24px; }
@@ -207,10 +207,12 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .card h3 { margin: 0 0 2px; font-size: 16px; }
 .card label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); font-size: 12px; font-weight: 500; }
 .card .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
-.settings-card { width: 620px; }
-.set-tabs { display: flex; gap: 8px; background: color-mix(in srgb, var(--bg) 75%, transparent); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
-.set-tabs .tab { flex: 1; border: 0; background: transparent; color: var(--dim); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
-.set-tabs .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.settings-card { width: 660px; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-head h3 { flex: none; }
+.set-tabs { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.set-tabs .tab { flex: none; border: 0; background: transparent; color: var(--dim); border-radius: 7px; padding: 7px 9px; cursor: pointer; }
+.set-tabs .tab.active { background: color-mix(in srgb, var(--accent) 15%, var(--bg)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
 .settings-page { display: flex; flex-direction: column; gap: 12px; }
 .card .note { color: var(--dim); font-size: 12px; line-height: 1.5; }
 .card label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; }
@@ -248,7 +250,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* panneau de droite */
 .rpanel { position: relative; width: var(--rpw, 400px); flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
 .rpanel[hidden] { display: none; }
-.rp-head { display: flex; align-items: center; gap: 2px; height: 41px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--line); flex: none; }
+.rp-head { display: flex; align-items: center; gap: 2px; height: 45px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--line); flex: none; }
 .rp-title { flex: 1; font-weight: 700; font-size: 13px; }
 .rp-actions { display: inline-flex; gap: 2px; }
 .rp-body { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }

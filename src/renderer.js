@@ -556,9 +556,10 @@ async function openSettingsModal() {
     }
   }
 
-  const content = h('div', { className: 'card settings-card', style: 'width: 620px;' },
-    h('h3', { textContent: t('settings.title') }),
-    h('div', { className: 'set-tabs' }, buttonGeneral, buttonEditor, buttonUpdate),
+  const content = h('div', { className: 'card settings-card' },
+    h('div', { className: 'settings-head' },
+      h('h3', { textContent: t('settings.title') }),
+      h('div', { className: 'set-tabs' }, buttonGeneral, buttonEditor, buttonUpdate)),
     h('div', { className: 'settings-panels' }, generalPage, editorPage, updatesPage),
     h('div', { className: 'btns' },
       h('button', { type: 'button', textContent: t('btn.cancel'), onclick: close }),
@@ -872,6 +873,12 @@ function ctxMenu(tab, e) {
     { label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
+    ...(one ? [{ label: t('ctx.permissions'), icon: 'lock', fn: async () => {
+      const v = await modal(t('ctx.permissions'), [{ name: 'mode', label: t('col.perms'), value: one.mode.toString(8).padStart(4, '0') }], t('btn.save'))
+      if (!v) return
+      if (!/^[0-7]{3,4}$/.test(v.mode) || parseInt(v.mode, 8) > 0o7777) return toast(t('err.permissions'), true)
+      act(tab, () => api.invoke('sftp:chmod', tab.connId, full(one), v.mode))
+    } }] : []),
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
     ...(one && !one.isDir && archive.kind(one.name)
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },

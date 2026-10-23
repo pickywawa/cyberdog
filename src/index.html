@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>Cyberdog</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><img src="assets/icon.svg" alt=""><span>Cyberdog</span></div>
+    <div class="side-head">
+      <span data-i18n="app.servers"></span>
+      <div class="actions">
+        <button class="ib" id="btn-sort" data-icon="sort" data-i18n-title="btn.sort"></button>
+        <button class="ib" id="btn-export" data-icon="upload" data-i18n-title="btn.export"></button>
+        <button class="ib" id="btn-import" data-icon="download" data-i18n-title="btn.import"></button>
+        <button class="ib accent" id="btn-add" data-icon="plus" data-i18n-title="btn.add"></button>
+      </div>
+    </div>
+    <ul id="servers"></ul>
+    <div class="side-foot">
+      <button class="ib lab" id="btn-theme"><span data-icon="palette"></span><span class="lbl"></span></button>
+      <button class="ib lab" id="btn-lang"><span data-icon="globe"></span><span class="lbl"></span></button>
+    </div>
+  </aside>
+  <main>
+    <div id="tabs"></div>
+    <div id="panes">
+      <div id="empty">
+        <div class="hero">
+          <img class="logo" src="assets/icon.svg" alt="">
+          <h1 data-i18n="empty.title"></h1>
+          <p class="none" data-i18n="empty.none"></p>
+          <p class="sub" data-i18n="empty.sub"></p>
+          <div class="cards">
+            <button class="card-btn c1" id="card-add"><span class="ct" data-icon="plus"></span><b data-i18n="card.add.t"></b><small data-i18n="card.add.d"></small></button>
+            <button class="card-btn c2" id="card-cyberduck"><span class="ct" data-icon="download"></span><b data-i18n="card.cyberduck.t"></b><small data-i18n="card.cyberduck.d"></small></button>
+            <button class="card-btn c3" id="card-zip"><span class="ct" data-icon="archive"></span><b data-i18n="card.zip.t"></b><small data-i18n="card.zip.d"></small></button>
+            <button class="card-btn c4" id="card-export"><span class="ct" data-icon="upload"></span><b data-i18n="card.export.t"></b><small data-i18n="card.export.d"></small></button>
+          </div>
+          <p class="tip" data-i18n="empty.tip"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div id="menu" hidden></div>
+  <div id="modal" hidden></div>
+  <div id="toast" hidden></div>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="i18n.js"></script>
+  <script src="icons.js"></script>
+  <script src="renderer.js"></script>
+  <script src="panels.js"></script>
+</body>
+</html>

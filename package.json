@@ -1,0 +1,94 @@
+{
+  "name": "cyberdog",
+  "productName": "Cyberdog",
+  "version": "1.0.0",
+  "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/import.test.js && node test/share.test.js && node test/i18n.test.js && node test/health.test.js",
+    "icons": "electron build/make-icons.js",
+    "dist": "electron-builder --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "com.pickywawa.cyberdog",
+    "productName": "Cyberdog",
+    "copyright": "Copyright © pickywawa",
+    "artifactName": "Cyberdog-${version}-${os}-${arch}.${ext}",
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "afterPack": "build/afterPack.js",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Cyberdog ${version}"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "artifactName": "Cyberdog-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Cyberdog-${version}-portable-${arch}.${ext}"
+    }
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "adm-zip": "^0.6.1",
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "author": {
+    "name": "pickywawa",
+    "email": "44199439+pickywawa@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/pickywawa/cyberdog",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pickywawa/cyberdog.git"
+  }
+}

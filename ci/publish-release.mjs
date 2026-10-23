@@ -1,11 +1,13 @@
 // Crée (ou complète) la Release GitLab du tag courant avec les fichiers déjà publiés dans le Package Registry
-// (voir ci/upload.sh). N'utilise que CI_JOB_TOKEN : aucun jeton personnel nécessaire.
+// (voir ci/upload.sh). En pipeline : CI_JOB_TOKEN suffit. Hors pipeline (ex. .dmg construit sur votre Mac) :
+// GITLAB_TOKEN (jeton personnel, scope api) + CI_API_V4_URL, CI_PROJECT_ID et CI_COMMIT_TAG.
 // Idempotent : peut être relancé (ex. après l'ajout du .dmg par un runner macOS).
 import { readFileSync } from 'node:fs'
 
-const { CI_API_V4_URL: api, CI_PROJECT_ID: pid, CI_JOB_TOKEN: token, CI_COMMIT_TAG: tag } = process.env
+const { CI_API_V4_URL: api, CI_PROJECT_ID: pid, CI_COMMIT_TAG: tag, GITLAB_TOKEN } = process.env
+const token = GITLAB_TOKEN || process.env.CI_JOB_TOKEN
 if (!api || !pid || !token || !tag) {
-  console.error('CI_API_V4_URL, CI_PROJECT_ID, CI_JOB_TOKEN et CI_COMMIT_TAG sont requis (pipeline de tag uniquement).')
+  console.error('CI_API_V4_URL, CI_PROJECT_ID, CI_COMMIT_TAG et CI_JOB_TOKEN (ou GITLAB_TOKEN) sont requis.')
   process.exit(1)
 }
 
@@ -18,7 +20,7 @@ if (pkg.version !== version) {
 
 const PACKAGE = 'cyberdog'
 const base = `${api}/projects/${pid}/packages/generic/${PACKAGE}/${version}`
-const headers = { 'JOB-TOKEN': token }
+const headers = GITLAB_TOKEN ? { 'PRIVATE-TOKEN': token } : { 'JOB-TOKEN': token }
 const CANDIDATES = [
   `Cyberdog-Setup-${version}-x64.exe`,
   `Cyberdog-${version}-portable-x64.exe`,

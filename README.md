@@ -166,6 +166,13 @@ Installers are written to `dist/`. Icons are generated from `src/assets/icon.svg
 | [`release.yml`](.github/workflows/release.yml) | tag `v*` (or manual run) | builds the macOS `.dmg` and Windows `.exe` files, then publishes a GitHub Release with checksums |
 | [`.gitlab-ci.yml`](.gitlab-ci.yml) | push, tag `v*` | same pipeline for GitLab: tests, Windows build (Linux + wine), optional macOS build on a `macos` runner, Release via the Package Registry |
 
+No macOS runner on your GitLab? Build the `.dmg` on your Mac and attach it to the release:
+
+```sh
+export GITLAB_TOKEN=<personal token, scope api> CI_API_V4_URL=<gitlab>/api/v4 CI_PROJECT_ID=<id> CI_COMMIT_TAG=v1.2.3
+npm run dist:mac && sh ci/upload.sh dist/*.dmg && node ci/publish-release.mjs
+```
+
 To publish a new version:
 
 ```sh

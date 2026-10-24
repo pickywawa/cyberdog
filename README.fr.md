@@ -39,6 +39,8 @@ Le bouton **Paramètres** à côté de la langue — ou **Cyberdog → Paramètr
 
 La taille, la position et l’état maximisé de la fenêtre sont restaurés au lancement suivant. Si un écran est débranché, la fenêtre revient sur un écran disponible.
 
+La case facultative **Rouvrir les connexions au démarrage** restaure les onglets serveurs et terminaux laissés ouverts à la fermeture. Elle est décochée par défaut. Seules les références aux serveurs et la présence d’un terminal sont enregistrées ; aucune commande n’est rejouée.
+
 Un double-clic sur un fichier l'ouvre dans l'éditeur choisi et chaque enregistrement le renvoie sur le serveur.
 
 ---
@@ -285,3 +287,7 @@ Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Su
 Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
 
 Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le serveur courant dans `~/.ssh/authorized_keys`, avec leurs empreintes SHA-256. Elles sont séparées des clés gérées localement. La lecture dépend des permissions du fichier distant ; aucune clé privée n’est lue sur le serveur.
+
+## Site web
+
+Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Ses fichiers statiques sont dans [site/](site/), déployés par GitHub Actions lorsqu’ils changent sur main. Prévisualisation locale : `python3 -m http.server 8765 --directory site`.

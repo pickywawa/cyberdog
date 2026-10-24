@@ -5,6 +5,10 @@
 
   const D = {
     en: {
+      "settings.restore_connections": "Reopen connections at startup",
+      "settings.restore_help": "Reopens the server tabs and terminals left open when you quit. Commands are never replayed. Disabled by default.",
+
+      "paths.share_all": "Available on all servers",
       "transfer.title": "Transfers",
       "transfer.preparing": "Preparing…",
       "transfer.download": "Download",
@@ -504,6 +508,10 @@
     },
 
     fr: {
+      "settings.restore_connections": "Rouvrir les connexions au démarrage",
+      "settings.restore_help": "Rouvre les onglets serveurs et terminaux laissés ouverts à la fermeture. Aucune commande n’est rejouée. Désactivé par défaut.",
+
+      "paths.share_all": "Disponible sur tous les serveurs",
       "transfer.title": "Transferts",
       "transfer.preparing": "Préparation…",
       "transfer.download": "Téléchargement",
@@ -1003,6 +1011,10 @@
     },
 
     de: {
+      "settings.restore_connections": "Verbindungen beim Start wieder öffnen",
+      "settings.restore_help": "Öffnet die beim Beenden geöffneten Server-Tabs und Terminals erneut. Befehle werden nicht wiederholt. Standardmäßig deaktiviert.",
+
+      "paths.share_all": "Auf allen Servern verfügbar",
       "transfer.title": "Übertragungen",
       "transfer.preparing": "Vorbereitung…",
       "transfer.download": "Download",
@@ -1502,6 +1514,10 @@
     },
 
     it: {
+      "settings.restore_connections": "Riapri le connessioni all’avvio",
+      "settings.restore_help": "Riapre le schede server e i terminali lasciati aperti alla chiusura. I comandi non vengono rieseguiti. Disattivato per impostazione predefinita.",
+
+      "paths.share_all": "Disponibile su tutti i server",
       "transfer.title": "Trasferimenti",
       "transfer.preparing": "Preparazione…",
       "transfer.download": "Download",

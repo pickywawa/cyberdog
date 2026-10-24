@@ -32,6 +32,10 @@ let theme = 'system'
 let settings = { lang: 'en', theme: 'system', defaultEditor: 'system', configPath: '', autoDownload: false }
 let servers = []
 let tabs = []
+let restoringConnections = false
+function rememberConnections() {
+  if (!restoringConnections && settings.restoreConnections) api.send('session:update', tabs.filter(tb => !tb.closed).map(tb => ({ serverId: tb.server.id, terminal: !!tb.term })))
+}
 let activeId = null
 let toastTimer
 const t = (k, v) => i18n.t(lang, k, v)
@@ -172,6 +176,7 @@ function modal(title, fields, okLabel, { wide = false } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
     const inputs = fields.map(f => {
+      if (f.type === 'checkbox') return h('input', { type: 'checkbox', checked: !!f.value })
       if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false })
       if (f.type === 'select') {
         const sel = h('select', { className: 'lsel full' }, ...f.options.map(([v, label]) => h('option', { value: v, textContent: label })))
@@ -183,11 +188,11 @@ function modal(title, fields, okLabel, { wide = false } = {}) {
     const close = v => { m.hidden = true; m.replaceChildren(); resolve(v) }
     const form = h('form', {
       className: 'card' + (wide ? ' wide' : ''),
-      onsubmit: e => { e.preventDefault(); close(Object.fromEntries(fields.map((f, i) => [f.name, inputs[i].value]))) },
+      onsubmit: e => { e.preventDefault(); close(Object.fromEntries(fields.map((f, i) => [f.name, f.type === 'checkbox' ? inputs[i].checked : inputs[i].value]))) },
       onkeydown: e => { if (e.key === 'Escape') close(null) },
     },
       h('h3', { textContent: title }),
-      ...fields.map((f, i) => h('label', {}, f.label, inputs[i])),
+      ...fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i])),
       h('div', { className: 'btns' },
         h('button', { type: 'button', textContent: t('btn.cancel'), onclick: () => close(null) }),
         h('button', { className: 'primary', textContent: okLabel })))
@@ -459,6 +464,7 @@ async function openSettingsModal() {
     editorInput.insertBefore(h('option', { value: target, textContent: target }), editorInput.lastElementChild)
     editorInput.value = target
   }
+  const restoreInput = h('input', { type: 'checkbox', checked: !!current.restoreConnections })
   const autoDownloadInput = h('input', { type: 'checkbox', checked: !!current.autoDownload })
   const settingsPage = (name, display, ...children) => {
     const page = h('div', { className: 'settings-page', style: `display: ${display}; flex-direction: column; gap: 12px;` }, ...children)
@@ -467,6 +473,8 @@ async function openSettingsModal() {
   }
 
   const generalPage = settingsPage('general', 'flex',
+    h('label', { className: 'check' }, restoreInput, h('span', { textContent: t('settings.restore_connections') })),
+    h('div', { className: 'note', textContent: t('settings.restore_help') }),
     h('label', {}, t('settings.lang'), langSel),
     h('label', {}, t('settings.theme'), themeSel),
     h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
@@ -528,6 +536,7 @@ async function openSettingsModal() {
         configPath: configInput.value.trim(),
         defaultEditor: editorInput.value,
         autoDownload: autoDownloadInput.checked,
+        restoreConnections: restoreInput.checked,
       }
       const configChanged = patch.configPath !== current.configPath
       if (patch.configPath && configChanged) {
@@ -537,6 +546,7 @@ async function openSettingsModal() {
       }
       const next = await api.invoke('settings:set', patch)
       settings = next
+      rememberConnections()
       lang = next.lang || 'en'
       theme = next.theme in THEMES ? next.theme : 'system'
       if (configChanged) {
@@ -598,11 +608,13 @@ function closeTab(id) {
   leavePanel(tb)
   tb.el.remove()
   tabs.splice(i, 1)
+  rememberConnections()
   activate(activeId === id ? tabs[Math.min(i, tabs.length - 1)]?.id : activeId)
 }
 
 function addTab(tb) {
   tabs.push(tb)
+  rememberConnections()
   $('#panes').append(tb.el)
   activate(tb.id)
 }
@@ -623,6 +635,7 @@ async function openTerminal(tab) {
   const fit = new FitAddon.FitAddon()
   term.loadAddon(fit)
   Object.assign(tab, { term, fit, termId: uid() })
+  rememberConnections()
   const id = tab.termId
   tab.termWrap.hidden = false
   updateBar(tab)
@@ -651,6 +664,7 @@ function closeTerminal(tab) {
   tab.termRO.disconnect()
   tab.term.dispose()
   Object.assign(tab, { term: null, fit: null, termId: null })
+  rememberConnections()
   tab.termWrap.hidden = true
   updateBar(tab)
 }
@@ -1148,4 +1162,10 @@ function openFiles(server, { terminal = false } = {}) {
   groups = await api.invoke('groups:list')
   savedPaths = await api.invoke('paths:list')
   renderServers()
+  if (settings.restoreConnections) {
+    const session = await api.invoke('session:get')
+    restoringConnections = true
+    try { for (const item of session) { const server = servers.find(s => s.id === item.serverId); if (server) openFiles(server, { terminal: item.terminal }) } }
+    finally { restoringConnections = false; rememberConnections() }
+  }
 })()

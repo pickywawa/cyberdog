@@ -39,6 +39,8 @@ The **Settings** button beside the language selector — or **Cyberdog → Setti
 
 Window size, position and maximized state are restored at the next launch. If a monitor is disconnected, the window returns to an available screen.
 
+An optional **Reopen connections at startup** checkbox restores the server tabs and terminals left open when quitting. It is disabled by default. It stores only server references and whether a terminal was open; terminal commands are never replayed.
+
 Double-clicking a file opens it in the selected editor and uploads every saved change back to the server.
 
 ---
@@ -285,3 +287,7 @@ The explorer footer shows the current upload or download. Hover over it or click
 The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
 
 The SSH key manager also lists public keys authorized on the current server from `~/.ssh/authorized_keys`, with their SHA-256 fingerprints. These are shown separately from locally managed keys. Reading requires permission on the remote file; private keys are never read from the server.
+
+## Website
+
+The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Its static files live in [site/](site/), deployed by GitHub Actions when those files change on main. Preview locally with `python3 -m http.server 8765 --directory site`.

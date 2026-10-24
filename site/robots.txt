@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://pickywawa.github.io/cyberdog/sitemap.xml

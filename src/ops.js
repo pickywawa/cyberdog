@@ -399,10 +399,11 @@ async function pathForm(tab, entry, scope) {
   const v = await modal(entry ? t('paths.edit_title') : t('paths.new_title'), [
     { name: 'name', label: t('paths.name'), value: entry?.name, placeholder: t('paths.name_ph') },
     { name: 'path', label: t('paths.path'), value: entry?.path ?? (tab.path || tab.active?.path || ''), placeholder: '/var/log/app' },
+    { name: 'allServers', type: 'checkbox', label: t('paths.share_all'), value: entry ? !entry.serverId : scope === 'all' },
   ], entry ? t('btn.save') : t('btn.add_ok'))
   if (!v) return
   try {
-    const serverId = entry ? entry.serverId : scope === 'here' ? tab.server.id : null
+    const serverId = v.allServers ? null : (entry?.serverId || tab.server.id)
     savedPaths = await api.invoke('paths:save', { id: entry?.id, name: v.name, path: v.path, serverId })
     repaintPaths()
   } catch (e) { toast(errText(e), true) }

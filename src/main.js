@@ -38,7 +38,7 @@ let servers = []
 let actions = []
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
-const DEFAULT_SETTINGS = { lang: 'en', theme: 'system', configPath: '', defaultEditor: 'system', autoDownload: false }
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'system', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false }
 const checkConfigRoot = () => {
   if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
 }
@@ -101,6 +101,10 @@ ipcMain.handle('settings:set', (_, patch) => {
   if (patch.lang in i18n.LANGS) settings.lang = patch.lang
   if (typeof patch.theme === 'string') settings.theme = patch.theme
   if (typeof patch.defaultEditor === 'string') settings.defaultEditor = patch.defaultEditor.trim() || 'system'
+  if (typeof patch.restoreConnections === 'boolean') {
+    settings.restoreConnections = patch.restoreConnections
+    if (!settings.restoreConnections) { try { fs.unlinkSync(sessionFile()) } catch (e) { if (e.code !== 'ENOENT') throw e } }
+  }
   if (typeof patch.autoDownload === 'boolean') settings.autoDownload = patch.autoDownload
   if ('configPath' in patch) {
     const nextPath = typeof patch.configPath === 'string' ? patch.configPath.trim() : ''
@@ -121,6 +125,17 @@ ipcMain.handle('settings:set', (_, patch) => {
   fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2))
   applyNativeTheme()
   return settings
+})
+const sessionFile = () => path.join(app.getPath('userData'), 'session.json')
+const { normalizeSession } = require('./session-state')
+ipcMain.handle('session:get', () => {
+  if (!settings.restoreConnections) return []
+  try { const saved = JSON.parse(fs.readFileSync(sessionFile(), 'utf8')); return saved.configRoot === currentConfigRoot() ? normalizeSession(saved.tabs, servers) : [] } catch { return [] }
+})
+ipcMain.on('session:update', (_, items) => {
+  if (!settings.restoreConnections) return
+  try { fs.writeFileSync(sessionFile(), JSON.stringify({ configRoot: currentConfigRoot(), tabs: normalizeSession(items, servers) }), { mode: 0o600 }) }
+  catch (e) { console.warn('Cannot save session:', e.message) }
 })
 ipcMain.handle('settings:config-status', (_, dir) => {
   const target = path.resolve(String(dir || '').trim())

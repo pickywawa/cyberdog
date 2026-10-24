@@ -25,6 +25,7 @@ const newDash = () => ({ status: 'checking', data: null, error: null, history: [
 
 // Sondage périodique du panneau affiché dans l'onglet actif (santé, services, docker) ; un seul sondage par onglet.
 const POLLS = {
+  certificates: { every: 60000, run: t => certificatePoll(t) },
   processes: { every: 5000, run: t => processPoll(t) },
   dashboard: { every: 10000, run: t => dashCheck(t) },
   services: { every: 10000, run: t => svcPoll(t) },
@@ -88,6 +89,10 @@ function alertsOf(tab) {
   const ram = d.mem && (d.mem.used / d.mem.total) * 100
   if (ram >= 90) out.push({ lvl: ram >= 95 ? 'crit' : 'warn', text: t('dash.alert.ram', { pct: Math.round(ram) }) })
   if (d.load && d.cores && d.load[0] >= d.cores * 1.5) out.push({ lvl: d.load[0] >= d.cores * 3 ? 'crit' : 'warn', text: t('dash.alert.load', { load: d.load[0], n: d.cores }) })
+  for (const cert of tab.certificates?.data?.certificates || []) {
+    const state = certificateState(cert, tab.certificates.days)
+    if (state.level !== 'ok') out.push({ lvl: state.level, text: certificateAlert(cert, state) })
+  }
   return out.sort((a, b) => (a.lvl === 'crit' ? 0 : 1) - (b.lvl === 'crit' ? 0 : 1))
 }
 // même volume monté plusieurs fois (bind mounts) : une seule ligne, point de montage le plus court

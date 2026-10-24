@@ -1,10 +1,10 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net } = require('electron')
 const path = require('path')
 const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('./config-path')
 app.setName('Cyberdog')
 // Keep the data location independent of the application bundle and release version.
 initializeUserData(app)
-const { Client } = require('ssh2')
+const { Client, utils: sshUtils } = require('ssh2')
 const { execFile } = require('child_process')
 const fs = require('fs')
 const os = require('os')
@@ -14,6 +14,9 @@ const { exportZip, readZip } = require('./share')
 const configTransfer = require('./config-transfer')
 const clientImport = require('./client-import')
 const permissions = require('./permissions')
+const certificateTools = require('./certificates')
+const sshKeys = require('./ssh-keys')
+const keyPassphrases = new Map()
 const { readList, writeList } = require('./persistent-list')
 const i18n = require('./i18n')
 const archive = require('./archive')
@@ -197,7 +200,8 @@ async function downloadReleaseAsset(openFallback = true) {
   const target = path.join(app.getPath('downloads'), updateAsset.name)
   const temporary = target + '.download'
   try {
-    const response = await fetch(updateAsset.url, {
+    // Chromium networking follows the system proxy, including enterprise PAC/WPAD.
+    const response = await net.fetch(updateAsset.url, {
       headers: { Accept: 'application/octet-stream', 'User-Agent': 'Cyberdog' },
       signal: AbortSignal.timeout(30 * 60 * 1000),
     })
@@ -265,7 +269,7 @@ ipcMain.handle('app:update:download', () => performUpdateAction(false))
 async function checkForAppUpdate() {
   if (!app.isPackaged) return
   try {
-    const response = await fetch('https://api.github.com/repos/pickywawa/cyberdog/releases/latest', {
+    const response = await net.fetch('https://api.github.com/repos/pickywawa/cyberdog/releases/latest', {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cyberdog' },
       signal: AbortSignal.timeout(10000),
     })
@@ -343,12 +347,21 @@ function connect(s) {
     c.on('ready', () => { c.connectMs = Date.now() - t0; resolve(c) })
     c.on('error', e => reject(mismatch ? new Error(t('err.hostkey')) : e))
     c.on('keyboard-interactive', (n, i, l, prompts, finish) => finish(prompts.map(() => secret(s) ?? '')))
+    const privateKey = s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined
+    if (privateKey) {
+      const parsed = sshUtils.parseKey(privateKey, keyPassphrases.get(s.key))
+      if (parsed instanceof Error) {
+        if (/encrypted|passphrase|decrypt|integrity check/i.test(parsed.message)) { keyPassphrases.delete(s.key); reject(new Error('KEY_PASSPHRASE_REQUIRED')); return }
+        reject(parsed); return
+      }
+    }
     c.connect({
       host: s.host,
       port: s.port,
       username: s.user,
       password: secret(s),
-      privateKey: s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined,
+      privateKey,
+      passphrase: s.key ? keyPassphrases.get(s.key) : undefined,
       agent: process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
       tryKeyboard: true,
       keepaliveInterval: 15000,
@@ -752,6 +765,63 @@ ipcMain.handle('process:signal', async (_, id, process, signal) => {
   const r = await exec(getConn(id).client, 'sh -s', { input: processModel.signal(process, signal) })
   if (r.code !== 0) throw new Error(r.out || 'Signal failed')
 })
+
+// ---------- Certificates and local SSH keys ----------
+async function certificateCommand(c, script, sudo, timeout = 60000) {
+  const privilege = sudo ? sudoOf(c) : null
+  return exec(c.client, `${privilege ? privilege.prefix + ' ' : ''}sh -c ${q(script)}`, { input: privilege?.input, timeout, max: 2e6 })
+}
+ipcMain.handle('cert:scan', async (_, id, options = {}) => {
+  const c = getConn(id)
+  const result = await certificateCommand(c, certificateTools.scanScript(options.directory || ''), options.sudo === true)
+  if (result.code !== 0) throw new Error(result.out || 'Certificate scan failed')
+  if (result.out.length >= 2e6) throw new Error('Certificate scan exceeds size limit')
+  c.certificates = certificateTools.parseScan(result.out)
+  return c.certificates
+})
+ipcMain.handle('cert:renew', async (_, id, fingerprint, sudo = false) => {
+  const c = getConn(id)
+  const cert = c.certificates?.certificates.find(x => x.fingerprint === fingerprint)
+  if (!c.certificates?.certbot || !cert?.certName) throw new Error(t('cert.unsupported'))
+  const result = await certificateCommand(c, certificateTools.renewScript(cert.certName), sudo === true, 180000)
+  if (result.code !== 0) throw new Error(result.out || 'Certificate renewal failed')
+  return { out: result.out }
+})
+const localKeyStore = () => sshKeys.createKeyStore(path.join(os.homedir(), '.ssh', 'cyberdog'), path.join(app.getPath('userData'), 'ssh-keys.json'))
+ipcMain.handle('keys:list', () => localKeyStore().list())
+ipcMain.handle('keys:generate', async (_, options) => {
+  const key = await localKeyStore().generate(options)
+  if (options.passphrase) keyPassphrases.set(key.privatePath, options.passphrase)
+  return localKeyStore().list()
+})
+ipcMain.handle('keys:import', async () => {
+  const result = await dialog.showOpenDialog(win, { properties: ['openFile'], defaultPath: path.join(os.homedir(), '.ssh'), filters: [{ name: 'SSH public key', extensions: ['pub'] }] })
+  if (result.canceled) return null
+  localKeyStore().importPublic(result.filePaths[0])
+  return localKeyStore().list()
+})
+ipcMain.handle('keys:install', async (_, id, keyId) => {
+  const key = localKeyStore().get(keyId)
+  const result = await exec(getConn(id).client, 'sh -s', { input: sshKeys.installScript(key.publicKey) })
+  if (result.code !== 0) throw new Error(result.out || 'Public key installation failed')
+  return { exists: result.out.trim() === 'EXISTS' }
+})
+ipcMain.handle('keys:use', (_, serverId, keyId) => {
+  const key = localKeyStore().get(keyId)
+  if (!key.hasPrivate) throw new Error(t('keys.no_private'))
+  const server = find(serverId)
+  server.key = key.privatePath
+  persist()
+  return list()
+})
+ipcMain.handle('keys:unlock', (_, serverId, passphrase) => {
+  const server = find(serverId)
+  if (!server.key || typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error(t('keys.unlock_failed'))
+  const parsed = sshUtils.parseKey(fs.readFileSync(server.key), passphrase)
+  if (parsed instanceof Error) throw new Error(t('keys.unlock_failed'))
+  keyPassphrases.set(server.key, passphrase)
+})
+ipcMain.handle('keys:reveal', (_, keyId) => { const key = localKeyStore().get(keyId); shell.showItemInFolder(key.publicPath) })
 
 // ---------- Santé du serveur ----------
 const healthOf = async (client, connectMs) => {

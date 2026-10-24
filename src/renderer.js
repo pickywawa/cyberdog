@@ -86,6 +86,7 @@ function refreshLanguage() {
 const AUTH_FAIL = /authentication methods failed|authentication failure/i
 function errText(e) {
   const m = e.message || String(e)
+  if (m.includes('KEY_PASSPHRASE_REQUIRED')) return t('keys.unlock')
   if (AUTH_FAIL.test(m)) return t('err.auth')
   if (/ECONNREFUSED/.test(m)) return t('err.refused')
   if (/ETIMEDOUT|timed out/i.test(m)) return t('err.timeout')
@@ -571,9 +572,9 @@ async function openSettingsModal() {
 
 // ---------- Onglets ----------
 function renderTabs() {
-  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : '') + (tb.opening ? ' opening' : ''), title: tb.opening ? `${t('srv.opening')} — ${tb.server.name}` : tb.server.name, ariaBusy: String(!!tb.opening), onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
-    tb.opening ? h('img', { className: 'tab-dog', src: 'assets/icon.svg', alt: '' }) : h('span', { innerHTML: icon('folder'), style: 'display:inline-flex' }),
-    h('span', { className: 't', textContent: tb.opening ? `${t('srv.opening')} · ${tb.server.name}` : tb.server.name }),
+  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : ''), title: tb.server.name, onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
+    h('span', { innerHTML: icon('folder'), style: 'display:inline-flex' }),
+    h('span', { className: 't', textContent: tb.server.name }),
     h('span', { className: 'x', innerHTML: icon('x'), onclick: e => { e.stopPropagation(); closeTab(tb.id) } }))))
 }
 
@@ -636,6 +637,7 @@ async function openTerminal(tab) {
   for (;;) {
     try { await api.invoke('term:open', id, server.id, term.cols, term.rows, tab.active?.path || undefined); break } catch (e) {
       if (tab.termId !== id) return
+      if (await unlockServerKey(server, e)) continue
       if (AUTH_FAIL.test(e.message) && (await askPassword(server))) continue
       term.write(`\x1b[31m${errText(e)}\x1b[0m\r\n`)
       break
@@ -662,10 +664,12 @@ const PANELS = {
   services: { title: 'svc.title', render: t => renderServices(t) },
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
   docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  certificates: { title: 'cert.title', render: t => renderCertificates(t) },
+  keys: { title: 'keys.title', render: t => renderKeys(t) },
   paths: { title: 'paths.title', render: t => renderPaths(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
 
 const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
@@ -684,7 +688,23 @@ function renderPanel(tab) {
   tab.rpanelTitle.textContent = t(PANELS[tab.panel].title)
   PANELS[tab.panel].render(tab)
 }
+let rightBarExpanded = localStorage.getItem('cyberdog.rbarExpanded') === 'true'
+function toggleRightBar() {
+  rightBarExpanded = !rightBarExpanded
+  localStorage.setItem('cyberdog.rbarExpanded', String(rightBarExpanded))
+  tabs.forEach(updateBar)
+}
 function updateBar(tab) {
+  tab.rightBar.ariaLabel = t('bar.views')
+  tab.rightBar.classList.toggle('expanded', rightBarExpanded)
+  tab.barToggle.innerHTML = icon('chevron-right') + `<span class="rbar-label">${t('bar.collapse')}</span>`
+  tab.barToggle.title = t(rightBarExpanded ? 'bar.collapse' : 'bar.expand')
+  tab.barToggle.ariaExpanded = String(rightBarExpanded)
+  for (const [key, ic, title] of BAR) {
+    tab.bar[key].title = t(title)
+    tab.bar[key].innerHTML = icon(ic)
+    tab.bar[key].append(h('span', { className: 'rbar-label', textContent: t(title) }))
+  }
   tab.bar.term.classList.toggle('on', !!tab.term)
   for (const [key] of BAR.slice(1)) tab.bar[key].classList.toggle('on', tab.panel === key)
   tab.termTitle.textContent = `${t('term.title')} — ${tab.server.user}@${tab.server.host}`
@@ -706,7 +726,11 @@ async function ensure(tab) {
   if (T.connId) return
   if (T.connecting) return T.connecting
   T.connecting = (async () => {
-    const r = await api.invoke('files:open', T.server.id)
+    let r
+    for (;;) {
+      try { r = await api.invoke('files:open', T.server.id); break }
+      catch (e) { if (T.closed || !(await unlockServerKey(T.server, e))) throw e }
+    }
     if (T.closed) { await api.invoke('conn:close', r.id); throw new Error(t('term.closed')) }
     T.connId = r.id
     T.home = r.home
@@ -1053,7 +1077,7 @@ function toggleSplit(ex) {
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
 function openFiles(server, { terminal = false } = {}) {
-  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
+  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
   layoutExplorers(tab)
@@ -1066,7 +1090,12 @@ function openFiles(server, { terminal = false } = {}) {
   tab.termWrap = h('div', { className: 'term-wrap', hidden: true }, splitter,
     h('div', { className: 'term-head' }, tab.termTitle, ib('x', 'term.close', () => closeTerminal(tab))),
     tab.termBody)
-  tab.wsMain = h('div', { className: 'ws-main' }, tab.explorers, tab.termWrap)
+  const openingTitle = h('b', { textContent: t('srv.opening') })
+  openingTitle.dataset.i18n = 'srv.opening'
+  tab.openLoader = h('div', { className: 'connection-loader', role: 'status', ariaLive: 'polite' },
+    h('img', { className: 'connection-dog', src: 'assets/icon.svg', alt: '' }), openingTitle,
+    h('small', { textContent: `${server.name} · ${server.user}@${server.host}` }))
+  tab.wsMain = h('div', { className: 'ws-main opening', ariaBusy: 'true' }, tab.explorers, tab.termWrap, tab.openLoader)
 
   // panneau de droite (largeur commune à tous les panneaux, redimensionnable)
   tab.rpanelTitle = h('span', { className: 'rp-title' })
@@ -1081,12 +1110,19 @@ function openFiles(server, { terminal = false } = {}) {
   // barre d'outils (tout à droite)
   tab.bar = {}
   for (const [key, ic, title] of BAR) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
-  tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, h('div', { className: 'rbar' }, ...BAR.map(([k]) => tab.bar[k])))
+  tab.barToggle = h('button', { className: 'ib rbar-toggle', onclick: toggleRightBar })
+  tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') }, tab.barToggle, ...BAR.map(([k]) => tab.bar[k]))
+  tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, tab.rightBar)
   applyI18n(tab.el)
   updateBar(tab)
 
   addTab(tab)
-  load(tab.active, null).finally(() => { tab.opening = false; if (!tab.closed) renderTabs() })
+  load(tab.active, null).finally(() => {
+    tab.opening = false
+    tab.wsMain.classList.remove('opening')
+    tab.wsMain.ariaBusy = 'false'
+    tab.openLoader.remove()
+  })
   if (terminal) openTerminal(tab)
 }
 

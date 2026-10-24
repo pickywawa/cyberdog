@@ -49,6 +49,8 @@ Download the latest installer from the **[Releases page](https://github.com/pick
 
 Cyberdog shows its version beside the logo and highlights new versions with an animated **New** badge. On Windows (standard installation), click it to download and install the update, then restart the app. On macOS, once the DMG has downloaded, Cyberdog offers to open it and quit automatically so you can drag the update into Applications, then reopen the app. Choose Later to keep using Cyberdog and install the downloaded DMG another time. If the DMG cannot be opened, Cyberdog stays running. The portable Windows build downloads and opens its executable.
 
+Update checks and downloads use Electron’s native networking to honor the system proxy, including enterprise PAC/WPAD configurations.
+
 ### macOS (Apple Silicon & Intel)
 
 1. Download `Cyberdog-<version>-mac-arm64.dmg` (Apple Silicon: M1/M2/M3/M4) or `Cyberdog-<version>-mac-x64.dmg` (Intel).
@@ -85,7 +87,7 @@ Saved paths live in the version-independent user data directory. Writes are atom
 
 ### Open your servers with a double-click
 
-Double-click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the tab while connecting.
+Double-click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the central workspace while connecting.
 
 Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import everything from Cyberduck** in one click. The welcome page walks you through the options.
 
@@ -153,6 +155,20 @@ The right-hand **Process Explorer** shows Linux processes over SSH without an ag
 On-demand details show listening ports, working directory and command. Local rules provide a guided diagnosis. The context menu opens logs or an SSH terminal and offers **SIGTERM / SIGKILL**, with confirmation. Available details depend on permissions; Linux `/proc` and `procps` are required, `ss` supplies ports and the systemd journal supplies logs.
 
 Right-hand panels resize down to a minimum of **480 px**, with their width remembered between launches.
+
+### SSL certificates and SSH keys
+
+The far-right navigation can be **expanded or collapsed** to show view titles; its state is remembered.
+
+**SSL certificates** scans PEM/DER certificates over SSH in the Let’s Encrypt, nginx, Apache and `/etc/pki/tls/certs` directories, or an absolute directory you choose. The server needs OpenSSL. The view shows domains, issuer, file locations, SHA-256 fingerprint and validity dates. Duplicate certificates are grouped by fingerprint. A limited scan is flagged so you can select a more specific directory.
+
+Expiry alerts can be set to **7, 14, 30, 60 or 90 days**, with separate states for expired and not-yet-valid certificates. Scans repeat every minute while the view is open; the latest scan’s alerts also appear in the health dashboard. No monitoring runs when the app is closed. **Use sudo** accesses protected directories according to the connected account’s privileges.
+
+**Renew with Certbot** is available for certificates managed under `/etc/letsencrypt/live` when Certbot is installed. It reuses existing configuration and hooks, without forcing early renewal. Command output is shown and certificate dates are refreshed afterwards. See the [Certbot documentation](https://eff-certbot.readthedocs.io/en/stable/using.html#renewing-certificates).
+
+**SSH key manager** generates local **Ed25519** or **RSA 4096** keys, with an optional passphrase, in `~/.ssh/cyberdog`. Import an existing `.pub` file, display or copy the public key and SHA-256 fingerprint, or reveal the local file. Private keys are never sent to the server.
+
+**Install on this server** appends the public key to the connected account’s `~/.ssh/authorized_keys`, preserving existing keys and avoiding duplicates. **Use for this server** selects the local private key for future connections without interrupting the current connection. Required passphrases are requested and kept only in memory until the app closes.
 
 ### Services
 

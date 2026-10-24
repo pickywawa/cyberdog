@@ -49,6 +49,8 @@ Téléchargez le dernier installeur depuis la **[page des Releases](https://gith
 
 Cyberdog affiche sa version près du logo et signale les nouvelles versions avec un badge animé **Nouveau**. Sur Windows (installation classique), cliquez dessus pour télécharger puis installer la mise à jour et relancer l'app. Sur macOS, une fois le DMG téléchargé, Cyberdog propose de l’ouvrir puis de quitter automatiquement pour vous permettre de glisser la mise à jour dans Applications et de relancer l’app. « Plus tard » conserve l’app ouverte et le DMG téléchargé pour une installation ultérieure. Si le DMG ne peut pas être ouvert, Cyberdog reste lancé. La version Windows portable télécharge et ouvre son exécutable.
 
+Les recherches et téléchargements de mises à jour utilisent le réseau natif d’Electron pour respecter le proxy système, y compris les configurations d’entreprise PAC/WPAD.
+
 ### macOS (Apple Silicon et Intel)
 
 1. Téléchargez `Cyberdog-<version>-mac-arm64.dmg` (Apple Silicon : M1/M2/M3/M4) ou `Cyberdog-<version>-mac-x64.dmg` (Intel).
@@ -85,7 +87,7 @@ Les chemins enregistrés sont conservés dans le dossier de données utilisateur
 
 ### Ouvrez vos serveurs au double-clic
 
-Double-cliquez sur un serveur (ou appuyez sur Entrée lorsqu’il a le focus) pour l’ouvrir. Un Cyberdog animé et le texte « Ouverture… » apparaissent dans l’onglet pendant la connexion.
+Double-cliquez sur un serveur (ou appuyez sur Entrée lorsqu’il a le focus) pour l’ouvrir. Un Cyberdog animé et le texte « Ouverture… » apparaissent au centre du panneau principal pendant la connexion.
 
 Ajoutez un serveur avec un nom, un hôte, un login et un mot de passe (ou utilisez votre agent / clé SSH). Réorganisez-les par glisser-déposer, triez de A à Z et **importez tout depuis Cyberduck** en un clic. La page d'accueil vous guide parmi les options.
 
@@ -153,6 +155,20 @@ La vue **Process Explorer** à droite affiche les processus Linux via SSH, sans 
 Les détails à la demande présentent les ports écoutés, le dossier et la commande. Un diagnostic local aide à comprendre le programme. Le menu contextuel donne accès aux logs, au terminal SSH et aux arrêts **SIGTERM / SIGKILL**, avec confirmation. Les données disponibles dépendent des permissions ; Linux `/proc` et `procps` sont requis, `ss` sert aux ports et le journal systemd aux logs.
 
 Les panneaux de droite sont redimensionnables avec une largeur minimale de **480 px**, mémorisée pour les prochains lancements.
+
+### Certificats SSL et clés SSH
+
+La barre tout à droite peut être **dépliée ou repliée** pour afficher les titres des vues ; ce choix est mémorisé.
+
+**Certificats SSL** recherche via SSH les certificats PEM/DER dans les dossiers Let’s Encrypt, nginx, Apache et `/etc/pki/tls/certs`, ou dans un dossier absolu de votre choix. OpenSSL doit être disponible sur le serveur. La vue affiche les domaines, l’émetteur, les fichiers, l’empreinte SHA-256 et les dates de validité. Les doublons sont regroupés par empreinte. Une recherche limitée est signalée pour permettre de cibler un dossier plus précis.
+
+Les alertes sont réglables à **7, 14, 30, 60 ou 90 jours** avant échéance, avec un état distinct pour les certificats expirés ou pas encore valides. L’analyse se renouvelle chaque minute lorsque la vue est ouverte ; les alertes du dernier résultat apparaissent aussi dans le tableau de santé. Il n’y a pas de surveillance lorsque l’app est fermée. La case **Utiliser sudo** permet d’accéder aux dossiers protégés selon les droits du compte connecté.
+
+Le bouton **Renouveler avec Certbot** est disponible pour les certificats gérés dans `/etc/letsencrypt/live` lorsque Certbot est installé. Il utilise la configuration et les hooks existants, sans forcer un renouvellement avant l’échéance prévue par Certbot. Le résultat de la commande est affiché, puis les dates sont actualisées. Voir la [documentation Certbot](https://eff-certbot.readthedocs.io/en/stable/using.html#renewing-certificates).
+
+**Gestionnaire de clés SSH** génère localement des clés **Ed25519** ou **RSA 4096**, avec phrase secrète facultative, dans `~/.ssh/cyberdog`. Il permet aussi d’importer un fichier `.pub` existant, d’afficher ou copier la clé publique et son empreinte SHA-256, et de retrouver le fichier local. Les clés privées ne sont jamais transmises au serveur.
+
+**Installer sur ce serveur** ajoute la clé publique au `~/.ssh/authorized_keys` du compte SSH connecté, sans supprimer les clés existantes ni ajouter de doublon. **Utiliser pour ce serveur** choisit la clé privée locale pour les prochaines connexions, sans couper la connexion actuelle. Si une phrase secrète est nécessaire, elle est demandée et conservée uniquement en mémoire jusqu’à la fermeture de l’app.
 
 ### Services
 

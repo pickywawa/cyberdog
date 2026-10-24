@@ -229,7 +229,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
 /* ---------- Espace de travail d'un serveur ---------- */
 .pane.ws { flex-direction: row; }
-.ws-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ws-main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .explorers { flex: 1; min-height: 0; display: flex; }
 .explorer { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .msg.small { padding: 18px; font-size: 12px; }
@@ -480,12 +480,14 @@ body.resizing-y { cursor: row-resize; }
 .proc-detail .kvtable { user-select: text; }
 .proc-list button:focus-visible, .proc-group summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* Cyberdog connection indicator in the opening tab. */
-.tab.opening { max-width: 300px; }
-.tab-dog { width: 22px; height: 22px; flex: none; animation: dog-connect .65s ease-in-out infinite alternate; }
-.tab.opening .t { color: var(--accent); }
-@keyframes dog-connect { from { transform: translateY(2px) rotate(-9deg); } to { transform: translateY(-3px) rotate(9deg); } }
-@media (prefers-reduced-motion: reduce) { .tab-dog { animation: none; } }
+/* Opening indicator in the central workspace. */
+.ws-main.opening > .explorers, .ws-main.opening > .term-wrap { visibility: hidden; }
+.connection-loader { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px; text-align: center; background: var(--bg); }
+.connection-dog { width: 80px; height: 80px; margin-bottom: 8px; animation: dog-connect .65s ease-in-out infinite alternate; }
+.connection-loader b { font-size: 18px; color: var(--text); }
+.connection-loader small { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; max-width: 100%; }
+@keyframes dog-connect { from { transform: translate(-4px, 3px) rotate(-7deg); } to { transform: translate(4px, -7px) rotate(7deg); } }
+@media (prefers-reduced-motion: reduce) { .connection-dog { animation: none; } }
 
 /* Configuration bundle selector */
 .config-card { width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 48px); }
@@ -508,3 +510,26 @@ body.resizing-y { cursor: row-resize; }
 .permission-grid th:first-child { text-align: left; }
 .permission-grid input, .permission-special input { width: 16px; height: 16px; accent-color: var(--accent); }
 .permission-special { display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* Expandable view navigation and security panels. */
+.rbar { overflow-y: auto; overflow-x: hidden; }
+.rbar .ib { flex: 0 0 34px; }
+.rbar .rbar-label { display: none; }
+.rbar.expanded { width: 200px; align-items: stretch; padding: 10px 6px; }
+.rbar.expanded .ib { width: 100%; justify-content: flex-start; gap: 9px; padding: 0 10px; }
+.rbar.expanded .rbar-label { display: inline; font-size: 11px; white-space: normal; text-align: left; }
+.rbar:not(.expanded) .rbar-toggle svg { transform: rotate(180deg); }
+.rbar-toggle { margin-bottom: 7px; }
+.security-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.security-tools > input { flex: 1; min-width: 180px; }
+.security-tools label { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.security-tools .check input { width: 15px; height: 15px; accent-color: var(--accent); }
+.security-list { display: flex; flex-direction: column; gap: 10px; }
+.security-note { font-size: 11px; line-height: 1.5; margin: 0; }
+.certificate-card, .key-card { display: flex; flex-direction: column; gap: 9px; }
+.certificate-card .v { overflow-wrap: anywhere; white-space: pre-wrap; }
+.certificate-card .mchip { white-space: normal; align-self: flex-start; }
+.key-fingerprint, .key-public { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font-size: 11px; background: var(--side); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.key-location { display: block; overflow-wrap: anywhere; user-select: text; }
+.key-card .chips { flex-wrap: wrap; }
+.key-card details summary { cursor: pointer; font-size: 12px; }

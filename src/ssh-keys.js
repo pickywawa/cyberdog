@@ -74,4 +74,19 @@ else
 fi
 `
 }
-module.exports = { publicInfo, createKeyStore, installScript }
+function parseAuthorizedKeys(contents) {
+  const items = []
+  for (const [index, line] of contents.split(/\r?\n/).entries()) {
+    if (!line.trim() || line.trim().startsWith('#')) continue
+    // Quoted options can contain spaces and key-like text. Consume options as tokens.
+    const tokens = line.match(/(?:[^\s"\\]|\\.|"(?:[^"\\]|\\.)*")+/g) || []
+    const keyIndex = /^(ssh-|ecdsa-)/.test(tokens[0] || '') ? 0 : 1
+    if (!/^(ssh-|ecdsa-)/.test(tokens[keyIndex] || '')) continue
+    try {
+      const info = publicInfo(tokens.slice(keyIndex).join(' '))
+      items.push({ ...info, line: index + 1, name: info.publicKey.split(/\s+/).slice(2).join(' ') || info.type })
+    } catch {}
+  }
+  return items
+}
+module.exports = { publicInfo, createKeyStore, installScript, parseAuthorizedKeys }

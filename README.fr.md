@@ -85,9 +85,9 @@ Le menu conserve **Cyberduck** et ajoute les exports SFTP de **FileZilla** (`sit
 
 Les chemins enregistrés sont conservés dans le dossier de données utilisateur, indépendant de la version de l’app. Les écritures sont atomiques et une copie `paths.json.bak` permet de récupérer le dernier état valide si le fichier principal devient illisible. Un dossier externe indisponible reste configuré et déclenche un message, sans basculer silencieusement vers un autre dossier.
 
-### Ouvrez vos serveurs au double-clic
+### Ouvrez vos serveurs au simple clic
 
-Double-cliquez sur un serveur (ou appuyez sur Entrée lorsqu’il a le focus) pour l’ouvrir. Un Cyberdog animé et le texte « Ouverture… » apparaissent au centre du panneau principal pendant la connexion.
+Cliquez sur un serveur (ou appuyez sur Entrée lorsqu’il a le focus) pour l’ouvrir. Un Cyberdog animé et le texte « Ouverture… » apparaissent au centre du panneau principal pendant la connexion.
 
 Ajoutez un serveur avec un nom, un hôte, un login et un mot de passe (ou utilisez votre agent / clé SSH). Réorganisez-les par glisser-déposer, triez de A à Z et **importez tout depuis Cyberduck** en un clic. La page d'accueil vous guide parmi les options.
 
@@ -277,3 +277,11 @@ src/i18n.js        traductions (EN/FR/DE/IT)
 ## 📄 Licence
 
 [MIT](LICENSE) © pickywawa
+
+### Gestionnaire de transferts et navigation distante
+
+Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Survolez-le ou cliquez dessus pour voir les transferts simultanés, leur progression, le débit, le temps restant estimé, les boutons d’annulation et les résultats récents. Les dossiers incluent leurs fichiers imbriqués. Une annulation peut laisser un fichier partiel à destination ; les fichiers déjà transférés sont conservés. L’historique récent reste en mémoire et peut être effacé.
+
+Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
+
+Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le serveur courant dans `~/.ssh/authorized_keys`, avec leurs empreintes SHA-256. Elles sont séparées des clés gérées localement. La lecture dépend des permissions du fichier distant ; aucune clé privée n’est lue sur le serveur.

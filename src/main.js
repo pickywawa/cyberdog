@@ -28,6 +28,8 @@ const { autoUpdater } = require('electron-updater')
 const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./update-version')
 const { restoreWindow } = require('./window-state')
 
+const { Transfers } = require('./transfers')
+const transfers = new Transfers((...args) => send(...args))
 const posix = path.posix
 const isMac = process.platform === 'darwin'
 const isWin = process.platform === 'win32'
@@ -380,6 +382,7 @@ function connect(s) {
 function drop(id) {
   const c = conns.get(id)
   if (!c) return
+  transfers.cancelConnection(id)
   conns.delete(id)
   c.tmp.forEach(d => { fs.readdirSync(d).forEach(f => fs.unwatchFile(path.join(d, f))); fs.rmSync(d, { recursive: true, force: true }) })
   send('conn:closed', id)
@@ -480,7 +483,7 @@ ipcMain.handle('paths:list', () => savedPaths)
 ipcMain.handle('paths:save', (_, d) => {
   if (pathsLoadError) throw pathsLoadError
   const p = String(d.path || '').trim()
-  if (!p.startsWith('/')) throw new Error(t('err.path_required'))
+  if (!p.startsWith('/') && p !== '~' && !p.startsWith('~/')) throw new Error(t('err.path_required'))
   const server = d.serverId ? find(d.serverId) : null
   let e = savedPaths.find(x => x.id === d.id)
   if (!e) savedPaths.push((e = { id: crypto.randomUUID() }))
@@ -602,7 +605,9 @@ ipcMain.handle('conn:close', (_, id) => conns.get(id)?.client.end())
 
 ipcMain.handle('sftp:list', async (_, id, dir) => {
   const s = S(id)
-  dir = await P(s, 'realpath', dir)
+  const resolved = await require('./sftp-navigation').resolveDirectory(s, dir)
+  dir = resolved.path
+  const selected = resolved.selected
   const items = (await P(s, 'readdir', dir)).filter(f => f.filename !== '.' && f.filename !== '..')
   const entries = await Promise.all(items.map(async f => {
     const a = f.attrs
@@ -613,7 +618,7 @@ ipcMain.handle('sftp:list', async (_, id, dir) => {
     const l = f.longname.split(/\s+/)
     return { name: f.filename, size: a.size, mtime: a.mtime * 1000, mode: a.mode & 0o7777, uid: a.uid, gid: a.gid, owner: l[2] ?? a.uid, group: l[3] ?? a.gid, isDir, isLink }
   }))
-  return { path: dir, entries }
+  return { path: dir, entries, selected }
 })
 
 ipcMain.handle('sftp:mkdir', (_, id, p) => P(S(id), 'mkdir', p))
@@ -658,38 +663,25 @@ async function dl(s, remote, local, budget) {
   }
 }
 
+const { executeTransfer } = require('./transfer-files')(transfers)
+ipcMain.handle('transfers:list', () => transfers.list())
+ipcMain.handle('transfers:cancel', (_, id) => transfers.cancel(id))
 ipcMain.handle('sftp:download', async (_, id, paths) => {
-  const s = S(id)
-  const downloads = app.getPath('downloads')
-  if (paths.length === 1 && !(await P(s, 'stat', paths[0])).isDirectory()) {
-    const r = await dialog.showSaveDialog(win, { defaultPath: path.join(downloads, posix.basename(paths[0])) })
-    if (r.canceled) return null
-    await P(s, 'fastGet', paths[0], r.filePath)
-    return r.filePath
-  }
-  const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), defaultPath: downloads, properties: ['openDirectory', 'createDirectory'] })
-  if (r.canceled) return null
-  for (const p of paths) await dl(s, p, path.join(r.filePaths[0], posix.basename(p)))
-  return r.filePaths[0]
+  const s = S(id), downloads = app.getPath('downloads')
+  let target, single = paths.length === 1 && !(await P(s, 'stat', paths[0])).isDirectory()
+  if (single) { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(downloads, posix.basename(paths[0])) }); if (r.canceled) return null; target = r.filePath }
+  else { const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; target = r.filePaths[0] }
+  const ok = await transfers.run(id, 'download', posix.basename(paths[0]), job => executeTransfer(s, 'download', paths, p => single ? target : path.join(target, posix.basename(p)), job))
+  return ok ? target : null
 })
-
-async function ul(s, local, remote) {
-  if (fs.statSync(local).isDirectory()) {
-    await P(s, 'mkdir', remote).catch(() => {}) // existe déjà
-    for (const f of fs.readdirSync(local)) await ul(s, path.join(local, f), posix.join(remote, f))
-  } else await P(s, 'fastPut', local, remote)
-}
-
 ipcMain.handle('sftp:upload', async (_, id, locals, dir) => {
-  const s = S(id)
-  const clash = []
+  const s = S(id), clash = []
   for (const l of locals) if (await P(s, 'stat', posix.join(dir, path.basename(l))).then(() => true, () => false)) clash.push(path.basename(l))
   if (clash.length) {
     const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [t('dlg.replace'), t('btn.cancel')], defaultId: 1, cancelId: 1, message: t('dlg.exists'), detail: clash.join('\n') })
     if (r.response) return false
   }
-  for (const l of locals) await ul(s, l, posix.join(dir, path.basename(l)))
-  return true
+  return transfers.run(id, 'upload', path.basename(locals[0]), job => executeTransfer(s, 'upload', locals, p => posix.join(dir, path.basename(p)), job))
 })
 
 // Édition : téléchargement en tmp, ouverture dans l'appli, renvoi à chaque sauvegarde
@@ -788,6 +780,14 @@ ipcMain.handle('cert:renew', async (_, id, fingerprint, sudo = false) => {
   return { out: result.out }
 })
 const localKeyStore = () => sshKeys.createKeyStore(path.join(os.homedir(), '.ssh', 'cyberdog'), path.join(app.getPath('userData'), 'ssh-keys.json'))
+ipcMain.handle('keys:remote', async (_, id) => {
+  const s = S(id), home = await P(s, 'realpath', '.')
+  const file = posix.join(home, '.ssh/authorized_keys')
+  let contents
+  try { const st = await P(s, 'stat', file); if (st.size > 2 * 1024 * 1024) throw new Error('authorized_keys exceeds 2 MB'); contents = await P(s, 'readFile', file) }
+  catch (e) { if (e.code === 2) return { path: file, items: [] }; throw e }
+  return { path: file, items: sshKeys.parseAuthorizedKeys(String(contents)) }
+})
 ipcMain.handle('keys:list', () => localKeyStore().list())
 ipcMain.handle('keys:generate', async (_, options) => {
   const key = await localKeyStore().generate(options)

@@ -85,9 +85,9 @@ The import menu retains **Cyberduck** and adds SFTP sites from **FileZilla** (`s
 
 Saved paths live in the version-independent user data directory. Writes are atomic, with a `paths.json.bak` copy for recovery if the primary file becomes unreadable. An unavailable external configuration directory retains its saved location and shows a message instead of silently switching directories.
 
-### Open your servers with a double-click
+### Open your servers with a click
 
-Double-click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the central workspace while connecting.
+Click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the central workspace while connecting.
 
 Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import everything from Cyberduck** in one click. The welcome page walks you through the options.
 
@@ -277,3 +277,11 @@ src/i18n.js        translations (EN/FR/DE/IT)
 ## 📄 License
 
 [MIT](LICENSE) © pickywawa
+
+### Transfer manager and remote navigation
+
+The explorer footer shows the current upload or download. Hover over it or click it to see concurrent transfers, byte progress, transfer speed, approximate remaining time, cancellation and recent results. Folder transfers include nested files. Cancelling can leave a partial destination file; completed files are kept. Recent transfer history is held in memory and can be cleared.
+
+The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
+
+The SSH key manager also lists public keys authorized on the current server from `~/.ssh/authorized_keys`, with their SHA-256 fingerprints. These are shown separately from locally managed keys. Reading requires permission on the remote file; private keys are never read from the server.

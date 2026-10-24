@@ -1,6 +1,6 @@
 // TLS certificates on the active SSH server, and local SSH key management.
 const newCertificates = () => ({ data: null, directory: '', days: [7, 14, 30, 60, 90].includes(Number(localStorage.getItem('cyberdog.cert.days'))) ? Number(localStorage.getItem('cyberdog.cert.days')) : 30, sudo: false, busy: false, renewing: false, error: null, output: '', ui: null, notified: new Set() })
-const newKeys = () => ({ items: [], loaded: false, busy: false, error: null, ui: null })
+const newKeys = () => ({ items: [], remote: null, remoteError: null, loaded: false, busy: false, error: null, ui: null })
 function certificateState(c, days, now = Date.now()) {
   const remaining = Math.ceil((c.validTo - now) / 86400000)
   return { days: remaining, level: c.validTo <= now ? 'crit' : c.validFrom > now || remaining <= days ? 'warn' : 'ok', expired: c.validTo <= now, notYetValid: c.validFrom > now }
@@ -75,7 +75,7 @@ async function loadKeys(tab) {
   if (K.busy) return
   K.busy = true
   paintKeys(tab)
-  try { K.items = await api.invoke('keys:list'); K.loaded = true; K.error = null } catch (e) { K.error = errText(e) }
+  try { K.items = await api.invoke('keys:list'); K.loaded = true; K.error = null; try { await ensure(tab); K.remote = await api.invoke('keys:remote', tab.connId); K.remoteError = null } catch (e) { K.remoteError = errText(e) } } catch (e) { K.error = errText(e) }
   finally { K.busy = false }
   paintKeys(tab)
 }
@@ -92,6 +92,14 @@ function paintKeys(tab) {
   body.replaceChildren()
   if (K.error) body.append(h('p', { className: 'err', role: 'alert', textContent: K.error }))
   if (K.busy) body.append(h('p', { className: 'dim', textContent: t('keys.working') }))
+  body.append(h('h4', { textContent: t('keys.remote_title') }))
+  if (K.remoteError) body.append(h('p', { className: 'err', textContent: K.remoteError }))
+  if (K.remote) {
+    body.append(h('small', { className: 'dim key-location', textContent: K.remote.path }))
+    if (!K.remote.items.length) body.append(h('p', { className: 'dim', textContent: t('keys.remote_empty') }))
+    for (const key of K.remote.items) body.append(h('article', { className: 'd-card key-card' }, h('b', { textContent: key.name }), h('pre', { className: 'key-fingerprint', textContent: key.fingerprint }), h('details', {}, h('summary', { textContent: t('keys.public') }), h('pre', { className: 'key-public', textContent: key.publicKey })), h('button', { className: 'chip', textContent: t('keys.copy'), onclick: () => navigator.clipboard.writeText(key.publicKey).catch(e => toast(errText(e), true)) })))
+  }
+  body.append(h('h4', { textContent: t('keys.local_title') }))
   if (K.loaded && !K.items.length) body.append(h('p', { className: 'dim', textContent: t('keys.empty') }))
   for (const key of K.items) {
     const button = (label, fn, disabled = false) => h('button', { className: 'chip', textContent: t('keys.' + label), disabled: disabled || K.busy, onclick: fn })
@@ -128,7 +136,7 @@ async function installKey(tab, key) {
   K.busy = true; paintKeys(tab)
   try { await ensure(tab); const result = await api.invoke('keys:install', tab.connId, key.id); toast(t(result.exists ? 'keys.exists' : 'keys.installed')) }
   catch (e) { toast(errText(e), true) }
-  finally { K.busy = false; paintKeys(tab) }
+  finally { K.busy = false; await loadKeys(tab) }
 }
 async function useKey(tab, key) {
   if (!confirm(t('keys.use_confirm', { name: key.name, server: tab.server.name }))) return

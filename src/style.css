@@ -533,3 +533,18 @@ body.resizing-y { cursor: row-resize; }
 .key-location { display: block; overflow-wrap: anywhere; user-select: text; }
 .key-card .chips { flex-wrap: wrap; }
 .key-card details summary { cursor: pointer; font-size: 12px; }
+/* Transfers stay in the explorer footer; their list opens above it. */
+.status { position: relative; align-items: center; gap: 10px; min-height: 32px; }
+.status > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status > span:last-child { text-align: right; }
+.transfer-widget { position: relative; flex: 0 1 340px; min-width: 100px; }
+.transfer-summary { width: 100%; display: flex; align-items: center; gap: 6px; position: relative; padding: 3px 5px 8px; font-size: 11px; }
+.transfer-summary svg, .transfer-heading svg { width: 14px; height: 14px; }
+.transfer-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; min-width: 0; text-align: left; }
+.transfer-summary progress { position: absolute; bottom: 0; left: 0; height: 3px; }
+.transfer-widget progress { width: 100%; accent-color: var(--accent); }
+.transfer-popover { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); width: min(420px, 75vw); max-height: 360px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--side); box-shadow: 0 8px 30px #0005; z-index: 80; color: var(--text); }
+.transfer-widget.expanded .transfer-popover { display: block; }
+.transfer-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.transfer-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.transfer-row small { display: block; }

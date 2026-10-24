@@ -89,7 +89,7 @@ function merge(current, incoming) {
     out.actions.push({ id: crypto.randomUUID(), name: a.name.trim(), script: a.script }); added.actions++
   }
   for (const p of incoming.paths) {
-    if (typeof p?.path !== 'string' || !p.path.startsWith('/')) throw new Error('Invalid saved path')
+    if (typeof p?.path !== 'string' || !(p.path.startsWith('/') || p.path === '~' || p.path.startsWith('~/'))) throw new Error('Invalid saved path')
     let serverId
     if (p.serverId) {
       serverId = serverIds.get(p.serverId) || (p.server ? out.servers.find(s => endpoint(s) === endpoint(p.server))?.id : undefined)

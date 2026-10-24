@@ -256,7 +256,7 @@ function serverRow(s, activeServer) {
     h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
     starBtn(s.favorite, () => setFavorite(s, !s.favorite)),
     h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('srv.edit_tip'), onclick: e => { e.stopPropagation(); serverForm(s) } }))
-  li.ondblclick = e => { if (!e.target.closest('button')) openFiles(s) }
+  li.onclick = e => { if (!e.target.closest('button')) openFiles(s) }
   li.tabIndex = 0
   li.onkeydown = e => { if (e.key === 'Enter' && e.target === li) openFiles(s) }
   li.oncontextmenu = e => {
@@ -744,6 +744,7 @@ async function load(tab, p, push = true) {
     await ensure(tab)
     const r = await api.invoke('sftp:list', tab.connId, p ?? tab.home)
     if (push && tab.path && tab.path !== r.path) tab.hist.push(tab.path)
+    if (r.selected) tab.pendingSelect = r.selected
     Object.assign(tab, { path: r.path, entries: r.entries, sel: new Set(), last: null, error: null })
   } catch (e) {
     tab.pendingSelect = null
@@ -762,6 +763,7 @@ async function act(tab, fn, refresh = true) {
 }
 
 function updateStatus(tab) {
+  paintTransfers()
   const n = tab.sel.size
   tab.statusL.textContent = t('ex.items', { n: tab.entries.length }) + (n ? ' · ' + t('ex.selected', { n }) : '')
 }
@@ -865,10 +867,8 @@ async function newItem(tab, kind) {
 }
 
 async function upload(tab, paths) {
-  toast(t('t.uploading'), false, 60000)
   await act(tab, async () => {
     if (await api.invoke('sftp:upload', tab.connId, paths, tab.path)) toast(t('t.uploaded'))
-    else $('#toast').hidden = true
   })
 }
 
@@ -1014,6 +1014,7 @@ function makeExplorer(tab) {
   ex.body = h('div')
   ex.statusL = h('span')
   ex.statusR = h('span')
+  ex.transfer = buildTransfers(ex)
   ex.splitBtn = ib('split', 'ex.split', () => toggleSplit(ex))
   ex.pathsBtn = ib('bookmark', 'paths.title', () => { ex.pathsBox.hidden = !ex.pathsBox.hidden; if (!ex.pathsBox.hidden) paintPathsBox(ex) }, 'pbtn js-paths-btn')
   ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
@@ -1030,7 +1031,7 @@ function makeExplorer(tab) {
     ex.searchBox,
     ex.pathsBox,
     table,
-    h('div', { className: 'status' }, ex.statusL, ex.statusR))
+    h('div', { className: 'status' }, ex.statusL, ex.transfer, ex.statusR))
   ex.explorer.addEventListener('mousedown', () => { tab.active = ex; tab.panes.forEach(p => p.explorer.classList.toggle('active', p === ex && tab.panes.length > 1)) })
   ex.explorer.ondragover = e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); ex.explorer.classList.add('drop') } }
   ex.explorer.ondragleave = e => { if (!ex.explorer.contains(e.relatedTarget)) ex.explorer.classList.remove('drop') }
@@ -1128,6 +1129,7 @@ function openFiles(server, { terminal = false } = {}) {
 
 // ---------- Init ----------
 ;(async () => {
+  if (document.readyState === 'loading') await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
   $('#app-version').textContent = 'v' + await api.invoke('app:version')
   root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')

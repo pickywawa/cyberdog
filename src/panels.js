@@ -25,6 +25,7 @@ const newDash = () => ({ status: 'checking', data: null, error: null, history: [
 
 // Sondage périodique du panneau affiché dans l'onglet actif (santé, services, docker) ; un seul sondage par onglet.
 const POLLS = {
+  processes: { every: 5000, run: t => processPoll(t) },
   dashboard: { every: 10000, run: t => dashCheck(t) },
   services: { every: 10000, run: t => svcPoll(t) },
   docker: { every: 6000, run: t => dockerPoll(t) },

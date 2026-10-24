@@ -11,6 +11,7 @@ const i18n = require('./i18n')
 const archive = require('./archive')
 const logfmt = require('./logs')
 const dockerfmt = require('./docker')
+const processModel = require('./processes')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 const { autoUpdater } = require('electron-updater')
 const { isNewerVersion, selectUpdateAsset } = require('./update-version')
@@ -657,6 +658,23 @@ function exec(client, cmd, { input, timeout = 15000, max = 2e6 } = {}) {
 }
 const getConn = id => (conns.get(id)?.client ? conns.get(id) : (() => { throw new Error(t('err.lost')) })())
 
+// ---------- Process Explorer (SSH, Linux sans agent) ----------
+ipcMain.handle('process:list', async (_, id) => {
+  const r = await exec(getConn(id).client, 'sh -s', { input: processModel.SNAPSHOT, max: 8e6 })
+  if (r.code !== 0) throw new Error(r.out || 'Process snapshot failed')
+  if (r.out.length >= 8e6) throw new Error('Process snapshot exceeds size limit')
+  return processModel.parse(r.out)
+})
+ipcMain.handle('process:details', async (_, id, process) => {
+  const r = await exec(getConn(id).client, 'sh -s', { input: processModel.details(process) })
+  if (r.code !== 0) throw new Error(r.out || 'Process unavailable')
+  return r.out
+})
+ipcMain.handle('process:signal', async (_, id, process, signal) => {
+  const r = await exec(getConn(id).client, 'sh -s', { input: processModel.signal(process, signal) })
+  if (r.code !== 0) throw new Error(r.out || 'Signal failed')
+})
+
 // ---------- Santé du serveur ----------
 const healthOf = async (client, connectMs) => {
   const t0 = Date.now()
@@ -806,8 +824,9 @@ ipcMain.handle('log:start', async (_, connId, spec) => {
   const c = getConn(connId)
   let cmd
   if (spec.kind === 'journal') {
+    if (spec.pid != null && (!Number.isSafeInteger(spec.pid) || spec.pid <= 0)) throw new Error('invalid pid')
     if (spec.unit && !UNIT_NAME.test(spec.unit)) throw new Error('invalid unit')
-    cmd = ['journalctl', '-f', '-n', '300', '-o', 'json', '--no-pager', ...(spec.unit ? ['-u', spec.unit] : [])]
+    cmd = ['journalctl', '-f', '-n', '300', '-o', 'json', '--no-pager', ...(spec.unit ? ['-u', spec.unit] : []), ...(spec.pid ? ['_PID=' + spec.pid] : [])]
   } else if (spec.kind === 'file') {
     if (typeof spec.path !== 'string' || !spec.path.startsWith('/')) throw new Error('invalid path')
     cmd = ['tail', '-n', '300', '-F', spec.path]

@@ -658,13 +658,14 @@ const toggleTerminal = tab => (tab.term ? closeTerminal(tab) : openTerminal(tab)
 // Les fonctions render*/leave* vivent dans panels.js et ops.js (chargés après ce fichier).
 const PANELS = {
   dashboard: { title: 'dash.title', render: t => renderDashboard(t) },
+  processes: { title: 'proc.title', render: t => renderProcesses(t), leave: t => leaveProcesses(t) },
   services: { title: 'svc.title', render: t => renderServices(t) },
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
   docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
   paths: { title: 'paths.title', render: t => renderPaths(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
 
 const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
@@ -1052,7 +1053,7 @@ function toggleSplit(ex) {
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
 function openFiles(server, { terminal = false } = {}) {
-  const tab = { id: uid(), kind: 'files', server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
+  const tab = { id: uid(), kind: 'files', server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
   layoutExplorers(tab)

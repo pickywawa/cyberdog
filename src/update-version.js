@@ -25,4 +25,25 @@ function selectUpdateAsset(release, platform, arch, version) {
   }
 }
 
-module.exports = { isNewerVersion, selectUpdateAsset }
+// The DMG must be opened successfully before quitting the running application.
+async function openUpdatePackage({ platform, file, version, dialog, shell, app, window, t }) {
+  const quitAfterOpen = platform === 'darwin' && /\.dmg$/i.test(file)
+  if (quitAfterOpen) {
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'question',
+      title: t('update.mac_title'),
+      message: t('update.mac_message', { version }),
+      detail: t('update.mac_detail'),
+      buttons: [t('update.mac_install'), t('update.mac_later')],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    })
+    if (response !== 0) return
+  }
+  const error = await shell.openPath(file)
+  if (error) throw new Error(error)
+  if (quitAfterOpen) app.quit()
+}
+
+module.exports = { isNewerVersion, selectUpdateAsset, openUpdatePackage }

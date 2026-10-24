@@ -28,7 +28,7 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
 | ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. |
-| 🔁 **Partagez votre configuration** | Un fichier JSON par serveur. Exportez/importez un zip (jamais de mot de passe dedans) ou importez vos favoris **Cyberduck**. |
+| 🔁 **Partagez votre configuration** | Export ZIP sélectif des groupes, serveurs, actions et chemins. Import de configuration, **Cyberduck**, **FileZilla XML** et **WinSCP INI**. |
 | 🎨 **Pensé pour être beau** | 7 thèmes, 4 langues, barres de défilement discrètes, autant d'onglets de serveurs que vous voulez. |
 
 ---
@@ -36,6 +36,8 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 ## ⚙️ Paramètres
 
 Le bouton **Paramètres** à côté de la langue — ou **Cyberdog → Paramètres…** sur macOS — regroupe la langue, le thème, l'éditeur par défaut et les mises à jour. Vous pouvez aussi choisir un dossier de configuration externe pour partager serveurs, groupes, actions rapides, chemins enregistrés et recherches favorites, tout en gardant les préférences personnelles sur chaque poste.
+
+La taille, la position et l’état maximisé de la fenêtre sont restaurés au lancement suivant. Si un écran est débranché, la fenêtre revient sur un écran disponible.
 
 Un double-clic sur un fichier l'ouvre dans l'éditeur choisi et chaque enregistrement le renvoie sur le serveur.
 
@@ -45,7 +47,7 @@ Un double-clic sur un fichier l'ouvre dans l'éditeur choisi et chaque enregistr
 
 Téléchargez le dernier installeur depuis la **[page des Releases](https://github.com/pickywawa/cyberdog/releases/latest)**.
 
-Cyberdog affiche sa version près du logo et signale les nouvelles versions avec un badge animé **Nouveau**. Sur Windows (installation classique), cliquez dessus pour télécharger puis installer la mise à jour et relancer l'app. Sur macOS et dans la version Windows portable, le bouton ouvre la release : l'installation macOS reste manuelle car l'app n'est pas signée/notarisée.
+Cyberdog affiche sa version près du logo et signale les nouvelles versions avec un badge animé **Nouveau**. Sur Windows (installation classique), cliquez dessus pour télécharger puis installer la mise à jour et relancer l'app. Sur macOS, une fois le DMG téléchargé, Cyberdog propose de l’ouvrir puis de quitter automatiquement pour vous permettre de glisser la mise à jour dans Applications et de relancer l’app. « Plus tard » conserve l’app ouverte et le DMG téléchargé pour une installation ultérieure. Si le DMG ne peut pas être ouvert, Cyberdog reste lancé. La version Windows portable télécharge et ouvre son exécutable.
 
 ### macOS (Apple Silicon et Intel)
 
@@ -69,7 +71,21 @@ Chaque release contient aussi un fichier `SHA256SUMS.txt` pour vérifier votre t
 
 ## 🚀 Visite guidée
 
-### Vos serveurs à un clic
+### Exporter et importer la configuration
+
+Le bouton **Exporter la configuration** ouvre une sélection par catégories : groupes (s’il y en a), serveurs, actions rapides et chemins enregistrés. Toutes les catégories sont cochées et repliées au départ. Dépliez-les pour sélectionner chaque élément ; la case de la catégorie permet de tout cocher ou décocher.
+
+Le ZIP contient un `manifest.json` et les dossiers `groups/`, `servers/`, `actions/` et `paths/`, avec un JSON par élément sélectionné. Les mots de passe, empreintes d’hôte et fichiers de clés privées sont exclus. Les scripts sont exportés tels quels.
+
+**Importer → Configuration ZIP** restaure les catégories en une opération et accepte aussi les anciens ZIP de serveurs ou d’actions. L’import fusionne sans écraser les identifiants de connexion existants. Les associations des chemins sont rétablies même si les identifiants internes des serveurs diffèrent. Pour exporter uniquement des chemins propres à un serveur, celui-ci doit déjà exister dans la configuration de destination ; les chemins sans serveur correspondant sont ignorés et comptés dans le résultat.
+
+Le menu conserve **Cyberduck** et ajoute les exports SFTP de **FileZilla** (`sitemanager.xml` ou export XML) et **WinSCP** (export INI via [Outils → Exporter/Sauvegarder la configuration](https://winscp.net/eng/docs/config)). Les mots de passe de ces logiciels ne sont pas importés. Les formats Transmit et SolarWinds ne sont pas encore pris en charge.
+
+Les chemins enregistrés sont conservés dans le dossier de données utilisateur, indépendant de la version de l’app. Les écritures sont atomiques et une copie `paths.json.bak` permet de récupérer le dernier état valide si le fichier principal devient illisible. Un dossier externe indisponible reste configuré et déclenche un message, sans basculer silencieusement vers un autre dossier.
+
+### Ouvrez vos serveurs au double-clic
+
+Double-cliquez sur un serveur (ou appuyez sur Entrée lorsqu’il a le focus) pour l’ouvrir. Un Cyberdog animé et le texte « Ouverture… » apparaissent dans l’onglet pendant la connexion.
 
 Ajoutez un serveur avec un nom, un hôte, un login et un mot de passe (ou utilisez votre agent / clé SSH). Réorganisez-les par glisser-déposer, triez de A à Z et **importez tout depuis Cyberduck** en un clic. La page d'accueil vous guide parmi les options.
 
@@ -109,6 +125,12 @@ Dossiers d'abord, icônes colorées selon le type de fichier, sélection multipl
 
 **Tout est redimensionnable** : tirez le bord de la liste des serveurs, du panneau de droite, du terminal ou la séparation entre les deux explorateurs. Les tailles sont mémorisées.
 
+### Permissions et propriétaire
+
+Dans le menu clic droit d’un fichier ou dossier, **Modifier les permissions…** affiche le propriétaire actuel et permet de choisir un autre compte du serveur. Le mode octal (`0644`, `0755`…) est synchronisé avec les cases **Lecture / Écriture / Exécution** pour le propriétaire, le groupe et les autres. Les bits spéciaux `setuid`, `setgid` et `sticky` sont aussi disponibles.
+
+Le groupe du fichier est conservé. Les modifications utilisent les droits du compte SSH ; un changement de propriétaire refusé ou une modification partiellement appliquée est signalé.
+
 ### Le terminal, là où vous travaillez
 
 Le terminal s'ouvre sous l'explorateur, démarre dans le dossier courant et reste ouvert quand vous changez de panneau. Un splitter permet de le redimensionner.
@@ -123,6 +145,14 @@ Cliquez sur le bouton 📈 de la barre d'outils de droite (terminal, santé, ser
 - **Uptime, latence SSH et temps de connexion**, avec l'historique des dernières vérifications
 
 <img src="docs/screenshots/dashboard.png" alt="Tableau de bord de santé" width="100%">
+
+### Process Explorer
+
+La vue **Process Explorer** à droite affiche les processus Linux via SSH, sans agent. Actualisation toutes les 5 secondes, recherche et regroupements par programme, arbre parent/enfants, utilisateur, service systemd ou conteneur. Les tendances CPU/mémoire reposent sur les mesures observées, jusqu’à 5 minutes, avec alertes de pics CPU, croissance mémoire, zombies et attentes d’E/S.
+
+Les détails à la demande présentent les ports écoutés, le dossier et la commande. Un diagnostic local aide à comprendre le programme. Le menu contextuel donne accès aux logs, au terminal SSH et aux arrêts **SIGTERM / SIGKILL**, avec confirmation. Les données disponibles dépendent des permissions ; Linux `/proc` et `procps` sont requis, `ss` sert aux ports et le journal systemd aux logs.
+
+Les panneaux de droite sont redimensionnables avec une largeur minimale de **480 px**, mémorisée pour les prochains lancements.
 
 ### Services
 

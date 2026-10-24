@@ -2,7 +2,7 @@ const fs = require('fs')
 const path = require('path')
 
 const CONFIG_DIRS = ['servers', 'actions']
-const CONFIG_FILES = ['groups.json', 'paths.json', 'log-favorites.json']
+const CONFIG_FILES = ['groups.json', 'paths.json', 'paths.json.bak', 'log-favorites.json']
 
 function hasCyberdogConfig(dir) {
   if (!dir || !fs.existsSync(dir)) return false

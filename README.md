@@ -28,7 +28,7 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
 | ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. |
-| 🔁 **Share your setup** | One JSON file per server. Export/import a zip (passwords never included) or import your **Cyberduck** bookmarks. |
+| 🔁 **Share your setup** | Selectively export groups, servers, actions and paths to ZIP. Import configuration, **Cyberduck**, **FileZilla XML** and **WinSCP INI**. |
 | 🎨 **Made to look good** | 7 themes, 4 languages, discreet scrollbars, tabs for as many servers as you like. |
 
 ---
@@ -36,6 +36,8 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 ## ⚙️ Settings
 
 The **Settings** button beside the language selector — or **Cyberdog → Settings…** on macOS — groups language, theme, default editor and update preferences. You can also select an external configuration folder to share servers, groups, quick actions, saved paths and favorite searches while keeping personal preferences local to each computer.
+
+Window size, position and maximized state are restored at the next launch. If a monitor is disconnected, the window returns to an available screen.
 
 Double-clicking a file opens it in the selected editor and uploads every saved change back to the server.
 
@@ -45,7 +47,7 @@ Double-clicking a file opens it in the selected editor and uploads every saved c
 
 Download the latest installer from the **[Releases page](https://github.com/pickywawa/cyberdog/releases/latest)**.
 
-Cyberdog shows its version beside the logo and highlights new versions with an animated **New** badge. On Windows (standard installation), click it to download and install the update, then restart the app. On macOS and the portable Windows build, the button opens the release page; macOS installation remains manual because the app is not signed/notarized.
+Cyberdog shows its version beside the logo and highlights new versions with an animated **New** badge. On Windows (standard installation), click it to download and install the update, then restart the app. On macOS, once the DMG has downloaded, Cyberdog offers to open it and quit automatically so you can drag the update into Applications, then reopen the app. Choose Later to keep using Cyberdog and install the downloaded DMG another time. If the DMG cannot be opened, Cyberdog stays running. The portable Windows build downloads and opens its executable.
 
 ### macOS (Apple Silicon & Intel)
 
@@ -69,7 +71,21 @@ Each release also ships a `SHA256SUMS.txt` so you can verify your download.
 
 ## 🚀 Tour
 
-### Your servers, one click away
+### Export and import configuration
+
+**Export configuration** opens a category selector: groups (when present), servers, quick actions and saved paths. All categories start checked and collapsed. Expand them to select individual items, or use each category checkbox to select or clear all of its items.
+
+The ZIP contains a `manifest.json` and `groups/`, `servers/`, `actions/` and `paths/` folders, with one JSON file per selected item. Server passwords, host fingerprints and private key files are excluded. Action scripts are exported as written.
+
+**Import → Configuration ZIP** restores these categories together and also accepts legacy server or action ZIPs. Imports merge without overwriting existing connection credentials. Saved paths are mapped to matching servers even when their internal IDs differ. A server-specific path exported without its server requires that server to already exist at the destination; unmatched paths are skipped and counted in the result.
+
+The import menu retains **Cyberduck** and adds SFTP sites from **FileZilla** (`sitemanager.xml` or an XML export) and **WinSCP** (INI via [Tools → Export/Backup configuration](https://winscp.net/eng/docs/config)). Third-party passwords are not imported. Transmit and SolarWinds formats are not supported yet.
+
+Saved paths live in the version-independent user data directory. Writes are atomic, with a `paths.json.bak` copy for recovery if the primary file becomes unreadable. An unavailable external configuration directory retains its saved location and shows a message instead of silently switching directories.
+
+### Open your servers with a double-click
+
+Double-click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the tab while connecting.
 
 Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import everything from Cyberduck** in one click. The welcome page walks you through the options.
 
@@ -109,6 +125,12 @@ Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shif
 
 **Everything is resizable**: drag the edge of the server list, of the right-hand panel, of the terminal or between the two explorers. Sizes are remembered.
 
+### Permissions and ownership
+
+Right-click a file or folder and choose **Permissions…** to see the current owner and select another account from the server. The octal mode (`0644`, `0755`…) stays synchronized with **Read / Write / Execute** checkboxes for owner, group and others. Special `setuid`, `setgid` and `sticky` bits are available too.
+
+The file group is preserved. Changes use your SSH account’s permissions; denied ownership changes and partially applied changes are reported.
+
 ### Terminal, right where you work
 
 The terminal opens under the explorer, starts in the current folder and stays open while you switch panels. Drag the splitter to resize it.
@@ -123,6 +145,14 @@ Click the 📈 button in the right-hand toolbar (the terminal, health, services,
 - **Uptime, SSH latency and connection time**, plus a history of recent checks
 
 <img src="docs/screenshots/dashboard.png" alt="Server health dashboard" width="100%">
+
+### Process Explorer
+
+The right-hand **Process Explorer** shows Linux processes over SSH without an agent. It refreshes every 5 seconds, with search and grouping by program, parent tree, user, systemd service or container. CPU/memory trends use observed samples for up to 5 minutes, flagging CPU spikes, memory growth, zombies and uninterruptible I/O waits.
+
+On-demand details show listening ports, working directory and command. Local rules provide a guided diagnosis. The context menu opens logs or an SSH terminal and offers **SIGTERM / SIGKILL**, with confirmation. Available details depend on permissions; Linux `/proc` and `procps` are required, `ss` supplies ports and the systemd journal supplies logs.
+
+Right-hand panels resize down to a minimum of **480 px**, with their width remembered between launches.
 
 ### Services
 

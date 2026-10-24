@@ -255,7 +255,9 @@ function serverRow(s, activeServer) {
     h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
     starBtn(s.favorite, () => setFavorite(s, !s.favorite)),
     h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('srv.edit_tip'), onclick: e => { e.stopPropagation(); serverForm(s) } }))
-  li.onclick = () => openFiles(s)
+  li.ondblclick = e => { if (!e.target.closest('button')) openFiles(s) }
+  li.tabIndex = 0
+  li.onkeydown = e => { if (e.key === 'Enter' && e.target === li) openFiles(s) }
   li.oncontextmenu = e => {
     e.preventDefault()
     menu(e.clientX, e.clientY, [
@@ -370,7 +372,7 @@ function renderServers() {
     loose.forEach(s => ul.append(serverRow(s, activeServer)))
   }
   if (q && !ul.childElementCount) ul.append(h('li', { className: 'srv-empty', textContent: t('srvs.no_match') }))
-  $('#card-export').hidden = !servers.length
+  $('#card-export').hidden = false
 }
 
 async function sortServers() {
@@ -399,14 +401,9 @@ const importFrom = ch => async () => {
     toast(r.added ? `${t('t.imported', { n: r.added })} ${t('t.pw_hint')}` : t('t.nothing'), false, 6000)
   } catch (e) { toast(errText(e), true) }
 }
-const importZip = importFrom('servers:importZip')
+const importZip = () => importConfiguration()
 const importCyberduck = importFrom('servers:import')
-async function exportZip() {
-  try {
-    const r = await api.invoke('servers:exportZip')
-    if (r) toast(t('t.exported', { n: r.count, path: r.path }), false, 6000)
-  } catch (e) { toast(errText(e), true) }
-}
+const exportZip = () => exportConfiguration()
 
 $('#btn-add').onclick = $('#card-add').onclick = () => serverForm()
 $('#btn-sort').onclick = sortServers
@@ -418,6 +415,8 @@ $('#btn-import').onclick = e => {
   menu(r.left, r.bottom + 4, [
     { label: t('menu.import_zip'), icon: 'archive', fn: importZip },
     { label: t('menu.import_cyberduck'), icon: 'download', fn: importCyberduck },
+    { label: 'FileZilla (XML)…', icon: 'download', fn: () => importConfiguration('filezilla') },
+    { label: 'WinSCP (INI)…', icon: 'download', fn: () => importConfiguration('winscp') },
   ])
 }
 $('#btn-theme').onclick = e => {
@@ -572,9 +571,9 @@ async function openSettingsModal() {
 
 // ---------- Onglets ----------
 function renderTabs() {
-  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : ''), onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
-    h('span', { innerHTML: icon('folder'), style: 'display:inline-flex' }),
-    h('span', { className: 't', textContent: tb.server.name }),
+  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : '') + (tb.opening ? ' opening' : ''), title: tb.opening ? `${t('srv.opening')} — ${tb.server.name}` : tb.server.name, ariaBusy: String(!!tb.opening), onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
+    tb.opening ? h('img', { className: 'tab-dog', src: 'assets/icon.svg', alt: '' }) : h('span', { innerHTML: icon('folder'), style: 'display:inline-flex' }),
+    h('span', { className: 't', textContent: tb.opening ? `${t('srv.opening')} · ${tb.server.name}` : tb.server.name }),
     h('span', { className: 'x', innerHTML: icon('x'), onclick: e => { e.stopPropagation(); closeTab(tb.id) } }))))
 }
 
@@ -591,6 +590,7 @@ function activate(id) {
 function closeTab(id) {
   const i = tabs.findIndex(tb => tb.id === id)
   const tb = tabs[i]
+  tb.closed = true
   if (tb.connId) api.invoke('conn:close', tb.connId)
   closeTerminal(tb)
   pollStop(tb)
@@ -704,9 +704,14 @@ const nameCell = (iconHtml, kind, text) => h('div', { className: 'nm' }, h('span
 async function ensure(tab) {
   const T = tab.root || tab
   if (T.connId) return
-  const r = await api.invoke('files:open', T.server.id)
-  T.connId = r.id
-  T.home = r.home
+  if (T.connecting) return T.connecting
+  T.connecting = (async () => {
+    const r = await api.invoke('files:open', T.server.id)
+    if (T.closed) { await api.invoke('conn:close', r.id); throw new Error(t('term.closed')) }
+    T.connId = r.id
+    T.home = r.home
+  })()
+  try { await T.connecting } finally { T.connecting = null }
 }
 
 async function load(tab, p, push = true) {
@@ -874,12 +879,7 @@ function ctxMenu(tab, e) {
     { label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
-    ...(one ? [{ label: t('ctx.permissions'), icon: 'lock', fn: async () => {
-      const v = await modal(t('ctx.permissions'), [{ name: 'mode', label: t('col.perms'), value: one.mode.toString(8).padStart(4, '0') }], t('btn.save'))
-      if (!v) return
-      if (!/^[0-7]{3,4}$/.test(v.mode) || parseInt(v.mode, 8) > 0o7777) return toast(t('err.permissions'), true)
-      act(tab, () => api.invoke('sftp:chmod', tab.connId, full(one), v.mode))
-    } }] : []),
+    ...(one ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
     ...(one && !one.isDir && archive.kind(one.name)
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
@@ -1053,7 +1053,7 @@ function toggleSplit(ex) {
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
 function openFiles(server, { terminal = false } = {}) {
-  const tab = { id: uid(), kind: 'files', server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
+  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
   layoutExplorers(tab)
@@ -1073,7 +1073,7 @@ function openFiles(server, { terminal = false } = {}) {
   tab.rpanelActions = h('span', { className: 'rp-actions' })
   tab.rpanelBody = h('div', { className: 'rp-body' })
   const rz = h('div', { className: 'rz rz-left' })
-  dragResize(rz, { axis: 'x', dir: -1, min: 300, max: () => Math.max(400, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
+  dragResize(rz, { axis: 'x', dir: -1, min: 480, max: () => Math.max(480, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
   tab.rpanel = h('div', { className: 'rpanel', hidden: true }, rz,
     h('div', { className: 'rp-head' }, tab.rpanelTitle, tab.rpanelActions, ib('x', 'panel.close', () => setPanel(tab, tab.panel))),
     tab.rpanelBody)
@@ -1086,7 +1086,7 @@ function openFiles(server, { terminal = false } = {}) {
   updateBar(tab)
 
   addTab(tab)
-  load(tab.active, null)
+  load(tab.active, null).finally(() => { tab.opening = false; if (!tab.closed) renderTabs() })
   if (terminal) openTerminal(tab)
 }
 
@@ -1095,7 +1095,7 @@ function openFiles(server, { terminal = false } = {}) {
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
   $('#app-version').textContent = 'v' + await api.invoke('app:version')
   root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')
-  root.style.setProperty('--rpw', loadSize('rpw', 400) + 'px')
+  root.style.setProperty('--rpw', Math.max(480, loadSize('rpw', 480)) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
   settings = s

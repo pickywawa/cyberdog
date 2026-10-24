@@ -1,12 +1,19 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen } = require('electron')
+const path = require('path')
+app.setName('Cyberdog')
+// Keep the data location independent of the application bundle and release version.
+app.setPath('userData', path.join(app.getPath('appData'), 'Cyberdog'))
 const { Client } = require('ssh2')
 const { execFile } = require('child_process')
 const fs = require('fs')
 const os = require('os')
-const path = require('path')
 const crypto = require('crypto')
 const { parseDuck } = require('./duck')
 const { exportZip, readZip } = require('./share')
+const configTransfer = require('./config-transfer')
+const clientImport = require('./client-import')
+const permissions = require('./permissions')
+const { readList, writeList } = require('./persistent-list')
 const i18n = require('./i18n')
 const archive = require('./archive')
 const logfmt = require('./logs')
@@ -14,7 +21,8 @@ const dockerfmt = require('./docker')
 const processModel = require('./processes')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 const { autoUpdater } = require('electron-updater')
-const { isNewerVersion, selectUpdateAsset } = require('./update-version')
+const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./update-version')
+const { restoreWindow } = require('./window-state')
 const { hasCyberdogConfig, copyCyberdogConfig } = require('./config-path')
 
 const posix = path.posix
@@ -26,9 +34,12 @@ let actions = []
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
 const DEFAULT_SETTINGS = { lang: 'en', theme: 'system', configPath: '', defaultEditor: 'system', autoDownload: false }
+const checkConfigRoot = () => {
+  if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
+}
 const currentConfigRoot = () => {
   const custom = settings?.configPath?.trim()
-  return custom && fs.existsSync(custom) ? custom : app.getPath('userData')
+  return custom || app.getPath('userData')
 }
 
 // ---------- stockage : un fichier JSON par élément (userData/servers/, userData/actions/) ----------
@@ -43,6 +54,7 @@ function createStore(name) {
       return items.sort((a, b) => a.order - b.order)
     },
     save(items) {
+      checkConfigRoot()
       fs.mkdirSync(dir(), { recursive: true })
       const keep = new Set(items.map(s => s.id + '.json'))
       for (const f of fs.readdirSync(dir())) if (f.endsWith('.json') && !keep.has(f)) fs.rmSync(path.join(dir(), f))
@@ -55,7 +67,7 @@ const actionStore = createStore('actions')
 const persist = () => serverStore.save(servers)
 function load() {
   const legacy = path.join(app.getPath('userData'), 'servers.json')
-  if (fs.existsSync(legacy)) {
+  if (!settings.configPath && fs.existsSync(legacy)) {
     servers = JSON.parse(fs.readFileSync(legacy, 'utf8'))
     persist()
     fs.renameSync(legacy, legacy + '.migrated')
@@ -69,7 +81,7 @@ function loadSettings() {
   const sys = app.getLocale().slice(0, 2)
   settings = { ...DEFAULT_SETTINGS, lang: sys in i18n.LANGS ? sys : 'en' }
   try { Object.assign(settings, JSON.parse(fs.readFileSync(settingsFile(), 'utf8'))) } catch {}
-  if (settings.configPath && !fs.existsSync(settings.configPath)) settings.configPath = ''
+  // Retain custom paths even when an external volume is temporarily unavailable.
   if (!settings.defaultEditor) settings.defaultEditor = 'system'
   autoUpdater.autoDownload = !!settings.autoDownload
   applyNativeTheme()
@@ -139,6 +151,15 @@ let updateAsset
 let updateFile
 let updatePercent = 0
 let lastUpdateState = 'current'
+let updateOpenPromise
+
+function openDownloadedUpdate() {
+  installAfterDownload = false
+  if (updateOpenPromise) return updateOpenPromise
+  updateOpenPromise = openUpdatePackage({ platform: process.platform, file: updateFile, version: updateVersion, dialog, shell, app, window: win, t })
+    .finally(() => { updateOpenPromise = null })
+  return updateOpenPromise
+}
 
 ipcMain.handle('app:version', () => app.getVersion())
 const updateStatus = (state, extra = {}) => ({
@@ -207,7 +228,6 @@ async function downloadReleaseAsset(openFallback = true) {
     updateDownloadStarted = false
     updatePercent = 100
     sendUpdate('ready')
-    if (installAfterDownload) await shell.openPath(target)
   } catch (error) {
     fs.rmSync(temporary, { force: true })
     updateDownloadStarted = false
@@ -215,13 +235,14 @@ async function downloadReleaseAsset(openFallback = true) {
     useManualUpdate(error)
     throw error
   }
+  if (installAfterDownload) await openDownloadedUpdate()
 }
 
 async function performUpdateAction(install) {
   if (!releaseUrl || !updateVersion) throw new Error('No Cyberdog update is available.')
   installAfterDownload = install
   if (updateMode !== 'install') {
-    if (updateReady && updateFile) return install ? shell.openPath(updateFile) : undefined
+    if (updateReady && updateFile) return install ? openDownloadedUpdate() : undefined
     if (updateDownloadStarted) return
     return downloadReleaseAsset()
   }
@@ -394,7 +415,7 @@ ipcMain.handle('servers:update', (_, id, patch) => {
 const groupsFile = () => path.join(currentConfigRoot(), 'groups.json')
 let groups = []
 const loadGroups = () => { try { groups = JSON.parse(fs.readFileSync(groupsFile(), 'utf8')) } catch { groups = [] } }
-const saveGroups = () => fs.writeFileSync(groupsFile(), JSON.stringify(groups, null, 2))
+const saveGroups = () => { checkConfigRoot(); fs.writeFileSync(groupsFile(), JSON.stringify(groups, null, 2)) }
 const groupByName = name => groups.find(g => g.name.toLowerCase() === name.toLowerCase())
 const groupName = id => groups.find(g => g.id === id)?.name
 
@@ -429,21 +450,36 @@ ipcMain.handle('groups:delete', (_, id) => {
 // { id, name, path, serverId } ; serverId absent = valable pour tous les serveurs
 const pathsFile = () => path.join(currentConfigRoot(), 'paths.json')
 let savedPaths = []
-const loadPaths = () => { try { savedPaths = JSON.parse(fs.readFileSync(pathsFile(), 'utf8')) } catch { savedPaths = [] } }
-const writePaths = () => fs.writeFileSync(pathsFile(), JSON.stringify(savedPaths, null, 2))
+let pathsLoadError
+const loadPaths = () => {
+  try {
+    const stored = readList(pathsFile())
+    savedPaths = configTransfer.linkPaths(stored, servers)
+    pathsLoadError = null
+    if (JSON.stringify(stored) !== JSON.stringify(savedPaths)) {
+      try { writePaths() } catch (e) { console.warn('Saved-path metadata could not be persisted:', e.message) }
+    }
+  }
+  catch (e) { savedPaths = []; pathsLoadError = e; console.error('Cannot read saved paths:', e) }
+}
+const writePaths = () => { checkConfigRoot(); if (pathsLoadError) throw pathsLoadError; writeList(pathsFile(), savedPaths) }
 ipcMain.handle('paths:list', () => savedPaths)
 ipcMain.handle('paths:save', (_, d) => {
+  if (pathsLoadError) throw pathsLoadError
   const p = String(d.path || '').trim()
   if (!p.startsWith('/')) throw new Error(t('err.path_required'))
+  const server = d.serverId ? find(d.serverId) : null
   let e = savedPaths.find(x => x.id === d.id)
   if (!e) savedPaths.push((e = { id: crypto.randomUUID() }))
   Object.assign(e, { name: String(d.name || '').trim(), path: p })
-  if (d.serverId) e.serverId = d.serverId
-  else delete e.serverId
+  if (d.serverId) {
+    e.serverId = d.serverId
+    e.server = { host: server.host, port: server.port, user: server.user }
+  } else { delete e.serverId; delete e.server }
   writePaths()
   return savedPaths
 })
-ipcMain.handle('paths:delete', (_, id) => { savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return savedPaths })
+ipcMain.handle('paths:delete', (_, id) => { if (pathsLoadError) throw pathsLoadError; savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return savedPaths })
 
 // ajoute un serveur venant d'un import (Cyberduck ou zip) sauf doublon host/port/user
 function addImported(b) {
@@ -493,21 +529,50 @@ ipcMain.handle('servers:import', async () => {
   return { servers: list(), added }
 })
 
-ipcMain.handle('servers:exportZip', async () => {
-  if (!servers.length) throw new Error(t('err.no_export'))
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), 'cyberdog-servers.zip'), filters: [{ name: 'Zip', extensions: ['zip'] }] })
+// ---------- Configuration bundles ----------
+const configData = () => ({ groups, servers, actions, paths: savedPaths })
+const publicConfig = () => ({ groups, servers: list(), actions, paths: savedPaths })
+ipcMain.handle('config:catalog', () => { checkConfigRoot(); if (pathsLoadError) throw pathsLoadError; return publicConfig() })
+ipcMain.handle('config:export', async (_, selection) => {
+  if (pathsLoadError) throw pathsLoadError
+  // Add portable server references before filtering: a path can target an existing server on import.
+  const data = configTransfer.select(configTransfer.portable(configData()), selection)
+  const count = configTransfer.TYPES.reduce((n, k) => n + data[k].length, 0)
+  if (!count) throw new Error(t('config.empty'))
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), 'cyberdog-config.zip'), filters: [{ name: 'Zip', extensions: ['zip'] }] })
   if (r.canceled) return null
-  await exportZip(servers.map(s => ({ ...s, group: groupName(s.group) })), r.filePath, ['name', 'host', 'port', 'user', 'key', 'group'])
-  return { path: r.filePath, count: servers.length }
+  configTransfer.writeBundle(data, r.filePath)
+  return { path: r.filePath, count }
 })
-
-ipcMain.handle('servers:importZip', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Zip', extensions: ['zip'] }] })
+function mergeConfiguration(data) {
+  checkConfigRoot()
+  if (pathsLoadError) throw pathsLoadError
+  const result = configTransfer.merge(configData(), data)
+  const before = configData()
+  try {
+    ;({ groups, servers, actions, paths: savedPaths } = result.data)
+    persist(); persistActions(); saveGroups(); writePaths()
+  } catch (e) {
+    ;({ groups, servers, actions, paths: savedPaths } = before)
+    try { persist(); persistActions(); saveGroups(); writePaths() } catch (rollback) { console.error('Configuration rollback failed:', rollback) }
+    throw e
+  }
+  return { ...publicConfig(), added: result.added, skipped: result.skipped }
+}
+ipcMain.handle('config:import', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Cyberdog configuration ZIP', extensions: ['zip'] }] })
   if (r.canceled) return null
-  let added = 0
-  for (const b of await readZip(r.filePaths[0])) if (addImported(b)) added++
-  persist()
-  return { servers: list(), added }
+  return mergeConfiguration(configTransfer.readBundle(r.filePaths[0]))
+})
+ipcMain.handle('config:import-client', async (_, source) => {
+  if (!['filezilla', 'winscp'].includes(source)) throw new Error('Unsupported import source')
+  const r = await dialog.showOpenDialog(win, { title: source === 'filezilla' ? 'FileZilla — XML' : 'WinSCP — INI', properties: ['openFile'], filters: [{ name: source, extensions: [source === 'filezilla' ? 'xml' : 'ini'] }] })
+  if (r.canceled) return null
+  const file = r.filePaths[0]
+  if (fs.statSync(file).size > 8e6) throw new Error('Import exceeds 8 MB')
+  const bytes = fs.readFileSync(file)
+  const text = bytes[0] === 0xff && bytes[1] === 0xfe ? bytes.subarray(2).toString('utf16le') : bytes.toString('utf8')
+  return mergeConfiguration({ groups: [], servers: clientImport[source](text), actions: [], paths: [] })
 })
 
 // ---------- SFTP ----------
@@ -533,7 +598,7 @@ ipcMain.handle('sftp:list', async (_, id, dir) => {
     let isDir = type === 0o040000
     if (isLink) isDir = await P(s, 'stat', posix.join(dir, f.filename)).then(x => x.isDirectory(), () => false)
     const l = f.longname.split(/\s+/)
-    return { name: f.filename, size: a.size, mtime: a.mtime * 1000, mode: a.mode & 0o7777, owner: l[2] ?? a.uid, group: l[3] ?? a.gid, isDir, isLink }
+    return { name: f.filename, size: a.size, mtime: a.mtime * 1000, mode: a.mode & 0o7777, uid: a.uid, gid: a.gid, owner: l[2] ?? a.uid, group: l[3] ?? a.gid, isDir, isLink }
   }))
   return { path: dir, entries }
 })
@@ -542,6 +607,19 @@ ipcMain.handle('sftp:mkdir', (_, id, p) => P(S(id), 'mkdir', p))
 // flag wx: ne jamais écraser un fichier existant
 ipcMain.handle('sftp:touch', (_, id, p) => P(S(id), 'writeFile', p, '', { flag: 'wx' }))
 ipcMain.handle('sftp:rename', (_, id, from, to) => P(S(id), 'rename', from, to))
+ipcMain.handle('sftp:ownership', async (_, id, file) => {
+  const attrs = await P(S(id), 'stat', file)
+  let users = []
+  try {
+    const result = await exec(getConn(id).client, 'getent passwd 2>/dev/null || cat /etc/passwd', { timeout: 10000 })
+    if (result.code === 0) users = permissions.parseUsers(result.out)
+  } catch {}
+  return { uid: attrs.uid, gid: attrs.gid, mode: attrs.mode & 0o7777, users }
+})
+ipcMain.handle('sftp:attributes', async (_, id, file, attrs) => {
+  try { await permissions.applyAttributes(S(id), file, attrs) }
+  catch (error) { if (error.ownerChanged) throw new Error(t('perm.partial', { error: error.message })); throw error }
+})
 ipcMain.handle('sftp:chmod', (_, id, p, value) => {
   if (typeof value !== 'string' || !/^[0-7]{3,4}$/.test(value) || parseInt(value, 8) > 0o7777) throw new Error(i18n.t(settings.lang, 'err.permissions'))
   return P(S(id), 'chmod', p, parseInt(value, 8))
@@ -948,7 +1026,6 @@ ipcMain.on('term:write', (_, id, d) => conns.get(id)?.stream?.write(d))
 ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindow(rows, cols, 0, 0))
 
 // ---------- Fenêtre ----------
-app.setName('Cyberdog')
 app.whenReady().then(() => {
   loadSettings()
   load()
@@ -978,18 +1055,36 @@ app.whenReady().then(() => {
       { role: 'windowMenu' },
     ]))
   } else Menu.setApplicationMenu(null)
+  const windowStateFile = path.join(app.getPath('userData'), 'window-state.json')
+  let windowState
+  try { windowState = JSON.parse(fs.readFileSync(windowStateFile, 'utf8')) } catch {}
+  const primary = screen.getPrimaryDisplay()
+  const displays = [primary, ...screen.getAllDisplays().filter(d => d.id !== primary.id)]
+  const windowBounds = restoreWindow(windowState, displays)
   win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 560,
+    ...windowBounds,
+    minWidth: Math.min(1040, windowBounds.width),
+    minHeight: Math.min(560, windowBounds.height),
     ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } } : app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16171d' : '#ffffff',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   })
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    if (windowState?.maximized) win.maximize()
+    win.show()
+  })
+  let windowSaveTimer
+  const saveWindow = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
+    try { fs.writeFileSync(windowStateFile, JSON.stringify({ bounds: win.getNormalBounds(), maximized: win.isMaximized() })) } catch (e) { console.warn('Cannot save window state:', e.message) }
+  }
+  const scheduleWindowSave = () => { clearTimeout(windowSaveTimer); windowSaveTimer = setTimeout(saveWindow, 250) }
+  for (const event of ['resize', 'move', 'maximize', 'unmaximize']) win.on(event, scheduleWindowSave)
+  win.on('close', () => { clearTimeout(windowSaveTimer); saveWindow() })
   win.webContents.once('did-finish-load', () => {
+    if (settings.configPath && !fs.existsSync(settings.configPath)) send('toast', t('config.unavailable'), true, 10000)
+    if (pathsLoadError) send('toast', t('config.paths_error'), true, 10000)
     checkForAppUpdate()
     setInterval(checkForAppUpdate, 6 * 60 * 60 * 1000).unref()
   })

@@ -76,8 +76,9 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 
 /* ---------- Sidebar ---------- */
 #sidebar { position: relative; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-.brand { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0 16px; height: 44px; font-weight: 700; font-size: 14px; letter-spacing: .2px; -webkit-app-region: drag; }
+.brand { display: flex; flex-wrap: wrap; flex-shrink: 0; align-items: center; gap: 8px; padding: 12px 14px 0 16px; min-height: 44px; height: auto; padding-bottom: 8px; font-weight: 700; font-size: 14px; letter-spacing: .2px; -webkit-app-region: drag; }
 .mac .brand { padding-left: 84px; } /* place pour les boutons de fenêtre macOS */
+.brand img, .brand-name, .app-version, .update-badge { flex-shrink: 0; }
 .brand img { width: 22px; height: 22px; }
 .brand .brand-name { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .brand .app-version { color: var(--dim); background: none; font-size: 10px; font-weight: 500; letter-spacing: 0; }
@@ -107,7 +108,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 #servers .edit { opacity: 0; }
 #servers li:hover .ib.fav, #servers li:hover .edit { opacity: 1; }
 .side-foot { display: flex; gap: 4px; padding: 8px 10px 12px; border-top: 1px solid var(--line); }
-.side-foot .ib { flex: 1; justify-content: flex-start; height: 30px; }
+.side-foot .ib.lab { min-width: 0; flex: 1; justify-content: flex-start; height: 30px; }
+#btn-settings { flex: 0 0 30px; height: 30px; width: 30px; margin-left: auto; justify-content: center; }
 .side-foot .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Onglets ---------- */
@@ -248,7 +250,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .term-body { flex: 1; min-height: 0; padding: 8px 0 0 12px; }
 
 /* panneau de droite */
-.rpanel { position: relative; width: var(--rpw, 400px); flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
+.rpanel { position: relative; width: var(--rpw, 480px); min-width: 480px; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
 .rpanel[hidden] { display: none; }
 .rp-head { display: flex; align-items: center; gap: 2px; height: 45px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--line); flex: none; }
 .rp-title { flex: 1; font-weight: 700; font-size: 13px; }
@@ -477,3 +479,32 @@ body.resizing-y { cursor: row-resize; }
 .proc-detail .v { overflow-wrap: anywhere; white-space: pre-wrap; }
 .proc-detail .kvtable { user-select: text; }
 .proc-list button:focus-visible, .proc-group summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Cyberdog connection indicator in the opening tab. */
+.tab.opening { max-width: 300px; }
+.tab-dog { width: 22px; height: 22px; flex: none; animation: dog-connect .65s ease-in-out infinite alternate; }
+.tab.opening .t { color: var(--accent); }
+@keyframes dog-connect { from { transform: translateY(2px) rotate(-9deg); } to { transform: translateY(-3px) rotate(9deg); } }
+@media (prefers-reduced-motion: reduce) { .tab-dog { animation: none; } }
+
+/* Configuration bundle selector */
+.config-card { width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 48px); }
+.config-card .note { margin: 0; }
+.config-sections { overflow: auto; min-height: 0; }
+.config-section { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; }
+.config-section > summary { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; background: var(--side); border-radius: 8px; }
+.config-section > summary::before { content: '▸'; color: var(--dim); }
+.config-section[open] > summary::before { content: '▾'; }
+.config-section > summary label { flex: 1; color: var(--text); cursor: pointer; }
+.config-card .config-item { padding: 8px 12px 8px 36px; cursor: pointer; border-top: 1px solid var(--line); }
+.config-item > span { min-width: 0; overflow-wrap: anywhere; }
+.config-item small { display: block; font-size: 11px; margin-top: 3px; }
+.config-card input[type=checkbox] { accent-color: var(--accent); flex: none; }
+
+.permission-card { width: min(490px, calc(100vw - 40px)); max-height: calc(100vh - 48px); overflow: auto; }
+.permission-file { overflow-wrap: anywhere; user-select: text; }
+.permission-grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+.permission-grid th, .permission-grid td { padding: 9px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.permission-grid th:first-child { text-align: left; }
+.permission-grid input, .permission-special input { width: 16px; height: 16px; accent-color: var(--accent); }
+.permission-special { display: flex; gap: 14px; flex-wrap: wrap; }

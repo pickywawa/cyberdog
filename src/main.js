@@ -1,8 +1,9 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen } = require('electron')
 const path = require('path')
+const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('./config-path')
 app.setName('Cyberdog')
 // Keep the data location independent of the application bundle and release version.
-app.setPath('userData', path.join(app.getPath('appData'), 'Cyberdog'))
+initializeUserData(app)
 const { Client } = require('ssh2')
 const { execFile } = require('child_process')
 const fs = require('fs')
@@ -23,7 +24,6 @@ const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_AC
 const { autoUpdater } = require('electron-updater')
 const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./update-version')
 const { restoreWindow } = require('./window-state')
-const { hasCyberdogConfig, copyCyberdogConfig } = require('./config-path')
 
 const posix = path.posix
 const isMac = process.platform === 'darwin'

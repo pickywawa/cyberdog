@@ -24,4 +24,11 @@ function copyCyberdogConfig(sourceDir, targetDir) {
   }
 }
 
-module.exports = { hasCyberdogConfig, copyCyberdogConfig }
+function initializeUserData(app) {
+  const dir = path.join(app.getPath('appData'), 'Cyberdog')
+  fs.mkdirSync(dir, { recursive: true })
+  app.setPath('userData', dir)
+  return dir
+}
+
+module.exports = { hasCyberdogConfig, copyCyberdogConfig, initializeUserData }

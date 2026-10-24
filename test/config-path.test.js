@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const { hasCyberdogConfig, copyCyberdogConfig } = require('../src/config-path')
+const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('../src/config-path')
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cyberdog-config-test-'))
 const source = path.join(root, 'source')
@@ -26,5 +26,13 @@ assert.equal(fs.readFileSync(path.join(target, 'actions', 'action.json'), 'utf8'
 assert.equal(fs.readFileSync(path.join(target, 'paths.json'), 'utf8'), '[]')
 assert.equal(fs.readFileSync(path.join(target, 'log-favorites.json'), 'utf8'), '[]')
 
+const appData = path.join(root, 'fresh-install')
+let userData
+const mockApp = { getPath: name => { assert.equal(name, 'appData'); return appData }, setPath: (name, dir) => { assert.equal(name, 'userData'); assert(fs.statSync(dir).isDirectory(), 'Electron setPath requires an existing directory'); userData = dir } }
+initializeUserData(mockApp)
+const pathsFile = path.join(userData, 'paths.json')
+fs.writeFileSync(pathsFile, '[{"path":"/srv"}]')
+initializeUserData(mockApp)
+assert.equal(fs.readFileSync(pathsFile, 'utf8'), '[{"path":"/srv"}]', 'relaunches and updates preserve stored data')
 fs.rmSync(root, { recursive: true })
 console.log('ok')

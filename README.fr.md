@@ -19,6 +19,10 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ---
 
+## Nouveautés de la version 1.6.3
+
+Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’ancienne largeur minimale). Glissez sa bordure gauche pour le redimensionner ; la largeur choisie est mémorisée.
+
 ## Nouveautés de la version 1.6.2
 
 - **Restauration facultative de la session :** activez **Rouvrir les connexions au démarrage** dans Paramètres → Général pour rouvrir les onglets serveurs et terminaux laissés ouverts à la fermeture. L’option est décochée par défaut et aucune commande n’est rejouée. Seules les références aux serveurs configurés et la présence du terminal sont enregistrées. Les serveurs supprimés sont ignorés et désactiver l’option efface la session mémorisée.
@@ -162,7 +166,7 @@ La vue **Process Explorer** à droite affiche les processus Linux via SSH, sans 
 
 Les détails à la demande présentent les ports écoutés, le dossier et la commande. Un diagnostic local aide à comprendre le programme. Le menu contextuel donne accès aux logs, au terminal SSH et aux arrêts **SIGTERM / SIGKILL**, avec confirmation. Les données disponibles dépendent des permissions ; Linux `/proc` et `procps` sont requis, `ss` sert aux ports et le journal systemd aux logs.
 
-Les panneaux de droite sont redimensionnables avec une largeur minimale de **480 px**, mémorisée pour les prochains lancements.
+Les panneaux de droite sont redimensionnables avec une largeur minimale de **290 px**, mémorisée pour les prochains lancements.
 
 ### Certificats SSL et clés SSH
 

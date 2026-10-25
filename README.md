@@ -19,6 +19,10 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ---
 
+## New in 1.6.3
+
+The right panel can be narrowed to 290 px (about 60% of its previous minimum width). Drag its left edge to resize it; your chosen width is remembered.
+
 ## New in 1.6.2
 
 - **Optional session restoration:** enable **Reopen connections at startup** in Settings → General to reopen server tabs and terminals left open when quitting. Disabled by default; terminal commands are never replayed. Only references to configured servers and terminal visibility are stored. Deleted servers are skipped, and disabling the option removes the saved session.
@@ -162,7 +166,7 @@ The right-hand **Process Explorer** shows Linux processes over SSH without an ag
 
 On-demand details show listening ports, working directory and command. Local rules provide a guided diagnosis. The context menu opens logs or an SSH terminal and offers **SIGTERM / SIGKILL**, with confirmation. Available details depend on permissions; Linux `/proc` and `procps` are required, `ss` supplies ports and the systemd journal supplies logs.
 
-Right-hand panels resize down to a minimum of **480 px**, with their width remembered between launches.
+Right-hand panels resize down to a minimum of **290 px**, with their width remembered between launches.
 
 ### SSL certificates and SSH keys
 

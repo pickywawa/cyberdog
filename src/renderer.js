@@ -1117,7 +1117,7 @@ function openFiles(server, { terminal = false } = {}) {
   tab.rpanelActions = h('span', { className: 'rp-actions' })
   tab.rpanelBody = h('div', { className: 'rp-body' })
   const rz = h('div', { className: 'rz rz-left' })
-  dragResize(rz, { axis: 'x', dir: -1, min: 480, max: () => Math.max(480, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
+  dragResize(rz, { axis: 'x', dir: -1, min: 290, max: () => Math.max(290, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
   tab.rpanel = h('div', { className: 'rpanel', hidden: true }, rz,
     h('div', { className: 'rp-head' }, tab.rpanelTitle, tab.rpanelActions, ib('x', 'panel.close', () => setPanel(tab, tab.panel))),
     tab.rpanelBody)
@@ -1147,7 +1147,7 @@ function openFiles(server, { terminal = false } = {}) {
   document.body.classList.add(api.platform === 'darwin' ? 'mac' : 'other')
   $('#app-version').textContent = 'v' + await api.invoke('app:version')
   root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')
-  root.style.setProperty('--rpw', Math.max(480, loadSize('rpw', 480)) + 'px')
+  root.style.setProperty('--rpw', Math.max(290, loadSize('rpw', 480)) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
   settings = s

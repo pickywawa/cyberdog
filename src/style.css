@@ -250,7 +250,7 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .term-body { flex: 1; min-height: 0; padding: 8px 0 0 12px; }
 
 /* panneau de droite */
-.rpanel { position: relative; width: var(--rpw, 480px); min-width: 480px; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
+.rpanel { position: relative; width: var(--rpw, 480px); min-width: 290px; container-type: inline-size; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
 .rpanel[hidden] { display: none; }
 .rp-head { display: flex; align-items: center; gap: 2px; height: 45px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--line); flex: none; }
 .rp-title { flex: 1; font-weight: 700; font-size: 13px; }
@@ -548,3 +548,13 @@ body.resizing-y { cursor: row-resize; }
 .transfer-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .transfer-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .transfer-row small { display: block; }
+
+/* Compact right panels retain readable controls and details. */
+@container (max-width: 360px) {
+  .rp-head { height: auto; min-height: 45px; flex-wrap: wrap; padding-block: 6px; }
+  .rp-title { min-width: 100px; overflow-wrap: anywhere; }
+  .rp-actions { flex-wrap: wrap; }
+  .proc-charts { grid-template-columns: 1fr; }
+  .kvrow { grid-template-columns: 75px minmax(0, 1fr); }
+  .security-tools > input { min-width: 0; width: 100%; }
+}

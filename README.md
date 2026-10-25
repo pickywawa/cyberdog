@@ -19,6 +19,12 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ---
 
+## New in 1.6.2
+
+- **Optional session restoration:** enable **Reopen connections at startup** in Settings → General to reopen server tabs and terminals left open when quitting. Disabled by default; terminal commands are never replayed. Only references to configured servers and terminal visibility are stored. Deleted servers are skipped, and disabling the option removes the saved session.
+- **Shared saved paths:** the saved-path dialog includes **Available on all servers**, unchecked by default when saving from the explorer. Check it to share the path across servers; leave it unchecked to keep it on the current server. You can also change this scope when editing an existing saved path.
+- **New website:** discover Cyberdog, browse screenshots and download the latest macOS or Windows build at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). The site supports French and English, mobile layouts, an interactive gallery and reduced-motion preferences.
+
 ## ✨ Why Cyberdog?
 
 | | |

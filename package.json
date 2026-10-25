@@ -1,7 +1,7 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
   "main": "src/main.js",
   "scripts": {
@@ -15,7 +15,7 @@
   "build": {
     "appId": "com.pickywawa.cyberdog",
     "productName": "Cyberdog",
-    "copyright": "Copyright \u00a9 pickywawa",
+    "copyright": "Copyright © pickywawa",
     "artifactName": "Cyberdog-${version}-${os}-${arch}.${ext}",
     "npmRebuild": false,
     "files": [

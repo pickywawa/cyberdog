@@ -19,6 +19,12 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ---
 
+## Nouveautés de la version 1.6.2
+
+- **Restauration facultative de la session :** activez **Rouvrir les connexions au démarrage** dans Paramètres → Général pour rouvrir les onglets serveurs et terminaux laissés ouverts à la fermeture. L’option est décochée par défaut et aucune commande n’est rejouée. Seules les références aux serveurs configurés et la présence du terminal sont enregistrées. Les serveurs supprimés sont ignorés et désactiver l’option efface la session mémorisée.
+- **Chemins partagés :** la fenêtre d’enregistrement propose **Disponible sur tous les serveurs**, décochée par défaut depuis l’explorateur. Cochez-la pour partager le chemin ; sinon, il reste associé au serveur courant. Ce choix peut aussi être modifié sur un chemin existant.
+- **Nouveau site web :** présentation, captures et téléchargements macOS / Windows sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Le site est disponible en français et anglais, adapté au mobile, avec une galerie interactive et le respect des préférences de réduction des animations.
+
 ## ✨ Pourquoi Cyberdog ?
 
 | | |

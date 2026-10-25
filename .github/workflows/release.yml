@@ -12,8 +12,12 @@ permissions:
 
 jobs:
   test:
-    name: Tests
-    runs-on: ubuntu-latest
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:

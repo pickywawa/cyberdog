@@ -28,8 +28,8 @@ const loadSize = (key, def) => +localStorage.getItem('cyberdog.' + key) || def
 const { LANGS } = i18n
 
 let lang = 'en'
-let theme = 'system'
-let settings = { lang: 'en', theme: 'system', defaultEditor: 'system', configPath: '', autoDownload: false }
+let theme = 'dracula'
+let settings = { lang: 'en', theme: 'dracula', defaultEditor: 'system', configPath: '', autoDownload: false }
 let servers = []
 let tabs = []
 let restoringConnections = false
@@ -448,7 +448,7 @@ async function openSettingsModal() {
   const close = () => { paintSettingsUpdate = () => {}; m.hidden = true; m.replaceChildren() }
 
   const langSel = h('select', { className: 'lsel full' }, ...Object.entries(LANGS).map(([k, label]) => h('option', { value: k, selected: k === current.lang, textContent: label })))
-  const themeSel = h('select', { className: 'lsel full' }, ...Object.keys(THEMES).map(k => h('option', { value: k, selected: k === (current.theme || 'system'), textContent: t('theme.' + k) })))
+  const themeSel = h('select', { className: 'lsel full' }, ...Object.keys(THEMES).map(k => h('option', { value: k, selected: k === (current.theme || 'dracula'), textContent: t('theme.' + k) })))
   const configInput = h('input', { type: 'text', value: current.configPath || '', placeholder: t('settings.config_path_ph'), spellcheck: false })
   const browseConfig = h('button', { type: 'button', textContent: t('settings.browse'), onclick: async () => { const dir = await api.invoke('settings:pick-config'); if (dir) configInput.value = dir } })
   const editorValue = current.defaultEditor || 'system'
@@ -548,7 +548,7 @@ async function openSettingsModal() {
       settings = next
       rememberConnections()
       lang = next.lang || 'en'
-      theme = next.theme in THEMES ? next.theme : 'system'
+      theme = next.theme in THEMES ? next.theme : 'dracula'
       if (configChanged) {
         servers = await api.invoke('servers:list')
         groups = await api.invoke('groups:list')
@@ -1156,7 +1156,7 @@ function openFiles(server, { terminal = false } = {}) {
   const s = await api.invoke('settings:get')
   settings = s
   lang = s.lang
-  theme = s.theme in THEMES ? s.theme : 'system'
+  theme = s.theme in THEMES ? s.theme : 'dracula'
   applyIcons(document)
   applyTheme()
   refreshLanguage()

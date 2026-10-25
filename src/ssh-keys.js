@@ -12,6 +12,19 @@ function publicInfo(text) {
   const comment = line.split(/\s+/).slice(2).join(' ')
   return { type: key.type, fingerprint: 'SHA256:' + crypto.createHash('sha256').update(blob).digest('base64').replace(/=+$/, ''), publicKey: `${key.type} ${blob.toString('base64')}${comment ? ' ' + comment : ''}` }
 }
+// ssh2 keygen can strip significant leading zero bytes from Ed25519 public keys.
+// Validate both halves and retry rather than persisting an unusable key pair.
+async function generateValidatedKeyPair(type, options, generate = utils.generateKeyPair) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const pair = await new Promise((resolve, reject) => generate(type, options, (error, result) => error ? reject(error) : resolve(result)))
+    try {
+      const pub = utils.parseKey(publicInfo(pair.public).publicKey)
+      const priv = utils.parseKey(pair.private, options.passphrase)
+      if (!(priv instanceof Error) && !Array.isArray(priv) && priv.getPublicSSH().equals(pub.getPublicSSH())) return pair
+    } catch {}
+  }
+  throw new Error('Unable to generate a valid SSH key pair. Please try again.')
+}
 function createKeyStore(directory, registry) {
   const describe = item => {
     const info = publicInfo(fs.readFileSync(item.publicPath, 'utf8'))
@@ -31,7 +44,7 @@ function createKeyStore(directory, registry) {
     list: () => readList(registry).map(item => { try { return describe(item) } catch (e) { return { id: item.id, name: item.name, error: e.message } } }),
     async generate({ name, type = 'ed25519', passphrase = '', comment = '' }) {
       if (typeof name !== 'string' || !name.trim() || name.length > 100 || !['ed25519', 'rsa'].includes(type) || typeof passphrase !== 'string' || passphrase.length > 1024 || typeof comment !== 'string' || comment.length > 200 || /[\r\n\0]/.test(comment)) throw new Error('Invalid SSH key options')
-      const pair = await new Promise((resolve, reject) => utils.generateKeyPair(type, { bits: 4096, comment, ...(passphrase ? { passphrase, cipher: 'aes256-ctr', rounds: 32 } : {}) }, (e, result) => e ? reject(e) : resolve(result)))
+      const pair = await generateValidatedKeyPair(type, { bits: 4096, comment, ...(passphrase ? { passphrase, cipher: 'aes256-ctr', rounds: 32 } : {}) })
       fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
       const id = crypto.randomUUID(), file = path.join(directory, 'id_' + type + '_' + id)
       fs.writeFileSync(file, pair.private, { mode: 0o600, flag: 'wx' })
@@ -89,4 +102,4 @@ function parseAuthorizedKeys(contents) {
   }
   return items
 }
-module.exports = { publicInfo, createKeyStore, installScript, parseAuthorizedKeys }
+module.exports = { publicInfo, createKeyStore, installScript, parseAuthorizedKeys, generateValidatedKeyPair }

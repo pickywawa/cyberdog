@@ -38,7 +38,7 @@ let servers = []
 let actions = []
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
-const DEFAULT_SETTINGS = { lang: 'en', theme: 'system', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false }
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false }
 const checkConfigRoot = () => {
   if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
 }

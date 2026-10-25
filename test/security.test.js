@@ -50,7 +50,7 @@ const shellQuote = s => "'" + s.replace(/'/g, "'\\''") + "'"
   const remote=path.join(temp,'remote-ssh')
   const runInstall = () => cp.spawnSync('sh',['-s'],{input:keys.installScript(key.publicKey).replace('d="$HOME/.ssh"','d='+shellQuote(remote)),encoding:'utf8'})
   fs.mkdirSync(remote)
-  const other=utils.generateKeyPairSync('ed25519',{}).public
+  const other=(await keys.generateValidatedKeyPair('ed25519',{})).public
   fs.writeFileSync(path.join(remote,'authorized_keys'),'# existing entry\n# '+key.publicKey+'\n'+other+'\n')
   assert.equal(runInstall().stdout.trim(),'ADDED')
   assert.equal(runInstall().stdout.trim(),'EXISTS')

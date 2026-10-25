@@ -1,12 +1,12 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/import.test.js && node test/share.test.js && node test/i18n.test.js && node test/health.test.js && node test/archive.test.js && node test/ops.test.js && node test/update-version.test.js && node test/config-path.test.js && node test/processes.test.js && node test/window-state.test.js && node test/config-transfer.test.js && node test/permissions.test.js && node test/security.test.js && node test/transfers.test.js && node test/session-state.test.js",
+    "test": "node test/import.test.js && node test/share.test.js && node test/i18n.test.js && node test/health.test.js && node test/archive.test.js && node test/ops.test.js && node test/update-version.test.js && node test/config-path.test.js && node test/processes.test.js && node test/window-state.test.js && node test/config-transfer.test.js && node test/permissions.test.js && node test/security.test.js && node test/transfers.test.js && node test/session-state.test.js && node test/key-generation.test.js",
     "icons": "electron build/make-icons.js",
     "dist": "electron-builder --publish never",
     "dist:mac": "electron-builder --mac --publish never",

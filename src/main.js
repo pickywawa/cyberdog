@@ -1105,7 +1105,7 @@ ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
   stream.on('data', d => send('term:data', id, d))
   stream.on('close', () => client.end())
   client.on('close', () => drop(id))
-  if (cwd) stream.write(`cd ${q(cwd)} && clear\n`)
+  if (cwd) stream.write(`cd ${q(cwd)}\n`)
 })
 ipcMain.on('term:write', (_, id, d) => conns.get(id)?.stream?.write(d))
 ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindow(rows, cols, 0, 0))

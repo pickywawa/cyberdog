@@ -648,7 +648,11 @@ async function openTerminal(tab) {
   term.focus()
   term.write(t('term.connecting', { target: `${server.user}@${server.host}` }) + '\r\n')
   for (;;) {
-    try { await api.invoke('term:open', id, server.id, term.cols, term.rows, tab.active?.path || undefined); break } catch (e) {
+    try { await api.invoke('term:open', id, server.id, term.cols, term.rows, tab.active?.path || undefined);
+      if (tab.termId !== id) { api.invoke('conn:close', id); return }
+      fit.fit()
+      api.send('term:resize', id, term.cols, term.rows)
+      break } catch (e) {
       if (tab.termId !== id) return
       if (await unlockServerKey(server, e)) continue
       if (AUTH_FAIL.test(e.message) && (await askPassword(server))) continue

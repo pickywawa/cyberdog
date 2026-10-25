@@ -245,9 +245,10 @@ main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .term-wrap[hidden] { display: none; }
 .splitter { position: absolute; left: 0; right: 0; top: -3px; height: 7px; cursor: row-resize; z-index: 2; }
 .splitter:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); }
-.term-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); background: var(--side); font-size: 11.5px; color: var(--dim); font-weight: 600; }
+.term-head { flex: none; display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); background: var(--side); font-size: 11.5px; color: var(--dim); font-weight: 600; }
 .term-head .ib { width: 22px; height: 22px; }
-.term-body { flex: 1; min-height: 0; padding: 8px 0 0 12px; }
+.term-body { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.term-body > .xterm { height: 100%; width: 100%; padding: 8px 8px 6px 12px; }
 
 /* panneau de droite */
 .rpanel { position: relative; width: var(--rpw, 480px); min-width: 290px; container-type: inline-size; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-height: 0; }

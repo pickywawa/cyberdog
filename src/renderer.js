@@ -77,6 +77,7 @@ function refreshLanguage() {
   $('#btn-lang').title = t('language')
   $('#btn-theme .lbl').textContent = t('theme.' + theme)
   $('#btn-lang .lbl').textContent = LANGS[lang]
+  updateAccount(accountState)
   renderServers()
   tabs.forEach(tb => {
     applyI18n(tb.el)
@@ -90,6 +91,9 @@ function refreshLanguage() {
 const AUTH_FAIL = /authentication methods failed|authentication failure/i
 function errText(e) {
   const m = e.message || String(e)
+  if(m.startsWith('vault.'))return t(m)
+  if (['server_write_required','access_denied','owner_required','premium_required'].includes(m)) return t('err.denied')
+  if(['group_in_use','invalid_group','invalid_asset','script_changed'].includes(m))return t('shared.'+m)
   if (m.includes('KEY_PASSPHRASE_REQUIRED')) return t('keys.unlock')
   if (AUTH_FAIL.test(m)) return t('err.auth')
   if (/ECONNREFUSED/.test(m)) return t('err.refused')
@@ -175,17 +179,20 @@ addEventListener('drop', e => e.preventDefault())
 function modal(title, fields, okLabel, { wide = false } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
+    const previous = !m.hidden ? {nodes:[...m.childNodes],mousedown:m.onmousedown} : null
     const inputs = fields.map(f => {
       if (f.type === 'checkbox') return h('input', { type: 'checkbox', checked: !!f.value })
-      if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false })
+      if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false, readOnly:!!f.readOnly })
       if (f.type === 'select') {
-        const sel = h('select', { className: 'lsel full' }, ...f.options.map(([v, label]) => h('option', { value: v, textContent: label })))
+        const sel = h('select', { className: 'lsel full', disabled:!!f.disabled }, ...f.options.map(([v, label, scope]) => Object.assign(h('option', { value: v, textContent: label }),{_scope:scope})))
         sel.value = f.value || ''
         return sel
       }
       return h('input', { type: f.type || 'text', value: f.value || '', placeholder: f.placeholder || '' })
     })
-    const close = v => { m.hidden = true; m.replaceChildren(); resolve(v) }
+    const locationIndex=fields.findIndex(f=>f.name==='teamId')
+    if(locationIndex>=0){const sync=()=>{const scope=inputs[locationIndex].value;fields.forEach((f,i)=>{if(f.name==='group'){for(const option of inputs[i].options){option.disabled=!!option.value&&option._scope!==scope;option.hidden=option.disabled}if(inputs[i].selectedOptions[0]?.disabled)inputs[i].value=''}if(f.requireScope!==undefined){inputs[i].disabled=f.requireScope!==scope;if(inputs[i].disabled)inputs[i].checked=true}})};inputs[locationIndex].onchange=sync;sync()}
+    const close = v => { if(previous){m.replaceChildren(...previous.nodes);m.hidden=false;m.onmousedown=previous.mousedown}else{m.hidden=true;m.replaceChildren()} resolve(v) }
     const form = h('form', {
       className: 'card' + (wide ? ' wide' : ''),
       onsubmit: e => { e.preventDefault(); close(Object.fromEntries(fields.map((f, i) => [f.name, f.type === 'checkbox' ? inputs[i].checked : inputs[i].value]))) },
@@ -200,7 +207,7 @@ function modal(title, fields, okLabel, { wide = false } = {}) {
     m.replaceChildren(form)
     m.hidden = false
     inputs[0].focus()
-    inputs[0].select()
+    inputs[0].select?.()
   })
 }
 
@@ -212,12 +219,13 @@ let srvQuery = ''
 async function serverForm(s, { duplicate = false } = {}) {
   const edit = s && !duplicate
   const v = await modal(edit ? t('form.edit_title') : t('form.add_title'), [
+    ...(sharedLocationField(duplicate?null:s)?[sharedLocationField(duplicate?null:s)]:[]),
     { name: 'name', label: t('f.name'), value: duplicate ? t('srv.copy_name', { name: s.name }) : s?.name, placeholder: t('f.name_ph') },
     { name: 'host', label: t('f.host'), value: s?.host, placeholder: '192.168.1.10' },
     { name: 'port', label: t('f.port'), value: s?.port ?? 22 },
     { name: 'user', label: t('f.user'), value: s?.user, placeholder: 'root' },
     { name: 'pass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph') },
-    ...(groups.length ? [{ name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(g => [g.id, g.name])] }] : []),
+    ...(groups.length ? [{ name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(g => [g.id, g.name,g.teamId||''])] }] : []),
   ], edit ? t('btn.save') : t('btn.add_ok'))
   if (!v) return
   try { servers = await api.invoke('servers:save', { ...v, id: edit ? s.id : undefined, copyFrom: duplicate ? s.id : undefined }); renderServers() } catch (e) { toast(errText(e), true) }
@@ -225,6 +233,7 @@ async function serverForm(s, { duplicate = false } = {}) {
 
 // mot de passe manquant ou refusé : on le demande, on l'enregistre, l'appelant réessaie
 async function askPassword(s) {
+  if(s.vaultId){toast(t('vault.ssh_failed'),true);return false}
   const v = await modal(t('pw.title', { target: `${s.user}@${s.host}` }), [{ name: 'pass', label: t('f.pass'), type: 'password' }], t('btn.connect'))
   if (!v?.pass) return false
   try { servers = await api.invoke('servers:save', { ...s, pass: v.pass }); renderServers(); return true } catch (e) { toast(errText(e), true); return false }
@@ -237,12 +246,12 @@ const groupOf = s => groups.find(g => g.id === s.group)
 
 const setFavorite = async (s, on) => { servers = await api.invoke('servers:update', s.id, { favorite: on }); renderServers() }
 const setGroupFav = async (g, on) => { groups = await api.invoke('groups:update', g.id, { favorite: on }); renderServers() }
-const moveToGroup = async (s, gid) => { servers = await api.invoke('servers:update', s.id, { group: gid }); renderServers() }
+const moveToGroup = async (s, gid) => { if(gid&&(groups.find(g=>g.id===gid)?.teamId||'')!==(s.teamId||''))return; servers = await api.invoke('servers:update', s.id, { group: gid }); renderServers() }
 
 async function groupForm(g) {
-  const v = await modal(g ? t('grp.rename') : t('grp.new'), [{ name: 'name', label: t('grp.name'), value: g?.name }], g ? t('btn.save') : t('btn.create'))
+  const v = await modal(g ? t('grp.rename') : t('grp.new'), [...(sharedLocationField(g)?[sharedLocationField(g)]:[]),{ name: 'name', label: t('grp.name'), value: g?.name }], g ? t('btn.save') : t('btn.create'))
   if (!v) return
-  try { groups = await api.invoke('groups:save', { id: g?.id, name: v.name }); renderServers() } catch (e) { toast(errText(e), true) }
+  try { groups = await api.invoke('groups:save', { id: g?.id, ...v }); renderServers() } catch (e) { toast(errText(e), true) }
 }
 async function deleteGroup(g) {
   if (!confirm(t('grp.confirm_delete', { name: g.name }))) return
@@ -255,12 +264,13 @@ async function deleteGroup(g) {
 const starBtn = (on, onclick) => h('button', { className: 'ib fav' + (on ? ' favon' : ''), innerHTML: icon('star'), title: t(on ? 'fav.remove' : 'fav.add'), onclick: e => { e.stopPropagation(); onclick() } })
 
 function serverRow(s, activeServer) {
+  const canManage = !s.vaultId && (!s.teamId || !!s.canEditServers)
   const hh = hue(s.name)
-  const li = h('li', { className: 'srv' + (s.id === activeServer ? ' active' : ''), draggable: true },
+  const li = h('li', { className: 'srv' + (s.id === activeServer ? ' active' : ''), draggable: !s.teamId&&!s.vaultId },
     h('span', { className: 'tile', innerHTML: icon('server'), style: `background: linear-gradient(135deg, hsl(${hh} 75% 58%), hsl(${(hh + 45) % 360} 75% 48%))` }),
     h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
-    starBtn(s.favorite, () => setFavorite(s, !s.favorite)),
-    h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('srv.edit_tip'), onclick: e => { e.stopPropagation(); serverForm(s) } }))
+    ...(!s.teamId&&!s.vaultId ? [starBtn(s.favorite, () => setFavorite(s, !s.favorite))] : []),
+    h('button', { className: 'ib edit', innerHTML: icon('pencil'), disabled:!canManage&&!s.vaultId, title: t(s.vaultId?'vault.edit_server':canManage?'srv.edit_tip':'team.permissions'), onclick: e => { e.stopPropagation(); s.vaultId?editVaultServer(s):serverForm(s) } }))
   li.onclick = e => { if (!e.target.closest('button')) openFiles(s) }
   li.tabIndex = 0
   li.onkeydown = e => { if (e.key === 'Enter' && e.target === li) openFiles(s) }
@@ -270,12 +280,13 @@ function serverRow(s, activeServer) {
       { label: t('srv.open'), icon: 'folder', fn: () => openFiles(s) },
       { label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) },
       '-',
-      { label: t(s.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setFavorite(s, !s.favorite) },
-      ...(groups.length ? [{ label: t('f.group'), icon: 'folder', children: async () => [{ label: t('f.group_none'), checked: !groupOf(s), fn: () => moveToGroup(s, '') }, ...groups.map(g => ({ label: g.name, checked: s.group === g.id, fn: () => moveToGroup(s, g.id) }))] }] : []),
+      ...(!s.teamId&&!s.vaultId ? [{ label: t(s.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setFavorite(s, !s.favorite) }] : []),
+      ...(canManage && groups.some(g=>(g.teamId||'')===(s.teamId||'')) ? [{ label: t('f.group'), icon: 'folder', children: async () => [{ label: t('f.group_none'), checked: !groupOf(s), fn: () => moveToGroup(s, '') }, ...groups.filter(g=>(g.teamId||'')===(s.teamId||'')).map(g => ({ label: g.name, checked: s.group === g.id, fn: () => moveToGroup(s, g.id) }))] }] : []),
       '-',
-      { label: t('srv.edit'), icon: 'pencil', fn: () => serverForm(s) },
-      { label: t('srv.duplicate'), icon: 'copy', fn: () => serverForm(s, { duplicate: true }) },
-      { label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { servers = await api.invoke('servers:delete', s.id); renderServers() } } },
+      ...(canManage ? [{ label: t('srv.edit'), icon: 'pencil', fn: () => serverForm(s) }] : []),
+      ...(s.teamId?[{label:t('history.title'),icon:'server',fn:()=>showServerHistory(s)}]:[]),
+      ...(!s.vaultId?[{ label: t('srv.duplicate'), icon: 'copy', fn: () => serverForm(s, { duplicate: true }) }]:[{label:t('vault.edit_server'),icon:'pencil',fn:()=>editVaultServer(s)},{label:t('vault.unpin'),icon:'trash',fn:async()=>{if(confirm(t('vault.confirm_unpin'))){servers=await api.invoke('vaults:unpin',s.id);renderServers()}}}]),
+      ...(canManage ? [{ label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { servers = await api.invoke('servers:delete', s.id); renderServers() } } }] : []),
     ])
   }
   li.ondragstart = e => { dragId = s.id; dragGroup = null; e.dataTransfer.effectAllowed = 'move' }
@@ -288,6 +299,7 @@ function serverRow(s, activeServer) {
     li.classList.remove('over')
     if (!dragId || dragId === s.id) return
     const dragged = servers.find(x => x.id === dragId)
+    if(s.teamId||s.vaultId||dragged?.teamId)return
     const ids = servers.map(x => x.id)
     ids.splice(ids.indexOf(s.id), 0, ...ids.splice(ids.indexOf(dragId), 1))
     servers = await api.invoke('servers:reorder', ids)
@@ -300,21 +312,19 @@ function serverRow(s, activeServer) {
 
 function groupRow(g, count, q) {
   const collapsed = g.collapsed && !q // une recherche déplie les groupes pour montrer les résultats
-  const li = h('li', { className: 'grp' + (collapsed ? ' collapsed' : ''), draggable: true },
+  const li = h('li', { className: 'grp' + (collapsed ? ' collapsed' : ''), draggable: !g.teamId },
     h('span', { className: 'chev', innerHTML: icon('chevron-right') }),
     h('span', { className: 'gname', textContent: g.name }),
     h('span', { className: 'gcount', textContent: String(count) }),
     starBtn(g.favorite, () => setGroupFav(g, !g.favorite)),
-    h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('grp.rename'), onclick: e => { e.stopPropagation(); groupForm(g) } }))
+    h('button', { className: 'ib edit', innerHTML: icon('pencil'), title: t('grp.rename'), disabled:!!g.teamId&&!g.canEditServers, onclick: e => { e.stopPropagation(); groupForm(g) } }))
   li.title = t('grp.collapse')
   li.onclick = async () => { groups = await api.invoke('groups:update', g.id, { collapsed: !g.collapsed }); renderServers() }
   li.oncontextmenu = e => {
     e.preventDefault()
     menu(e.clientX, e.clientY, [
       { label: t(g.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setGroupFav(g, !g.favorite) },
-      { label: t('grp.rename'), icon: 'pencil', fn: () => groupForm(g) },
-      '-',
-      { label: t('grp.delete'), icon: 'trash', danger: true, fn: () => deleteGroup(g) },
+      ...(!g.teamId||g.canEditServers?[{ label: t('grp.rename'), icon: 'pencil', fn: () => groupForm(g) },{ label: t('grp.delete'), icon: 'trash', danger: true, fn: () => deleteGroup(g) }]:[]),
     ])
   }
   li.ondragstart = e => { dragGroup = g.id; dragId = null; e.dataTransfer.effectAllowed = 'move' }
@@ -342,9 +352,12 @@ function renderServers() {
   const activeServer = tabs.find(tb => tb.id === activeId)?.server.id
   const q = srvQuery.trim().toLowerCase()
   const has = (x, str) => str.toLowerCase().includes(x)
-  const srvMatch = s => !q || [s.name, s.host, s.user, groupOf(s)?.name || ''].some(x => has(q, x))
+  const srvMatch = s => !q || [s.name, s.host, s.user, s.vaultName||'', groupOf(s)?.name || ''].some(x => has(q, x))
   const grpMatch = g => !!q && has(q, g.name)
-  const inGroup = g => servers.filter(s => s.group === g.id)
+  const localServers=servers.filter(s=>!s.teamId&&!s.vaultId)
+  const sharedServers=servers.filter(s=>s.teamId)
+  if(sharedServers.length&&localServers.length)ul.append(h('li',{className:'sep-label plain'},h('span',{textContent:t('team.local_list')})))
+  const inGroup = g => localServers.filter(s => s.group === g.id)
   const visibleIn = g => (grpMatch(g) ? inGroup(g) : inGroup(g).filter(srvMatch))
   const showGroup = g => !q || grpMatch(g) || visibleIn(g).length > 0
 
@@ -355,10 +368,10 @@ function renderServers() {
     if (!g.collapsed || q) kids.forEach(s => { const li = serverRow(s, activeServer); li.classList.add('in-group'); ul.append(li) })
   }
 
-  const favGroups = groups.filter(g => g.favorite && showGroup(g))
-  const favServers = servers.filter(s => s.favorite && !groupOf(s)?.favorite && srvMatch(s))
-  const restGroups = groups.filter(g => !g.favorite && showGroup(g))
-  const loose = servers.filter(s => !s.favorite && !groupOf(s) && srvMatch(s))
+  const favGroups = groups.filter(g => !g.teamId && g.favorite && showGroup(g))
+  const favServers = localServers.filter(s => s.favorite && !groupOf(s)?.favorite && srvMatch(s))
+  const restGroups = groups.filter(g => !g.teamId && !g.favorite && showGroup(g))
+  const loose = localServers.filter(s => !s.favorite && !groupOf(s) && srvMatch(s))
 
   if (favGroups.length || favServers.length) {
     ul.append(h('li', { className: 'sep-label', innerHTML: icon('star') + `<span>${t('fav.title')}</span>` }))
@@ -377,6 +390,7 @@ function renderServers() {
     }
     loose.forEach(s => ul.append(serverRow(s, activeServer)))
   }
+  appendExtensionServers(ul,{sharedServers,srvMatch,grpMatch,q,activeServer})
   if (q && !ul.childElementCount) ul.append(h('li', { className: 'srv-empty', textContent: t('srvs.no_match') }))
   $('#card-export').hidden = false
 }
@@ -433,11 +447,12 @@ $('#btn-lang').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect()
   menu(r.left, r.top - 4, Object.entries(LANGS).map(([k, name]) => ({ label: name, checked: k === lang, fn: () => setLang(k) })), { up: true })
 }
+$('#btn-premium').onclick = () => openPremiumDialog()
 $('#btn-settings').onclick = () => openSettingsModal()
 api.on('app:open-settings', openSettingsModal)
 function setTheme(name) { theme = name; settings.theme = name; applyTheme(); api.invoke('settings:set', { theme }) }
 function setLang(code) { lang = code; settings.lang = code; refreshLanguage(); api.invoke('settings:set', { lang }) }
-async function openSettingsModal() {
+async function openSettingsModal(initialPage = 'general') {
   const [current, editors, currentUpdate] = await Promise.all([
     api.invoke('settings:get'),
     api.invoke('apps:list'),
@@ -515,18 +530,24 @@ async function openSettingsModal() {
   }
   paintSettingsUpdate()
 
-  const buttonGeneral = h('button', { type: 'button', className: 'tab active', textContent: t('settings.tab.general') })
-  const buttonEditor = h('button', { type: 'button', className: 'tab', textContent: t('settings.tab.editor') })
-  const buttonUpdate = h('button', { type: 'button', className: 'tab', textContent: t('settings.tab.updates') })
-  const switchTab = name => {
-    buttonGeneral.classList.toggle('active', name === 'general')
-    buttonEditor.classList.toggle('active', name === 'editor')
-    buttonUpdate.classList.toggle('active', name === 'updates')
-    ;[generalPage, editorPage, updatesPage].forEach(page => { page.style.display = page.dataset.page === name ? 'flex' : 'none' })
+  const vaultsPage=settingsPage('vaults','none')
+  let vaultsMounted=false
+  const pages=[generalPage,editorPage,updatesPage,vaultsPage]
+  const sections=[['general','cog','settings.tab.general'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']]
+  const buttons=new Map()
+  const sidebar=h('nav',{className:'settings-nav',role:'tablist',ariaLabel:t('settings.title'),ariaOrientation:'vertical'})
+  const switchTab=name=>{
+    for(const [key,button] of buttons){const active=key===name;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1}
+    for(const page of pages)page.style.display=page.dataset.page===name?'flex':'none'
+    if(name==='vaults'&&!vaultsMounted){vaultsMounted=true;vaultsPage.append(buildVaultSettings())}
   }
-  buttonGeneral.onclick = () => switchTab('general')
-  buttonEditor.onclick = () => switchTab('editor')
-  buttonUpdate.onclick = () => switchTab('updates')
+  for(const [name,symbol,label] of sections){
+    const button=h('button',{type:'button',className:'settings-nav-item',role:'tab',id:'settings-tab-'+name,ariaControls:'settings-page-'+name,onclick:()=>switchTab(name)},h('span',{innerHTML:icon(symbol)}),h('span',{textContent:t(label)}),...(name==='vaults'?[h('span',{className:'settings-premium-mark',innerHTML:icon('star'),title:t('premium.title'),ariaLabel:t('premium.title')})]:[]))
+    button.onkeydown=event=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;event.preventDefault();const index=sections.findIndex(section=>section[0]===name),next=event.key==='Home'?0:event.key==='End'?sections.length-1:(index+(event.key==='ArrowDown'?1:-1)+sections.length)%sections.length;switchTab(sections[next][0]);buttons.get(sections[next][0]).focus()}
+    buttons.set(name,button);sidebar.append(button)
+  }
+  for(const page of pages){page.id='settings-page-'+page.dataset.page;page.setAttribute('role','tabpanel');page.setAttribute('aria-labelledby','settings-tab-'+page.dataset.page)}
+  switchTab(sections.some(section=>section[0]===initialPage)?initialPage:'general')
 
   const save = async () => {
     try {
@@ -566,14 +587,10 @@ async function openSettingsModal() {
     }
   }
 
-  const content = h('div', { className: 'card settings-card' },
-    h('div', { className: 'settings-head' },
-      h('h3', { textContent: t('settings.title') }),
-      h('div', { className: 'set-tabs' }, buttonGeneral, buttonEditor, buttonUpdate)),
-    h('div', { className: 'settings-panels' }, generalPage, editorPage, updatesPage),
-    h('div', { className: 'btns' },
-      h('button', { type: 'button', textContent: t('btn.cancel'), onclick: close }),
-      h('button', { type: 'button', className: 'primary', textContent: t('btn.save'), onclick: save })))
+  const content=h('section',{className:'card settings-card',role:'dialog',ariaModal:'true',ariaLabel:t('settings.title'),onkeydown:event=>{if(event.key==='Escape'){event.stopPropagation();close()}}},
+    h('div',{className:'settings-head'},h('div',{},h('small',{className:'settings-eyebrow',textContent:'CYBERDOG'}),h('h3',{textContent:t('settings.title')})),h('button',{type:'button',className:'ib',innerHTML:icon('x'),title:t('btn.cancel'),ariaLabel:t('btn.cancel'),onclick:close})),
+    h('div',{className:'settings-layout'},sidebar,h('div',{className:'settings-panels'},...pages)),
+    h('div',{className:'btns'},h('button',{type:'button',textContent:t('btn.cancel'),onclick:close}),h('button',{type:'button',className:'primary settings-save',onclick:save},h('span',{innerHTML:icon('save')}),h('span',{textContent:t('btn.save')}))))
 
   m.hidden = false
   m.replaceChildren(content)
@@ -1165,6 +1182,9 @@ function openFiles(server, { terminal = false } = {}) {
   logFavs = await api.invoke('favs:list')
   groups = await api.invoke('groups:list')
   savedPaths = await api.invoke('paths:list')
+  renderServers()
+  api.invoke('premium:status').then(updatePremium).catch(() => {})
+  await api.invoke('teams:status').then(updateAccount).catch(()=>{})
   renderServers()
   if (settings.restoreConnections) {
     const session = await api.invoke('session:get')

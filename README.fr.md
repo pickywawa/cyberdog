@@ -19,6 +19,17 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ---
 
+## En développement : équipes avec licence Premium
+
+La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. Cette intégration utilise actuellement le mode Test et ne fait pas encore partie des installateurs publiés.
+
+## Nouveautés de 1.7.0-beta.1
+
+- Modules Premium privés : espace personnel, équipes, serveurs et groupes/actions/chemins partagés, permissions et restauration des versions.
+- Dix connecteurs de coffres locaux, dont TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server et RDM sous Windows. Voir les [prérequis et limites](docs/secret-vaults.md).
+- Paramètres avec navigation à gauche, fond adapté au thème, logos des coffres et icône Enregistrer.
+- Le Premium est un aperçu en mode Test. Le cœur open source reste gratuit ; les modules propriétaires sont assemblés depuis le dépôt privé.
+
 ## Nouveautés de la version 1.6.3
 
 Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’ancienne largeur minimale). Glissez sa bordure gauche pour le redimensionner ; la largeur choisie est mémorisée.
@@ -261,14 +272,17 @@ Les installeurs sont produits dans `dist/`. Les icônes se régénèrent depuis 
 | Workflow | Déclencheur | Rôle |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | chaque push / pull request | lance les tests sous Linux et macOS |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | compile le `.dmg` macOS et les `.exe` Windows, puis publie une Release GitHub avec les checksums |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | compile les artefacts Community macOS et Windows ; les versions officielles sont publiées depuis le dépôt privé |
 
 Pour publier une nouvelle version :
 
 ```sh
 npm version patch        # ou minor / major : met à jour package.json et crée le tag v*
-git push --follow-tags   # la pipeline compile et publie la release
+git push --follow-tags   # compile uniquement les artefacts Community
 ```
+
+La publication officielle s’effectue ensuite dans le workflow du dépôt privé, avec ce tag, la configuration Live et le secret `CYBERDOG_RELEASE_TOKEN`.
+
 
 ---
 
@@ -301,3 +315,19 @@ Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le 
 ## Site web
 
 Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Ses fichiers statiques sont dans [site/](site/), déployés par GitHub Actions lorsqu’ils changent sur main. Prévisualisation locale : `python3 -m http.server 8765 --directory site`.
+
+### Éléments partagés et historique Premium
+
+Les formulaires des groupes, actions rapides et chemins enregistrés proposent **Local**, **Mon espace** et les **équipes** disposant du droit de modification. Les groupes restent propres à leur espace ; les chemins et actions personnels sont disponibles sur vos serveurs, ceux d’une équipe sur les serveurs de cette équipe. Un script partagé est affiché intégralement avant exécution et vérifié à nouveau côté serveur avant lancement. Évitez de placer des secrets dans ces scripts partagés.
+
+Les droits lecture seule/modification des membres couvrent les serveurs et ces éléments partagés. Le catalogue est chargé au démarrage et après vos modifications ; les changements des autres membres apparaissent au prochain lancement.
+
+Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. Le panneau Premium donne également accès à l’historique de Mon espace et de chaque équipe, y compris aux serveurs supprimés. Chaque version indique la date, l’adresse email et l’identifiant de licence de l’auteur. Une restauration crée une nouvelle version et nécessite le droit de modification. Seuls le nom, l’hôte, le port, l’utilisateur SSH et le groupe sont historisés : aucun mot de passe ou clé SSH. Les anciennes configurations locales ne sont pas historisées. Une licence partagée identifie la licence, pas la personne qui l’utilise.
+
+### Coffres de secrets Premium
+
+L’onglet **Paramètres → Coffres de secrets** (étoile Premium) permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager** et **Azure Key Vault** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
+
+Voir le [guide de configuration et les fournisseurs étudiés](./docs/secret-vaults.md) pour les prérequis CLI, sessions, droits Vault et champs personnalisés.
+
+Les paramètres utilisent désormais une navigation latérale. Les implémentations Premium sont conservées dans le dépôt privé ; une copie publique fonctionne sans elles.

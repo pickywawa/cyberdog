@@ -31,7 +31,12 @@
     <div class="rz" id="sb-rz"></div>
   </aside>
   <main>
-    <div id="tabs"></div>
+    <div class="workspace-menu">
+      <div id="tabs"></div>
+      <nav class="workspace-actions" aria-label="Premium">
+        <button id="btn-premium" type="button" class="menu-premium" data-i18n="premium.title">Premium</button>
+      </nav>
+    </div>
     <div id="panes">
       <div id="empty">
         <div class="hero">
@@ -63,6 +68,7 @@
   <script src="process-panel.js"></script>
   <script src="renderer.js"></script>
   <script src="transfer-ui.js"></script>
+  <script src="premium-ui.js"></script>
   <script src="panels.js"></script>
   <script src="ops.js"></script>
   <script src="config-ui.js"></script>

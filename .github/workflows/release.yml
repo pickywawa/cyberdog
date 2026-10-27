@@ -1,14 +1,13 @@
-name: Release
+name: Community builds
 
-# Pousser un tag vX.Y.Z (ex : `npm version patch && git push --follow-tags`) construit les installeurs
-# macOS et Windows puis publie une GitHub Release. Lancement manuel : construit seulement les artefacts.
+# Public workflows build Community artifacts only; no private source or credentials are fetched.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -60,20 +59,4 @@ jobs:
           path: ${{ matrix.files }}
           if-no-files-found: error
 
-  release:
-    name: Publish release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Checksums
-        working-directory: artifacts
-        run: sha256sum * > SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v3
-        with:
-          files: artifacts/*
-          generate_release_notes: true
+# Official Premium releases are assembled and published from the private repository.

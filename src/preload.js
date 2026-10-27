@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('api', {
   on: (ch, fn) => ipcRenderer.on(ch, (_, ...a) => fn(...a)),
   pathOf: f => webUtils.getPathForFile(f),
   platform: process.platform,
+  premiumAvailable:process.argv.includes('--cyberdog-premium'),
 })

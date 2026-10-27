@@ -156,6 +156,7 @@ const repaintActions = () => tabs.forEach(tb => { if (tb.panel === 'actions') pa
 
 async function actionForm(a) {
   const v = await modal(a ? t('qa.edit_title') : t('qa.new_title'), [
+    ...(sharedLocationField(a)?[sharedLocationField(a)]:[]),
     { name: 'name', label: t('qa.name'), value: a?.name, placeholder: t('qa.name_ph') },
     { name: 'script', label: t('qa.script'), type: 'textarea', value: a?.script, placeholder: t('qa.script_ph') },
   ], a ? t('btn.save') : t('btn.add_ok'), { wide: true })
@@ -183,7 +184,8 @@ async function exportActions() {
 const openServerTabs = () => [...new Map(tabs.map(tb => [tb.server.id, tb])).values()]
 
 async function runAction(tab, a, all) {
-  const targets = all ? openServerTabs() : [tab]
+  const targets = (all ? openServerTabs() : [tab]).filter(tb=>sharedVisible(a,tb))
+  if(!await beforeActionRun(a))return
   if (all && !confirm(t('qa.confirm_all', { name: a.name, n: targets.length }))) return
   const runs = targets.map(tb => ({ tb, res: { server: tb.server.name, name: a.name, status: 'running', open: true } }))
   tab.results.unshift(...runs.map(r => r.res))
@@ -191,7 +193,7 @@ async function runAction(tab, a, all) {
   await Promise.all(runs.map(async ({ tb, res }) => {
     try {
       await ensure(tb)
-      Object.assign(res, await api.invoke('action:run', tb.connId, a.script), { status: 'done' })
+      Object.assign(res, await api.invoke('action:run', tb.connId, actionPayload(a)), { status: 'done' })
     } catch (e) { Object.assign(res, { status: 'done', code: -1, out: errText(e) }) }
     paintActions(tab)
   }))
@@ -204,16 +206,16 @@ function paintActions(tab) {
   if (!quickActions.length) {
     body.append(h('div', { className: 'qa-empty' }, h('span', { innerHTML: icon('zap') }), h('p', { textContent: t('qa.empty') }), h('button', { className: 'primary', textContent: t('qa.add'), onclick: () => actionForm() })))
   }
-  for (const a of quickActions) {
+  for (const a of quickActions.filter(a=>sharedVisible(a,tab))) {
     const preview = a.script.split('\n').filter(l => l.trim()).slice(0, 3).join('\n')
     const btn = (name, key, fn, cls = '') => h('button', { className: ('ib ' + cls).trim(), innerHTML: icon(name), title: t(key), onclick: fn })
     body.append(h('div', { className: 'qa-card' },
-      h('div', { className: 'qa-head' }, h('b', { textContent: a.name }),
+      h('div', { className: 'qa-head' }, h('b', { textContent: a.name }),h('small',{className:'dim',textContent:sharedScopeName(a)}),
         h('span', { className: 'qa-btns' },
           btn('play', 'qa.run', () => runAction(tab, a, false), 'accent'),
           btn('grid', 'qa.run_all', () => runAction(tab, a, true)),
-          btn('pencil', 'qa.edit', () => actionForm(a)),
-          btn('trash', 'qa.delete', async () => { if (confirm(t('qa.confirm_delete', { name: a.name }))) { quickActions = await api.invoke('actions:delete', a.id); repaintActions() } }))),
+          ...(!a.teamId||a.canEditServers?[btn('pencil', 'qa.edit', () => actionForm(a)),
+          btn('trash', 'qa.delete', async () => { if (confirm(t('qa.confirm_delete', { name: a.name }))) { quickActions = await api.invoke('actions:delete', a.id); repaintActions() } })]:[]))),
       h('pre', { className: 'qa-prev', textContent: preview })))
   }
   if (tab.results.length) {

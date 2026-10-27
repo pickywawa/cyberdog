@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+
+# Private Premium module is assembled locally or by the private build workflow.
+src/premium-runtime/
+.env
+.env.*
+!.env.example

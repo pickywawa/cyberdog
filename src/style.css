@@ -559,3 +559,48 @@ body.resizing-y { cursor: row-resize; }
   .kvrow { grid-template-columns: 75px minmax(0, 1fr); }
   .security-tools > input { min-width: 0; width: 100%; }
 }
+/* Premium is optional; the local explorer remains available without an account. */
+
+
+
+.card { max-height:calc(100vh - 40px); overflow-y:auto }
+.settings-card { overflow:hidden }
+.settings-panels { min-height:0; overflow-y:auto; padding-right:4px }
+.settings-head,.settings-card > .btns { flex-shrink:0 }
+
+.workspace-menu { display:flex; flex:none; min-width:0; height:40px; background:var(--side); border-bottom:1px solid var(--line); -webkit-app-region:drag }
+.workspace-menu #tabs { flex:1; min-width:0; height:100%; border-bottom:0; overflow-x:auto; scrollbar-width:none }
+.workspace-menu #tabs::-webkit-scrollbar { display:none }
+.workspace-actions { display:flex; align-items:center; gap:5px; padding:0 10px; flex:none; -webkit-app-region:no-drag }
+.workspace-actions button { border:0; background:transparent; padding:6px 10px; font-size:12px; border-radius:6px; color:var(--dim); white-space:nowrap }
+.workspace-actions button:hover { background:var(--hover); color:var(--text) }
+.workspace-actions .menu-premium,.workspace-actions .menu-premium:hover { color:#e6b84b; font-weight:600 }
+
+/* Settings: persistent navigation on the left, one scrollable panel on the right. */
+.settings-card{width:min(940px,calc(100vw - 40px));height:min(690px,calc(100vh - 56px));padding:0;gap:0;border-radius:16px}
+.settings-card .settings-head{padding:20px 24px;border-bottom:1px solid var(--line)}
+.settings-eyebrow{font-size:9px;letter-spacing:2px;color:var(--dim);font-weight:700}
+.settings-head h3{margin:4px 0 0;font-size:20px}
+.settings-layout{display:grid;grid-template-columns:202px minmax(0,1fr);flex:1;min-height:0}
+.settings-nav{display:flex;flex-direction:column;gap:5px;padding:16px 12px;background:var(--side);border-right:1px solid var(--line);overflow-y:auto}
+.settings-nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--dim);text-align:left;font-size:12px;white-space:normal}
+.settings-nav-item>span:first-child{display:flex;flex-shrink:0}
+.settings-nav-item>span:nth-child(2){flex:1}
+.settings-nav-item:hover{background:var(--hover);color:var(--text)}
+.settings-nav-item.active{color:var(--text);background:var(--bg);border-color:var(--line);box-shadow:0 2px 8px color-mix(in srgb,var(--shadow) 20%,transparent)}
+.settings-nav-item.active>span:first-child{color:var(--accent)}
+.settings-nav-item .settings-premium-mark{display:flex;flex:none;color:#e6b84b}
+.settings-premium-mark svg{width:13px;height:13px}
+.settings-card .settings-panels{padding:24px;overflow-y:auto}
+.settings-card .settings-page{min-width:0}
+.settings-card>.btns{margin:0;padding:15px 24px;border-top:1px solid var(--line);background:var(--side)}
+.premium-placeholder{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:30px 12px}
+.premium-placeholder h3,.premium-placeholder p{margin:0}
+.premium-emblem{display:flex;padding:12px;color:#e6b84b;background:color-mix(in srgb,#e6b84b 12%,transparent);border-radius:12px}
+@media(max-width:660px){.settings-layout{grid-template-columns:154px minmax(0,1fr)}.settings-nav{padding:10px 7px}.settings-nav-item{padding:10px 8px;gap:7px;font-size:11px}.settings-card .settings-panels{padding:16px}}
+
+/* Match Cyberfox settings surfaces: content uses the app background, not menu gray. */
+.settings-card,.settings-card .settings-head,.settings-card .settings-panels{background:var(--bg);color:var(--text)}
+.settings-nav-item.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:transparent;box-shadow:none}
+.settings-save{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.settings-save svg{width:15px;height:15px}

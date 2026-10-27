@@ -36,6 +36,7 @@ const isWin = process.platform === 'win32'
 let win
 let servers = []
 let actions = []
+const pendingVaultClients = new Set()
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
 const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false }
@@ -46,6 +47,20 @@ const currentConfigRoot = () => {
   const custom = settings?.configPath?.trim()
   return custom || app.getPath('userData')
 }
+
+const accountIPC = (channel, handler) => ipcMain.handle(channel, (event,...args) => {
+  const expected = require('node:url').pathToFileURL(path.join(__dirname,'index.html')).href
+  if(!win || event.sender!==win.webContents || event.senderFrame!==win.webContents.mainFrame || event.senderFrame.url.split(/[?#]/)[0]!==expected) throw new Error('access_denied')
+  return handler(...args)
+})
+const extension=require('./premium-extension').load({
+ accountIPC,send:(...args)=>send(...args),conns,pendingVaultClients,list:()=>list(),t:(...a)=>t(...a),
+ get servers(){return servers},set servers(value){servers=value},persist:()=>persist(),
+ get groups(){return groups},set groups(value){groups=value},saveGroups:()=>saveGroups(),
+ get actions(){return actions},set actions(value){actions=value},persistActions:()=>persistActions(),
+ get savedPaths(){return savedPaths},set savedPaths(value){savedPaths=value},writePaths:()=>writePaths(),
+ allGroups:()=>allGroups(),allActions:()=>allActions(),allPaths:()=>allPaths(),
+})
 
 // ---------- stockage : un fichier JSON par élément (userData/servers/, userData/actions/) ----------
 function createStore(name) {
@@ -149,10 +164,10 @@ ipcMain.handle('settings:pick-config', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass, group: s.group, favorite: !!s.favorite })
-const list = () => servers.map(pub)
+const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass, group: s.group, favorite: !!s.favorite, teamId:s.teamId, teamRole:s.teamRole,canEditServers:s.canEditServers,personal:s.personal,vaultId:s.vaultId,vaultName:s.vaultName,vaultProvider:s.vaultProvider,itemId:s.vaultId?s.itemId:undefined })
+const list = () => [...servers,...extension.servers()].map(pub)
 const secret = s => (s.pass ? safeStorage.decryptString(Buffer.from(s.pass, 'base64')) : undefined)
-const find = id => servers.find(s => s.id === id) ?? (() => { throw new Error(t('err.server_not_found')) })()
+const find = id => [...servers,...extension.servers()].find(s => s.id === id) ?? (() => { throw new Error(t('err.server_not_found')) })()
 
 // ---------- SSH ----------
 const P = (o, m, ...a) => new Promise((res, rej) => o[m](...a, (e, r) => (e ? rej(e) : res(r))))
@@ -356,18 +371,22 @@ autoUpdater.on('update-not-available', () => {
   if (updateMode === 'install' && updateVersion) useManualUpdate(new Error('The release does not contain a compatible update package.'))
 })
 
-function connect(s) {
+async function connect(s) {
+  const auth=await extension.connectionAuth(s)
+  let pending
   return new Promise((resolve, reject) => {
     const c = new Client()
+    if(auth){pending={client:c,server:s};pendingVaultClients.add(pending);c.once('close',()=>reject(new Error(auth.error||'connection_closed')))}
     let mismatch = false
     const t0 = Date.now()
     c.on('ready', () => { c.connectMs = Date.now() - t0; resolve(c) })
-    c.on('error', e => reject(mismatch ? new Error(t('err.hostkey')) : e))
-    c.on('keyboard-interactive', (n, i, l, prompts, finish) => finish(prompts.map(() => secret(s) ?? '')))
-    const privateKey = s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined
+    c.on('error', e => reject(mismatch ? new Error(t('err.hostkey')) : auth?new Error(auth.error||'connection_failed'):e))
+    c.on('keyboard-interactive', (n, i, l, prompts, finish) => finish(prompts.map(() => auth?.password ?? secret(s) ?? '')))
+    const privateKey = auth?.privateKey || (s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined)
     if (privateKey) {
-      const parsed = sshUtils.parseKey(privateKey, keyPassphrases.get(s.key))
+      const parsed = sshUtils.parseKey(privateKey, auth?.passphrase || keyPassphrases.get(s.key))
       if (parsed instanceof Error) {
+        if(auth){reject(new Error(auth.keyError||'invalid_key'));return}
         if (/encrypted|passphrase|decrypt|integrity check/i.test(parsed.message)) { keyPassphrases.delete(s.key); reject(new Error('KEY_PASSPHRASE_REQUIRED')); return }
         reject(parsed); return
       }
@@ -376,22 +395,22 @@ function connect(s) {
       host: s.host,
       port: s.port,
       username: s.user,
-      password: secret(s),
+      password: auth?.password || secret(s),
       privateKey,
-      passphrase: s.key ? keyPassphrases.get(s.key) : undefined,
-      agent: process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
+      passphrase: auth?.passphrase || (s.key ? keyPassphrases.get(s.key) : undefined),
+      agent: auth ? undefined : process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
       tryKeyboard: true,
       keepaliveInterval: 15000,
       readyTimeout: 15000,
       hostHash: 'sha256',
       // trust on first use
       hostVerifier: fp => {
-        if (!s.fp) { s.fp = fp; persist() }
+        if (!s.fp) { s.fp = fp; try{if(extension.owns(s.id))extension.saveCredentials(s,{fp});else persist()}catch{mismatch=true;return false} }
         mismatch = s.fp !== fp
         return !mismatch
       },
     })
-  })
+  }).finally(()=>{if(pending)pendingVaultClients.delete(pending);if(auth){auth.password='';auth.privateKey='';auth.passphrase=''}})
 }
 
 function drop(id) {
@@ -405,9 +424,11 @@ function drop(id) {
 
 const S = id => conns.get(id)?.sftp ?? (() => { throw new Error(t('err.lost')) })()
 
-ipcMain.handle('servers:list', list)
+ipcMain.handle('servers:list', async () => { await extension.init(); return list() })
 
-ipcMain.handle('servers:save', (_, d) => {
+ipcMain.handle('servers:save', async (_, d) => {
+  if(extension.handlesServerData(d))return extension.saveServer(d)
+
   const name = d.name?.trim(), host = d.host?.trim(), user = d.user?.trim()
   if (!host || !user) throw new Error(t('err.host_user_required'))
   let s = servers.find(x => x.id === d.id)
@@ -425,7 +446,7 @@ ipcMain.handle('servers:save', (_, d) => {
   return list()
 })
 
-ipcMain.handle('servers:delete', (_, id) => { servers = servers.filter(s => s.id !== id); persist(); return list() })
+ipcMain.handle('servers:delete', async (_,id)=>{if(extension.owns(id))return extension.removeServer(id);servers=servers.filter(s=>s.id!==id);persist();return list()})
 
 ipcMain.handle('servers:reorder', (_, ids) => {
   servers.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
@@ -434,8 +455,9 @@ ipcMain.handle('servers:reorder', (_, ids) => {
 })
 
 // mise à jour légère d'un serveur (favori, groupe) sans toucher à la connexion
-ipcMain.handle('servers:update', (_, id, patch) => {
+ipcMain.handle('servers:update', async (_, id, patch) => {
   const s = find(id)
+  if(extension.owns(id))return extension.updateServer(s,patch)
   if ('favorite' in patch) { if (patch.favorite) s.favorite = true; else delete s.favorite }
   if ('group' in patch) { if (patch.group && groups.some(g => g.id === patch.group)) s.group = patch.group; else delete s.group }
   persist()
@@ -450,8 +472,13 @@ const saveGroups = () => { checkConfigRoot(); fs.writeFileSync(groupsFile(), JSO
 const groupByName = name => groups.find(g => g.name.toLowerCase() === name.toLowerCase())
 const groupName = id => groups.find(g => g.id === id)?.name
 
-ipcMain.handle('groups:list', () => groups)
-ipcMain.handle('groups:save', (_, d) => {
+const allGroups=()=>[...groups,...extension.groups()]
+const allActions=()=>[...actions,...extension.actions()]
+const allPaths=()=>[...savedPaths,...extension.paths()]
+
+ipcMain.handle('groups:list', () => allGroups())
+ipcMain.handle('groups:save', async (_, d) => {
+  if(await extension.routeAsset('groups',d))return allGroups()
   const name = d.name?.trim()
   if (!name) throw new Error(t('err.group_name_required'))
   const clash = groupByName(name)
@@ -459,22 +486,25 @@ ipcMain.handle('groups:save', (_, d) => {
   const g = groups.find(x => x.id === d.id) ?? (groups.push({ id: crypto.randomUUID(), name }), groups.at(-1))
   g.name = name
   saveGroups()
-  return groups
+  await extension.finishAssetMove(d)
+  return allGroups()
 })
 ipcMain.handle('groups:update', (_, id, patch) => {
+  if(extension.updateGroup(id,patch))return allGroups()
   const g = groups.find(x => x.id === id)
-  if (!g) return groups
+  if (!g) return allGroups()
   for (const k of ['collapsed', 'favorite']) if (k in patch) { if (patch[k]) g[k] = true; else delete g[k] }
   saveGroups()
-  return groups
+  return allGroups()
 })
-ipcMain.handle('groups:reorder', (_, ids) => { groups.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); saveGroups(); return groups })
-ipcMain.handle('groups:delete', (_, id) => {
+ipcMain.handle('groups:reorder', (_, ids) => { groups.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); saveGroups(); return allGroups() })
+ipcMain.handle('groups:delete', async (_, id) => {
+  if(await extension.deleteAsset('groups',id))return{groups:allGroups(),servers:list()}
   groups = groups.filter(g => g.id !== id)
   servers.forEach(s => { if (s.group === id) delete s.group })
   saveGroups()
   persist()
-  return { groups, servers: list() }
+  return { groups:allGroups(), servers: list() }
 })
 
 // ---------- chemins enregistrés (userData/paths.json) ----------
@@ -494,8 +524,9 @@ const loadPaths = () => {
   catch (e) { savedPaths = []; pathsLoadError = e; console.error('Cannot read saved paths:', e) }
 }
 const writePaths = () => { checkConfigRoot(); if (pathsLoadError) throw pathsLoadError; writeList(pathsFile(), savedPaths) }
-ipcMain.handle('paths:list', () => savedPaths)
-ipcMain.handle('paths:save', (_, d) => {
+ipcMain.handle('paths:list', () => allPaths())
+ipcMain.handle('paths:save', async (_, d) => {
+  if(await extension.routeAsset('paths',d))return allPaths()
   if (pathsLoadError) throw pathsLoadError
   const p = String(d.path || '').trim()
   if (!p.startsWith('/') && p !== '~' && !p.startsWith('~/')) throw new Error(t('err.path_required'))
@@ -508,9 +539,10 @@ ipcMain.handle('paths:save', (_, d) => {
     e.server = { host: server.host, port: server.port, user: server.user }
   } else { delete e.serverId; delete e.server }
   writePaths()
-  return savedPaths
+  await extension.finishAssetMove(d)
+  return allPaths()
 })
-ipcMain.handle('paths:delete', (_, id) => { if (pathsLoadError) throw pathsLoadError; savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return savedPaths })
+ipcMain.handle('paths:delete', async (_, id) => { if(await extension.deleteAsset('paths',id))return allPaths();if (pathsLoadError) throw pathsLoadError; savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return allPaths() })
 
 // ajoute un serveur venant d'un import (Cyberduck ou zip) sauf doublon host/port/user
 function addImported(b) {
@@ -562,7 +594,7 @@ ipcMain.handle('servers:import', async () => {
 
 // ---------- Configuration bundles ----------
 const configData = () => ({ groups, servers, actions, paths: savedPaths })
-const publicConfig = () => ({ groups, servers: list(), actions, paths: savedPaths })
+const publicConfig = () => ({ groups, servers: list().filter(s=>!s.vaultId), actions, paths: savedPaths })
 ipcMain.handle('config:catalog', () => { checkConfigRoot(); if (pathsLoadError) throw pathsLoadError; return publicConfig() })
 ipcMain.handle('config:export', async (_, selection) => {
   if (pathsLoadError) throw pathsLoadError
@@ -608,15 +640,16 @@ ipcMain.handle('config:import-client', async (_, source) => {
 
 // ---------- SFTP ----------
 ipcMain.handle('files:open', async (_, sid) => {
-  const client = await connect(find(sid))
+  const server = extension.owns(sid) ? await extension.resolveServer(sid) : find(sid)
+  const client = await connect(server)
   const sftp = await P(client, 'sftp')
   const id = crypto.randomUUID()
-  conns.set(id, { client, sftp, tmp: [], server: find(sid), connectMs: client.connectMs })
+  conns.set(id, { client, sftp, tmp: [], server, connectMs: client.connectMs })
   client.on('close', () => drop(id))
   return { id, home: await P(sftp, 'realpath', '.') }
 })
 
-ipcMain.handle('conn:close', (_, id) => conns.get(id)?.client.end())
+ipcMain.handle('conn:close', (_, id) => { conns.get(id)?.client.end() })
 
 ipcMain.handle('sftp:list', async (_, id, dir) => {
   const s = S(id)
@@ -821,16 +854,17 @@ ipcMain.handle('keys:install', async (_, id, keyId) => {
   if (result.code !== 0) throw new Error(result.out || 'Public key installation failed')
   return { exists: result.out.trim() === 'EXISTS' }
 })
-ipcMain.handle('keys:use', (_, serverId, keyId) => {
+ipcMain.handle('keys:use', async (_, serverId, keyId) => {
   const key = localKeyStore().get(keyId)
   if (!key.hasPrivate) throw new Error(t('keys.no_private'))
-  const server = find(serverId)
+  const server = extension.owns(serverId) ? await extension.resolveServer(serverId) : find(serverId)
+  if(server.vaultId)throw new Error('extension_managed')
   server.key = key.privatePath
-  persist()
+  if(extension.owns(server.id))extension.saveCredentials(server,{key:key.privatePath});else persist()
   return list()
 })
-ipcMain.handle('keys:unlock', (_, serverId, passphrase) => {
-  const server = find(serverId)
+ipcMain.handle('keys:unlock', async (_, serverId, passphrase) => {
+  const server = extension.owns(serverId) ? await extension.resolveServer(serverId) : find(serverId)
   if (!server.key || typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error(t('keys.unlock_failed'))
   const parsed = sshUtils.parseKey(fs.readFileSync(server.key), passphrase)
   if (parsed instanceof Error) throw new Error(t('keys.unlock_failed'))
@@ -869,8 +903,9 @@ ipcMain.handle('svc:action', async (_, id, unit, action) => {
 const persistActions = () => actionStore.save(actions)
 const MAX_SCRIPT = 60000 // passe dans la ligne de commande (base64)
 
-ipcMain.handle('actions:list', () => actions)
-ipcMain.handle('actions:save', (_, d) => {
+ipcMain.handle('actions:list', () => allActions())
+ipcMain.handle('actions:save', async (_, d) => {
+  if(await extension.routeAsset('actions',d))return allActions()
   const name = d.name?.trim()
   if (!name || !d.script?.trim()) throw new Error(t('err.name_script_required'))
   if (d.script.length > MAX_SCRIPT) throw new Error(t('err.script_too_big'))
@@ -878,9 +913,10 @@ ipcMain.handle('actions:save', (_, d) => {
   if (!a) actions.push((a = { id: crypto.randomUUID() }))
   Object.assign(a, { name, script: d.script })
   persistActions()
-  return actions
+  await extension.finishAssetMove(d)
+  return allActions()
 })
-ipcMain.handle('actions:delete', (_, id) => { actions = actions.filter(a => a.id !== id); persistActions(); return actions })
+ipcMain.handle('actions:delete', async (_, id) => {if(await extension.deleteAsset('actions',id))return allActions();actions = actions.filter(a => a.id !== id); persistActions(); return allActions() })
 
 ipcMain.handle('actions:exportZip', async () => {
   if (!actions.length) throw new Error(t('err.no_actions_export'))
@@ -901,12 +937,14 @@ ipcMain.handle('actions:importZip', async () => {
     added++
   }
   persistActions()
-  return { actions, added }
+  return { actions:allActions(), added }
 })
 
 // le script voyage en base64 dans la commande : stdin reste libre pour les scripts interactifs
 ipcMain.handle('action:run', async (_, id, script) => {
   const c = getConn(id)
+  if(script&&typeof script==='object')script=await extension.resolveAction(script,c.server)
+  if(typeof script!=='string'||script.length>MAX_SCRIPT)throw new Error('invalid_script')
   const t0 = Date.now()
   const b64 = Buffer.from(script).toString('base64')
   const r = await exec(c.client, `bash -c "$(printf %s ${q(b64)} | base64 -d)"`, { timeout: 120000 })
@@ -1099,9 +1137,10 @@ ipcMain.handle('docker:action', async (_, id, target, action) => {
 
 // ---------- Terminal ----------
 ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
-  const client = await connect(find(sid))
+  const server = extension.owns(sid) ? await extension.resolveServer(sid) : find(sid)
+  const client = await connect(server)
   const stream = await P(client, 'shell', { term: 'xterm-256color', cols, rows })
-  conns.set(id, { client, stream, tmp: [] })
+  conns.set(id, { client, stream, server, tmp: [] })
   stream.on('data', d => send('term:data', id, d))
   stream.on('close', () => client.end())
   client.on('close', () => drop(id))
@@ -1113,6 +1152,7 @@ ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindo
 // ---------- Fenêtre ----------
 app.whenReady().then(() => {
   loadSettings()
+  setInterval(() => { extension.refresh().catch(() => {}) }, 6 * 60 * 60 * 1000).unref()
   load()
   loadGroups()
   loadPaths()
@@ -1153,8 +1193,10 @@ app.whenReady().then(() => {
     ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } } : app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16171d' : '#ffffff',
-    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:true,additionalArguments:extension.available?['--cyberdog-premium']:[] },
   })
+  win.webContents.setWindowOpenHandler(()=>({action:'deny'}))
+  win.webContents.on('will-navigate',event=>event.preventDefault())
   win.once('ready-to-show', () => {
     if (windowState?.maximized) win.maximize()
     win.show()

@@ -393,18 +393,19 @@ function paintDocker(tab) {
 // ============================================================ Chemins enregistrés
 // { id, name, path, serverId } ; sans serverId = valable pour tous les serveurs
 let savedPaths = []
-const pathsOf = tab => ({ here: savedPaths.filter(p => p.serverId === tab.server.id), all: savedPaths.filter(p => !p.serverId) })
+const pathsOf = tab => ({ here: savedPaths.filter(p => sharedVisible(p,tab)&&p.serverId === tab.server.id), all: savedPaths.filter(p => sharedVisible(p,tab)&&!p.serverId) })
 
 async function pathForm(tab, entry, scope) {
   const v = await modal(entry ? t('paths.edit_title') : t('paths.new_title'), [
+    ...(sharedLocationField(entry,tab.server.teamId||'')?[sharedLocationField(entry,tab.server.teamId||'')]:[]),
     { name: 'name', label: t('paths.name'), value: entry?.name, placeholder: t('paths.name_ph') },
     { name: 'path', label: t('paths.path'), value: entry?.path ?? (tab.path || tab.active?.path || ''), placeholder: '/var/log/app' },
-    { name: 'allServers', type: 'checkbox', label: t('paths.share_all'), value: entry ? !entry.serverId : scope === 'all' },
+    { name: 'allServers', type: 'checkbox', requireScope:entry?.serverId?(entry.teamId||''):(tab.server.teamId||''), label: t('paths.share_all'), value: entry ? !entry.serverId : scope === 'all' },
   ], entry ? t('btn.save') : t('btn.add_ok'))
   if (!v) return
   try {
     const serverId = v.allServers ? null : (entry?.serverId || tab.server.id)
-    savedPaths = await api.invoke('paths:save', { id: entry?.id, name: v.name, path: v.path, serverId })
+    savedPaths = await api.invoke('paths:save', { id: entry?.id, teamId:v.teamId, name: v.name, path: v.path, serverId })
     repaintPaths()
   } catch (e) { toast(errText(e), true) }
 }
@@ -446,10 +447,10 @@ function paintPaths(tab) {
     for (const p of list) {
       body.append(h('div', { className: 'ps-row', title: p.path, onclick: () => gotoPath(tab.active, p) },
         h('span', { className: 'ps-ic', innerHTML: icon('folder') }),
-        h('div', { className: 'svc-main' }, h('b', { textContent: p.name || p.path }), p.name ? h('small', { className: 'dim mono', textContent: p.path }) : ''),
+        h('div', { className: 'svc-main' }, h('b', { textContent: p.name || p.path }),h('small',{className:'dim',textContent:sharedScopeName(p)}), p.name ? h('small', { className: 'dim mono', textContent: p.path }) : ''),
         h('span', { className: 'svc-btns' },
-          hib('pencil', 'qa.edit', e => { e.stopPropagation(); pathForm(tab, p) }),
-          hib('trash', 'qa.delete', e => { e.stopPropagation(); deletePath(p) }))))
+          ...(!p.teamId||p.canEditServers?[hib('pencil', 'qa.edit', e => { e.stopPropagation(); pathForm(tab, p) }),
+          hib('trash', 'qa.delete', e => { e.stopPropagation(); deletePath(p) })]:[]))))
     }
   }
   section('paths.this', here, 'here')

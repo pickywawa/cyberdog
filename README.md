@@ -326,7 +326,7 @@ Open server history from a shared server's context menu or the Premium personal/
 
 ### Premium secret vault integrations
 
-**Settings → Secret vaults** (Premium star) adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager** and **Azure Key Vault** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
+**Settings → Secret vaults** (Premium star) adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** and **Windows Remote Desktop Manager** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
 
 See the [setup guide and provider comparison](./docs/secret-vaults.md) for CLI prerequisites, sessions, Vault policies and custom field mapping.
 

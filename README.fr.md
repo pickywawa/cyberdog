@@ -21,7 +21,7 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ## En développement : équipes avec licence Premium
 
-La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. Cette intégration utilise actuellement le mode Test et ne fait pas encore partie des installateurs publiés.
+La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. La préversion 1.7.0-beta.1 inclut cet aperçu Premium en mode Test ; la vente commerciale n’est pas encore ouverte.
 
 ## Nouveautés de 1.7.0-beta.1
 
@@ -326,7 +326,7 @@ Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. 
 
 ### Coffres de secrets Premium
 
-L’onglet **Paramètres → Coffres de secrets** (étoile Premium) permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager** et **Azure Key Vault** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
+L’onglet **Paramètres → Coffres de secrets** (étoile Premium) permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** et **Remote Desktop Manager sous Windows** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
 
 Voir le [guide de configuration et les fournisseurs étudiés](./docs/secret-vaults.md) pour les prérequis CLI, sessions, droits Vault et champs personnalisés.
 

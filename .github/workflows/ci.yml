@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1' # les tests n'ont pas besoin du binaire Electron
     steps:
@@ -26,3 +26,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+        if: runner.os != 'Windows'
+      - run: npm run test:portable
+        if: runner.os == 'Windows'

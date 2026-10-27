@@ -21,9 +21,9 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ## In development: licensed Premium teams
 
-Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0-beta.1 includes a Test-mode Premium preview; commercial sales are not open yet.
+Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0-beta.2 includes a Test-mode Premium preview; commercial sales are not open yet.
 
-## New in 1.7.0-beta.1
+## New in 1.7.0-beta.2
 
 - Private Premium modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.
 - Ten local vault connectors, including TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server and Windows RDM. See [requirements and limits](docs/secret-vaults.md).

@@ -32,7 +32,7 @@ const { parseAuthorizedKeys } = require('../src/ssh-keys')
       manager.cancel(job.id); await error
     })
     assert.equal(cancelled, false); assert.equal(manager.list().at(-1).state, 'cancelled')
-    fs.symlinkSync(local, path.join(local, 'cycle'))
+    fs.symlinkSync(local, path.join(local, 'cycle'), process.platform === 'win32' ? 'junction' : 'dir')
     await assert.rejects(manager.run('c', 'upload', 'cycle', job => executeTransfer(s, 'upload', [local], () => path.join(remote, 'cycle'), job)), /symlink cycle/)
     const nav = { realpath: (p, cb) => cb(null, p === '.' ? '/home/test' : p), stat: (p, cb) => cb(null, { isDirectory: () => !p.endsWith('authorized_keys') }) }
     assert.deepEqual(await resolveDirectory(nav, '~/.ssh/'), { path:'/home/test/.ssh/', selected:null })

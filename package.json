@@ -1,7 +1,7 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.7.0-beta.1",
+  "version": "1.7.0-beta.2",
   "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
   "main": "src/main.js",
   "scripts": {
@@ -12,7 +12,8 @@
     "dist:mac": "electron-builder --mac --publish never",
     "dist:win": "electron-builder --win --publish never",
     "premium:install": "node build/install-premium.cjs",
-    "dev": "electron ."
+    "dev": "electron .",
+    "test:portable": "node test/run-portable.cjs"
   },
   "build": {
     "appId": "com.pickywawa.cyberdog",

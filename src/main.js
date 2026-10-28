@@ -2,7 +2,7 @@ const localSshKeys=require('./local-ssh-keys')
 const {serverOptions}=require('./server-options')
 const serverType=require('./server-type')
 const objectStorage=require('./object-storage')
-const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net, clipboard } = require('electron')
 const path = require('path')
 const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('./config-path')
 app.setName('Cyberdog')
@@ -33,7 +33,8 @@ const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./upda
 const { restoreWindow } = require('./window-state')
 
 const { Transfers } = require('./transfers')
-const transfers = new Transfers((...args) => send(...args))
+let transferEngine
+const transfers = new Transfers((...args) => send(...args), path.join(app.getPath('userData'), 'transfers.json'), (job, resuming) => transferEngine.runJob(job, resuming))
 const posix = path.posix
 const isMac = process.platform === 'darwin'
 const isWin = process.platform === 'win32'
@@ -43,7 +44,7 @@ let actions = []
 const pendingVaultClients = new Set()
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
-const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false }
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false, showLocalPane: false }
 const checkConfigRoot = () => {
   if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
 }
@@ -128,6 +129,7 @@ ipcMain.handle('settings:set', (_, patch) => {
     if (!settings.restoreConnections) { try { fs.unlinkSync(sessionFile()) } catch (e) { if (e.code !== 'ENOENT') throw e } }
   }
   if (typeof patch.autoDownload === 'boolean') settings.autoDownload = patch.autoDownload
+  if (typeof patch.showLocalPane === 'boolean') settings.showLocalPane = patch.showLocalPane
   if ('configPath' in patch) {
     const nextPath = typeof patch.configPath === 'string' ? patch.configPath.trim() : ''
     if (nextPath !== previousPath) {
@@ -171,7 +173,7 @@ ipcMain.handle('settings:pick-config', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-const pub = s => ({ id: s.id, type: s.type, url: s.url, region: s.region, bucket: s.bucket, preset: s.preset, virtualHost: s.virtualHost, security: s.security, insecureTls: s.insecureTls, hasToken: !!s.token, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass||!!s.hasPass,authMode:s.authMode||(s.key?'key':'password'),hasSyncedCredential:!!s.hasSyncedCredential,hasStoredKey:!!s.keyData||!!s.hasStoredKey,key:s.key, website:s.website,tags:s.tags,downloadDir:s.downloadDir,loading:!!s.loading, group: s.group, favorite: !!s.favorite, teamId:s.teamId, teamRole:s.teamRole,canEditServers:s.canEditServers,personal:s.personal,networkAccess:s.networkAccess,vaultId:s.vaultId,vaultName:s.vaultName,vaultProvider:s.vaultProvider,itemId:s.vaultId?s.itemId:undefined })
+const pub = s => ({ id: s.id, type: s.type, url: s.url, region: s.region, bucket: s.bucket, preset: s.preset, virtualHost: s.virtualHost, security: s.security, insecureTls: s.insecureTls, hasToken: !!s.token, hasProxyPass: !!s.proxyPass, proxyType: s.proxyType, proxyHost: s.proxyHost, proxyPort: s.proxyPort, proxyUser: s.proxyUser, authMethod: s.authMethod, domain: s.domain, profile: s.profile, azureAuth: s.azureAuth, tenant: s.tenant, clientId: s.clientId, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass||!!s.hasPass,authMode:s.authMode||(s.key?'key':'password'),hasSyncedCredential:!!s.hasSyncedCredential,hasStoredKey:!!s.keyData||!!s.hasStoredKey,key:s.key, website:s.website,tags:s.tags,downloadDir:s.downloadDir,loading:!!s.loading, group: s.group, favorite: !!s.favorite, teamId:s.teamId, teamRole:s.teamRole,canEditServers:s.canEditServers,personal:s.personal,networkAccess:s.networkAccess,vaultId:s.vaultId,vaultName:s.vaultName,vaultProvider:s.vaultProvider,itemId:s.vaultId?s.itemId:undefined })
 const list = () => [...servers,...extension.servers()].map(pub)
 const secret = s => (s.pass ? safeStorage.decryptString(Buffer.from(s.pass, 'base64')) : undefined)
 const find = id => [...servers,...extension.servers()].find(s => s.id === id) ?? (() => { throw new Error(t('err.server_not_found')) })()
@@ -446,26 +448,41 @@ ipcMain.handle('servers:save', async (_, d) => {
   const options=serverOptions(d,servers.find(s=>s.id===(d.id||d.copyFrom)))
   const networkAccess=await extension.validateServer?.(d)
   if(d.networkAccess?.mode!=='direct'&&d.networkAccess&&!extension.validateServer)throw Error('premium_required')
-  const storage = serverType.storageFields({ ...d, type: d.type || servers.find(x => x.id === (d.id || d.copyFrom))?.type })
+  const prev = servers.find(x => x.id === (d.id || d.copyFrom))
+  const form = { ...d, type: d.type || prev?.type }
+  // an endpoint that was only derived from the previous preset/region must follow the new ones
+  if (form.type === 's3' && prev?.type === 's3' && form.url === prev.url && form.url === serverType.storageFields({ type: 's3', preset: prev.preset, region: prev.region }).url) form.url = ''
+  if (form.type === 's3' && prev?.type === 's3' && (form.preset || '') !== (prev.preset || '') && form.region === prev.region && form.region === (serverType.S3_PRESETS[prev.preset || '']?.region || 'us-east-1')) form.region = ''
+  const storage = serverType.storageFields(form)
   const name = d.name?.trim(), host = storage ? storage.host : d.host?.trim(), user = d.user?.trim()
-  if (!host || !user) throw new Error(t(storage ? 'err.url_user_required' : 'err.host_user_required'))
+  const noLogin = (storage?.type === 's3' && storage.profile) || (['azure', 'azurefiles'].includes(storage?.type) && storage.azureAuth === 'entra' && !user) || ['dropbox', 'onedrive', 'gdrive', 'smb'].includes(storage?.type)
+  if (!host || (!user && !noLogin)) throw new Error(t(storage ? 'err.url_user_required' : 'err.host_user_required'))
   if(!storage&&(!Number.isInteger(Number(d.port??22))||Number(d.port??22)<1||Number(d.port??22)>65535))throw Error('invalid_server')
   let s = servers.find(x => x.id === d.id)
   if (!s) servers.push((s = { id: crypto.randomUUID() }))
   Object.assign(s, options, { name: name || host, host, port: +d.port || 22, user, fp: undefined }, storage)
   if(networkAccess!==undefined)s.networkAccess=networkAccess
+  if (['azure', 'azurefiles'].includes(storage?.type) && prev && (prev.azureAuth || 'key') !== storage.azureAuth && !d.pass) delete s.pass // an account key must not become a client secret
+  // cloud drives keep a refresh token in `pass`: another application, or an explicit reset, means signing in again
+  if (['dropbox', 'onedrive', 'gdrive'].includes(storage?.type) && ((prev && (prev.clientId || '') !== storage.clientId) || d.resetAuth)) delete s.pass
   if(d.authMode!==undefined){s.authMode=d.authMode;if(s.authMode==='password'){delete s.key;delete s.keyData}else delete s.pass}
   if(d.key&&d.authMode!=='password'){s.key=d.key;delete s.keyData}
   if ('group' in d) { if (d.group && groups.some(g => g.id === d.group)) s.group = d.group; else delete s.group }
   // duplication : sans nouveau mot de passe, on reprend celui (chiffré) du serveur d'origine
   const src = d.copyFrom && servers.find(x => x.id === d.copyFrom)
   if (src && !d.pass) {if(d.authMode!=='key')s.pass=src.pass;if(d.authMode!=='password'&&!d.key)s.key=src.key}
-  if (storage?.type === 's3' && d.token) {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
-    s.token = safeStorage.encryptString(d.token.trim()).toString('base64')
-  }
-  if (storage?.type === 's3' && d.clearToken) delete s.token
-  if (src && storage?.type === 's3' && !d.token && !d.clearToken) s.token = src.token
+  // secondary secrets: S3 session token / Google client secret (token), proxy password
+  const secretOf = v => { if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain')); return safeStorage.encryptString(v.trim()).toString('base64') }
+  const hasToken = ['s3', 'gdrive'].includes(storage?.type)
+  if (hasToken && d.token) s.token = secretOf(d.token)
+  if (hasToken && d.clearToken) delete s.token
+  if (src && hasToken && !d.token && !d.clearToken) s.token = src.token
+  if (!hasToken) delete s.token
+  if (storage && storage.proxyType && storage.proxyType !== 'none') {
+    if (d.proxyPass) s.proxyPass = secretOf(d.proxyPass)
+    else if (src && !prev?.proxyPass && src.proxyPass) s.proxyPass = src.proxyPass
+    if (!storage.proxyUser) delete s.proxyPass
+  } else delete s.proxyPass
   if (d.pass&&d.authMode!=='key') {
     if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
     s.pass = safeStorage.encryptString(d.pass).toString('base64')
@@ -575,8 +592,10 @@ ipcMain.handle('paths:delete', async (_, id) => { if(await extension.deleteAsset
 // ajoute un serveur venant d'un import (Cyberduck ou zip) sauf doublon host/port/user
 function addImported(b) {
   if (typeof b?.host !== 'string' || !b.host.trim()) return false
-  const s = { name: String(b.name || b.host), host: b.host.trim(), port: +b.port || 22, user: String(b.user ?? ''), key: typeof b.key === 'string' ? b.key : undefined }
-  if (servers.some(x => x.host === s.host && x.port === s.port && x.user === s.user)) return false
+  let ftp = null
+  if (b.type === 'ftp') { try { ftp = serverType.storageFields({ type: 'ftp', host: b.host, port: b.port, security: b.security }) } catch { return false } }
+  const s = { name: String(b.name || b.host), host: b.host.trim(), port: +b.port || 22, user: String(b.user ?? ''), key: typeof b.key === 'string' ? b.key : undefined, ...ftp }
+  if (servers.some(x => x.host === s.host && x.port === s.port && x.user === s.user && (x.type || 'ssh') === (s.type || 'ssh'))) return false
   const gname = typeof b.group === 'string' ? b.group.trim() : ''
   if (gname) {
     const g = groupByName(gname) ?? (groups.push({ id: crypto.randomUUID(), name: gname }), groups.at(-1))
@@ -668,13 +687,22 @@ ipcMain.handle('config:import-client', async (_, source) => {
 })
 
 // ---------- SFTP ----------
-ipcMain.handle('files:open', async (_, sid) => {
+// Entra ID device sign-in: show the code, open the Microsoft page; the connection resumes once signed in
+function showDeviceCode({ userCode, url }) {
+  clipboard.writeText(userCode)
+  shell.openExternal(url).catch(() => {})
+  dialog.showMessageBox(win, { type: 'info', buttons: ['OK'], message: t('azure.device_title'), detail: t('azure.device_msg', { code: userCode, url }) }).catch(() => {})
+}
+// Opens (or fails to open) a connection to a saved server and registers it; returns { id, home }
+async function openConn(sid) {
   const ticket=extension.beginConnection?.(sid)
   let client
   try{
     const server=extension.owns(sid)?await extension.resolveServer(sid):find(sid)
     if(!serverType.isShell(server)){
-      const t0=Date.now(),sftp=await objectStorage.open(server,secret(server),{token:server.token?safeStorage.decryptString(Buffer.from(server.token,'base64')):undefined}),id=crypto.randomUUID()
+      const plain=v=>v?safeStorage.decryptString(Buffer.from(v,'base64')):undefined
+      const saveRefreshToken=token=>{const s=servers.find(x=>x.id===sid);if(s&&safeStorage.isEncryptionAvailable()){s.pass=safeStorage.encryptString(token).toString('base64');persist()}}
+      const t0=Date.now(),sftp=await objectStorage.open(server,secret(server),{token:plain(server.token),proxyPass:plain(server.proxyPass),onDeviceCode:showDeviceCode,openUrl:url=>shell.openExternal(url),onRefreshToken:saveRefreshToken}),id=crypto.randomUUID()
       conns.set(id,{sftp,tmp:[],server,connectMs:Date.now()-t0})
       return{id,home:'/'}
     }
@@ -684,7 +712,18 @@ ipcMain.handle('files:open', async (_, sid) => {
     client.on('close',()=>drop(id))
     return{id,home}
   }catch(e){client?.end();throw e}finally{extension.endConnection?.(ticket)}
-})
+}
+ipcMain.handle('files:open', (_, sid) => openConn(sid))
+
+// The local file system as a connection (local pane): '/' is the root, or the list of drives on Windows
+const LOCAL_SERVER = { id: 'local', type: 'local', name: 'Local' }
+async function openLocal() {
+  const id = crypto.randomUUID(), be = require('./local-storage').local()
+  conns.set(id, { sftp: require('./object-storage').sftpOver(be), tmp: [], server: LOCAL_SERVER, local: be })
+  const home = os.homedir().replace(/\\/g, '/')
+  return { id, home: /^[A-Za-z]:/.test(home) ? '/' + home : home }
+}
+ipcMain.handle('files:openLocal', () => openLocal())
 
 ipcMain.handle('conn:close', (_, id) => { const c = conns.get(id); if (c?.client) c.client.end(); else if (c) { c.sftp?.end?.(); drop(id) } })
 
@@ -709,6 +748,7 @@ ipcMain.handle('sftp:list', async (_, id, dir) => {
 ipcMain.handle('sftp:mkdir', (_, id, p) => P(S(id), 'mkdir', p))
 // flag wx: ne jamais écraser un fichier existant
 ipcMain.handle('sftp:touch', (_, id, p) => P(S(id), 'writeFile', p, '', { flag: 'wx' }))
+ipcMain.handle('storage:link', (_, id, p, seconds) => { const s = S(id); if (!s.link) throw new Error('unsupported'); return s.link(p, Number(seconds)) })
 ipcMain.handle('sftp:rename', (_, id, from, to) => P(S(id), 'rename', from, to))
 ipcMain.handle('sftp:ownership', async (_, id, file) => {
   const attrs = await P(S(id), 'stat', file)
@@ -734,7 +774,11 @@ async function rmr(s, p) {
     await P(s, 'rmdir', p)
   } else await P(s, 'unlink', p)
 }
-ipcMain.handle('sftp:rm', async (_, id, paths) => { for (const p of paths) await rmr(S(id), p) })
+// The local pane sends files to the Trash / Recycle Bin instead of deleting them for good
+ipcMain.handle('sftp:rm', async (_, id, paths) => {
+  const local = conns.get(id)?.local
+  for (const p of paths) local ? await shell.trashItem(local.nativePath(p)) : await rmr(S(id), p)
+})
 
 // budget { left } optionnel : plafonne le volume téléchargé (glisser vers le Finder)
 async function dl(s, remote, local, budget) {
@@ -748,7 +792,15 @@ async function dl(s, remote, local, budget) {
   }
 }
 
-const { executeTransfer } = require('./transfer-files')(transfers)
+// Where a transfer endpoint lives now: its connection if still open, another open one to the same server, or a new one
+async function resolveRef(ref) {
+  if (ref.disk) return null
+  let id = ref.connId && conns.get(ref.connId)?.sftp ? ref.connId : [...conns].find(([, c]) => c.server?.id === ref.serverId && c.sftp)?.[0]
+  if (!id) id = ref.serverId === 'local' ? (await openLocal()).id : (await openConn(ref.serverId)).id
+  ref.connId = id
+  return conns.get(id).sftp
+}
+transferEngine = require('./transfer-files')(transfers, resolveRef)
 ipcMain.handle('transfers:list', () => transfers.list())
 ipcMain.handle('transfers:cancel', (_, id) => transfers.cancel(id))
 ipcMain.handle('sftp:download', async (_, id, paths) => {
@@ -756,7 +808,8 @@ ipcMain.handle('sftp:download', async (_, id, paths) => {
   let target, single = paths.length === 1 && !(await P(s, 'stat', paths[0])).isDirectory()
   if (single) { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(downloads, posix.basename(paths[0])) }); if (r.canceled) return null; target = r.filePath }
   else { const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), defaultPath:downloads, properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; target = r.filePaths[0] }
-  const ok = await transfers.run(id, 'download', posix.basename(paths[0]), job => executeTransfer(s, 'download', paths, p => single ? target : path.join(target, posix.basename(p)), job))
+  const sid = conns.get(id).server.id
+  const ok = await transfers.run(id, 'download', posix.basename(paths[0]), { refs: { src: { connId: id, serverId: sid }, dst: { disk: true } }, serverIds: [sid], top: paths.map(p => ({ source: p, target: single ? target : path.join(target, posix.basename(p)) })) })
   return ok ? target : null
 })
 ipcMain.handle('sftp:upload', async (_, id, locals, dir) => {
@@ -766,12 +819,27 @@ ipcMain.handle('sftp:upload', async (_, id, locals, dir) => {
     const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [t('dlg.replace'), t('btn.cancel')], defaultId: 1, cancelId: 1, message: t('dlg.exists'), detail: clash.join('\n') })
     if (r.response) return false
   }
-  return transfers.run(id, 'upload', path.basename(locals[0]), job => executeTransfer(s, 'upload', locals, p => posix.join(dir, path.basename(p)), job))
+  const sid = conns.get(id).server.id
+  return transfers.run(id, 'upload', path.basename(locals[0]), { refs: { src: { disk: true }, dst: { connId: id, serverId: sid } }, serverIds: [sid], top: locals.map(p => ({ source: p, target: posix.join(dir, path.basename(p)) })) })
+})
+ipcMain.handle('transfers:resume', (_, id) => transfers.resume(id).then(ok => ok, e => { throw e }))
+// Copy between two servers, straight from one connection to the other (Premium)
+ipcMain.handle('transfer:copyToServer', async (_, id, paths, serverId, dir) => {
+  if (!(await extension.hasPremium?.())) throw new Error('premium_required')
+  const from = conns.get(id)?.server, to = (await resolveRef({ serverId })) && [...conns.values()].find(c => c.server?.id === serverId)?.server
+  if (!from || !to) throw new Error(t('err.lost'))
+  return transfers.run(id, 'copy', posix.basename(paths[0]), { refs: { src: { connId: id, serverId: from.id }, dst: { serverId } }, serverIds: [from.id, to.id], top: paths.map(p => ({ source: p, target: posix.join(dir, posix.basename(p)) })) })
 })
 
 // Édition : téléchargement en tmp, ouverture dans l'appli, renvoi à chaque sauvegarde
 ipcMain.handle('sftp:edit', async (_, id, remote, appPath) => {
   const c = conns.get(id)
+  if (c.local) { // edit in place
+    const file = c.local.nativePath(remote)
+    if (!appPath) shell.openPath(file)
+    else execFile(isMac ? 'open' : appPath, isMac ? ['-a', appPath, file] : [file], () => {})
+    return
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cyberdog-'))
   const name = posix.basename(remote)
   const local = path.join(dir, name)
@@ -1017,6 +1085,7 @@ let dragRoot
 const dragCache = new Map() // "conn:chemin:mtime:taille" -> chemin local
 ipcMain.handle('drag:prepare', async (_, id, paths) => {
   const s = S(id)
+  if (conns.get(id)?.local) return paths.map(p => conns.get(id).local.nativePath(p)) // already on this computer
   const out = []
   dragRoot ??= fs.mkdtempSync(path.join(os.tmpdir(), 'cyberdog-drag-'))
   for (const p of paths) {
@@ -1036,7 +1105,8 @@ ipcMain.on('drag:start', (e, files) => {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets/drag.png'))
   e.sender.startDrag({ file: files[0], files, icon })
 })
-app.on('will-quit', () => { if (dragRoot) fs.rmSync(dragRoot, { recursive: true, force: true }) })
+app.on('will-quit', () => { for (const c of conns.values()) try { c.sftp?.end?.() } catch {} // unmounts SMB shares
+  if (dragRoot) fs.rmSync(dragRoot, { recursive: true, force: true }) })
 
 // sudo : mot de passe enregistré sur stdin (jamais en argument), sinon `sudo -n`
 const sudoOf = c => {
@@ -1195,6 +1265,7 @@ ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindo
 
 // ---------- Fenêtre ----------
 app.whenReady().then(() => {
+  require('./smb-storage').cleanupStaleMounts().catch(() => {}) // shares left mounted by a crash
   loadSettings()
   setInterval(() => { extension.refresh().catch(() => {}) }, 6 * 60 * 60 * 1000).unref()
   load()

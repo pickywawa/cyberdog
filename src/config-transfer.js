@@ -22,7 +22,7 @@ function writeBundle(data, file, options = {}) {
   const zip = new AdmZip()
   zip.addFile('manifest.json', Buffer.from(JSON.stringify({ format: 'cyberdog-config', version: options.version || 1, ...(options.features?.length ? {features:options.features} : {}), created: new Date().toISOString(), counts: Object.fromEntries(TYPES.map(k => [k, data[k].length])) }, null, 2)))
   for (const k of TYPES) for (const [i, value] of data[k].entries()) {
-    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite', 'website', 'tags', 'downloadDir', 'authMode', 'type', 'url', 'region', 'bucket', 'preset', 'virtualHost', 'security', 'insecureTls'], actions: ['id', 'name', 'script'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
+    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite', 'website', 'tags', 'downloadDir', 'authMode', 'type', 'url', 'region', 'bucket', 'preset', 'virtualHost', 'security', 'insecureTls', 'profile', 'azureAuth', 'tenant', 'clientId'], actions: ['id', 'name', 'script'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
     let item = pick(value, fields)
     if(options.transformItem)item=options.transformItem(k,item,value)
     if (k === 'paths' && item.server) item.server = pick(item.server, REF)

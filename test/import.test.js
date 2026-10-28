@@ -7,5 +7,8 @@ const duck = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>
 <key>Username</key><string>root</string></dict></plist>`
 
 assert.deepStrictEqual(parseDuck(duck), { name: 'Prod & Co', host: '10.0.0.5', port: 2222, user: 'root', key: undefined })
-assert.strictEqual(parseDuck(duck.replace('sftp', 'ftp')), null)
+assert.deepStrictEqual(parseDuck(duck.replace('>sftp<', '>ftp<')), { name: 'Prod & Co', host: '10.0.0.5', port: 2222, user: 'root', type: 'ftp', security: 'none' })
+assert.strictEqual(parseDuck(duck.replace('>sftp<', '>ftp-tls<')).security, 'explicit')
+assert.strictEqual(parseDuck(duck.replace('>sftp<', '>ftp-tls<').replace('2222', '990')).security, 'implicit')
+assert.strictEqual(parseDuck(duck.replace('>sftp<', '>s3<')), null)
 console.log('ok')

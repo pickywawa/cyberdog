@@ -1,6 +1,7 @@
 // FTP / FTPS backend for object-storage's SFTP facade. A small pool of control connections lets a
 // listing run while a transfer is in progress (an FTP connection handles one command at a time).
 const { Client } = require('basic-ftp')
+const { ProxySocket } = require('./proxy')
 const { PassThrough, Readable } = require('stream')
 const posix = require('path').posix
 
@@ -13,13 +14,14 @@ function ftpError(e) {
   return e
 }
 
-// cfg: { host, port, security: 'none' | 'explicit' | 'implicit', insecureTls }, creds: { user, secret }
+// cfg: { host, port, security: 'none' | 'explicit' | 'implicit', insecureTls, proxy }, creds: { user, secret }
 function ftp(cfg, creds) {
   const idle = [], waiting = []
   let total = 0, closed = false
 
   async function connect() {
     const c = new Client(30000)
+    if (cfg.proxy) { c.ftp._newSocket = () => new ProxySocket(cfg.proxy); c.ftp.reset() } // control and data connections both go through the proxy
     try {
       await c.access({
         host: cfg.host, port: cfg.port, user: creds.user, password: creds.secret,
@@ -48,18 +50,22 @@ function ftp(cfg, creds) {
     else idle.push(c)
   }
   // Runs fn on a free connection; one retry when a pooled connection had silently timed out.
-  async function use(fn) {
+  async function use(fn, retry = true) {
     for (let attempt = 0; ; attempt++) {
       const c = await acquire()
       try { return await fn(c) } catch (e) {
-        if (attempt === 0 && c.closed && !closed) continue
+        if (retry && attempt === 0 && c.closed && !closed) continue
         throw ftpError(e)
       } finally { release(c) }
     }
   }
 
   const split = p => ({ dir: posix.dirname(p), name: posix.basename(p) })
-  const entry = f => ({ name: f.name, dir: f.isDirectory || f.isSymbolicLink, size: f.size, mtime: f.modifiedAt ? +f.modifiedAt : 0 })
+  const entry = f => ({
+    name: f.name, dir: f.isDirectory || f.isSymbolicLink, size: f.size, mtime: f.modifiedAt ? +f.modifiedAt : 0,
+    ...(f.permissions ? { mode: f.permissions.user << 6 | f.permissions.group << 3 | f.permissions.world } : {}),
+    ...(f.user ? { user: f.user } : {}), ...(f.group ? { group: f.group } : {}),
+  })
   const abs = c => p => c.protectWhitespace(p)
 
   const be = {
@@ -74,21 +80,27 @@ function ftp(cfg, creds) {
     list: p => use(async c => (await c.list(await abs(c)(p))).filter(f => f.name !== '.' && f.name !== '..').map(entry)),
     mkdir: p => use(async c => void await c.send('MKD ' + await abs(c)(p))),
     remove: (p, dir) => use(async c => void await (dir ? c.removeEmptyDir(await abs(c)(p)) : c.remove(await abs(c)(p)))),
+    chmod: (p, mode) => use(async c => void await c.send(`SITE CHMOD ${(mode & 0o7777).toString(8).padStart(3, '0')} ${await abs(c)(p)}`)),
     move: (a, b) => use(async c => void await c.rename(await abs(c)(a), await abs(c)(b))),
     put: (p, body) => use(async c => void await c.uploadFrom(Readable.from([Buffer.from(body)]), await abs(c)(p))),
+    // Streams straight to the server (no staging file), so progress follows the network.
+    // offset > 0 appends to the partial remote file (APPE), which must already hold exactly that many bytes
+    putStream: (p, stream, offset = 0) => use(async c => void await (offset ? c.appendFrom(stream, await abs(c)(p)) : c.uploadFrom(stream, await abs(c)(p))), false),
+    resumableWrite: true,
     putFile: (p, file) => use(async c => void await c.uploadFrom(file, await abs(c)(p))),
     // Streams the download through a pass-through; the connection is held until the transfer ends or is destroyed.
-    async get(p) {
+    async get(p, start = 0) {
       const out = new PassThrough()
-      const first = new Promise((ok, ko) => {
+      let handedOut = false
+      return new Promise((ok, ko) => {
         use(async c => {
           const path = await abs(c)(p)
           await c.size(path) // fails early (550) when the file is missing, before any data flows
+          handedOut = true
           ok(out)
-          await c.downloadTo(out, path)
-        }).then(() => out.end(), e => { if (out.writable) out.destroy(e); ko(e) })
+          await c.downloadTo(out, path, start)
+        }, false).then(() => out.end(), e => { if (handedOut) out.destroy(e); else ko(e) })
       })
-      return first
     },
     close() {
       closed = true

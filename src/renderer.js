@@ -204,7 +204,20 @@ function modal(title, fields, okLabel, { wide = false, premiumHint = false, lock
     const rows = fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i]))
     const hint = h('div',{className:'community-bastion'},h('label',{className:'check'},h('input',{type:'checkbox',disabled:true,checked:lockedRoute}),h('span',{textContent:t('bastion.unavailable')})))
     const typeAt = fields.findIndex(f => f.name === 'type')
-    if (typeAt >= 0) { const sync = () => { fields.forEach((f, i) => { if (f.types) rows[i].hidden = !f.types.includes(inputs[typeAt].value) }); hint.hidden = inputs[typeAt].value !== 'ssh' }; inputs[typeAt].onchange = sync; sync() }
+    if (typeAt >= 0) {
+      // a field is shown for its `types`, and only while its controlling field (`when: [name, value]`) has that value
+      const sync = () => {
+        fields.forEach((f, i) => {
+          if (!f.types && !f.when) return
+          const ctl = f.when && inputs[fields.findIndex(x => x.name === f.when[0])]
+          rows[i].hidden = !!(f.types && !f.types.includes(inputs[typeAt].value)) || !!(ctl && !whenMatches(f.when, ctl.value))
+        })
+        hint.hidden = inputs[typeAt].value !== 'ssh'
+      }
+      inputs[typeAt].onchange = sync
+      fields.forEach(f => { if (f.when) { const c = inputs[fields.findIndex(x => x.name === f.when[0])]; if (c) c.addEventListener('change', sync) } })
+      sync()
+    }
     const close = v => { if(previous){m.replaceChildren(...previous.nodes);m.hidden=false;m.onmousedown=previous.mousedown}else{m.hidden=true;m.replaceChildren()} resolve(v) }
     const form = h('form', {
       className: 'card' + (wide ? ' wide' : '') + (tabs.length ? ' tabbed' : ''),
@@ -229,16 +242,13 @@ let groups = []
 let srvQuery = ''
 
 // s : serveur à modifier ; duplicate : s sert de modèle pour un NOUVEAU serveur (mot de passe repris si laissé vide)
-const typeOptions = () => [['ssh', t('type.ssh')], ['ftp', t('type.ftp')], ['s3', t('type.s3')], ['azure', t('type.azure')], ['webdav', t('type.webdav')]]
-const s3Presets = () => [['', t('preset.aws')], ['gcs', 'Google Cloud Storage'], ['b2', 'Backblaze B2'], ['wasabi', 'Wasabi'], ['do', 'DigitalOcean Spaces'], ['scaleway', 'Scaleway']]
-const ftpSecurity = () => [['explicit', t('ftp.explicit')], ['implicit', t('ftp.implicit')], ['none', t('ftp.none')]]
 async function serverForm(s, { duplicate = false } = {}) {
   if (typeof premiumServerForm === 'function' && await premiumServerForm(s, { duplicate })) return
   const edit = s && !duplicate
   const keepPass = s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph')
   const g = 'general'
-  const v = await modal(edit ? t('form.edit_title') : t('form.add_title'), [
-    { tab: g, name: 'type', label: t('f.type'), type: 'select', value: s?.type || 'ssh', disabled: !!s, options: typeOptions() },
+  const form = await modal(edit ? t('form.edit_title') : t('form.add_title'), [
+    { tab: g, name: 'type', label: t('f.type'), type: 'select', value: s?.type || 'ssh', disabled: !!s, options: serverTypeOptions() },
     ...(sharedLocationField(duplicate?null:s)?[{ tab: g, ...sharedLocationField(duplicate?null:s) }]:[]),
     { tab: g, name: 'name', label: t('f.name'), value: duplicate ? t('srv.copy_name', { name: s.name }) : s?.name, placeholder: t('f.name_ph') },
     ...(groups.length ? [{ tab: g, name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(x => [x.id, x.name, x.teamId || ''])] }] : []),
@@ -246,49 +256,26 @@ async function serverForm(s, { duplicate = false } = {}) {
     { tab: g, name: 'port', label: t('f.port'), value: s?.port ?? 22, types: ['ssh'] },
     { tab: g, name: 'user', label: t('f.user'), value: s?.user, placeholder: 'root', types: ['ssh'] },
     { tab: g, name: 'pass', label: t('f.pass'), type: 'password', placeholder: keepPass, types: ['ssh'] },
-    { tab: g, name: 'ftphost', label: t('f.host'), value: s?.host, placeholder: 'ftp.example.com', types: ['ftp'] },
-    { tab: g, name: 'ftpport', label: t('f.port'), value: s?.port ?? '', placeholder: '21', types: ['ftp'] },
-    { tab: g, name: 'ftpsecurity', label: t('f.security'), type: 'select', value: s?.security || 'explicit', options: ftpSecurity(), types: ['ftp'] },
-    { tab: g, name: 'ftpinsecure', label: t('f.tls_insecure'), type: 'checkbox', value: !!s?.insecureTls, types: ['ftp'] },
-    { tab: g, name: 'ftpuser', label: t('f.user'), value: s?.user, placeholder: 'anonymous', types: ['ftp'] },
-    { tab: g, name: 'ftppass', label: t('f.pass'), type: 'password', placeholder: keepPass, types: ['ftp'] },
-    { tab: g, name: 'preset', label: t('f.preset'), type: 'select', value: s?.preset || '', options: s3Presets(), types: ['s3'] },
-    { tab: g, name: 's3url', label: t('f.url_s3'), value: s?.url, placeholder: 'https://s3.eu-west-1.amazonaws.com', types: ['s3'] },
-    { tab: g, name: 'region', label: t('f.region'), value: s?.region || '', placeholder: 'us-east-1', types: ['s3'] },
-    { tab: g, name: 's3bucket', label: t('f.bucket'), value: s?.bucket, types: ['s3'] },
-    { tab: g, name: 'virtualHost', label: t('f.virtual_host'), type: 'checkbox', value: !!s?.virtualHost, types: ['s3'] },
-    { tab: g, name: 's3user', label: t('f.access_key'), value: s?.user, types: ['s3'] },
-    { tab: g, name: 's3pass', label: t('f.secret_key'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['s3'] },
-    { tab: g, name: 'token', label: t('f.session_token'), type: 'password', placeholder: s?.hasToken ? keepPass : t('f.optional'), types: ['s3'] },
-    { tab: g, name: 'azurl', label: t('f.url_azure'), value: s?.url, placeholder: 'https://account.blob.core.windows.net', types: ['azure'] },
-    { tab: g, name: 'azbucket', label: t('f.container'), value: s?.bucket, types: ['azure'] },
-    { tab: g, name: 'azuser', label: t('f.account'), value: s?.user, types: ['azure'] },
-    { tab: g, name: 'azpass', label: t('f.account_key'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['azure'] },
-    { tab: g, name: 'davurl', label: t('f.url_dav'), value: s?.url, placeholder: 'https://cloud.example.com/remote.php/dav/files/me', types: ['webdav'] },
-    { tab: g, name: 'davuser', label: t('f.user'), value: s?.user, types: ['webdav'] },
-    { tab: g, name: 'davpass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['webdav'] },
+    ...storageFieldDefs(s, keepPass).map(d => ({ tab: g, ...d })),
     { tab: 'options', name: 'website', label: t('f.website'), value: s?.website, placeholder: 'https://example.com' },
     { tab: 'options', name: 'tags', label: t('f.tags'), value: (s?.tags || []).join(', '), placeholder: t('f.tags_ph') },
     { tab: 'options', name: 'downloadDir', label: t('f.download_dir'), value: s?.downloadDir, placeholder: '~/Downloads' },
   ], edit ? t('btn.save') : t('btn.add_ok'), { premiumHint: true, lockedRoute: s?.networkAccess?.mode === 'bastion', tabs: [[g, t('settings.tab.general'), 'server'], ['options', t('f.options'), 'sliders']] })
-  if (!v) return
-  const prefix = { s3: 's3', webdav: 'dav', ftp: 'ftp', azure: 'az' }[v.type]
-  if (prefix) Object.assign(v, { url: v[prefix + 'url'], user: v[prefix + 'user'] ?? v.user, pass: v[prefix + 'pass'] })
-  if (v.type === 'ftp') Object.assign(v, { host: v.ftphost, port: v.ftpport, security: v.ftpsecurity, insecureTls: v.ftpinsecure })
-  if (v.type === 's3') v.bucket = v.s3bucket
-  if (v.type === 'azure') v.bucket = v.azbucket
-  for (const k of ['s3url', 's3user', 's3pass', 's3bucket', 'davurl', 'davuser', 'davpass', 'ftphost', 'ftpport', 'ftpsecurity', 'ftpinsecure', 'ftpuser', 'ftppass', 'azurl', 'azbucket', 'azuser', 'azpass']) delete v[k]
-  if (v.type !== 's3') { delete v.region; delete v.preset; delete v.virtualHost; delete v.token }
-  if (!['s3', 'azure'].includes(v.type)) delete v.bucket
-  if (!['ssh', 'ftp'].includes(v.type)) { delete v.host; delete v.port }
+  if (!form) return
+  const v = storagePayload(form, storageFieldDefs(null, ''))
   v.tags = v.tags.split(',').map(x => x.trim()).filter(Boolean)
   try { servers = await api.invoke('servers:save', { ...v, id: edit ? s.id : undefined, copyFrom: duplicate ? s.id : undefined }); renderServers() } catch (e) { toast(errText(e), true) }
 }
 
 // mot de passe manquant ou refusé : on le demande, on l'enregistre, l'appelant réessaie
 async function askPassword(s) {
+  // cloud drives: an expired or revoked sign-in is renewed through the browser (once; a first sign-in that failed is not retried)
+  if (isDrive(s)) {
+    if (!s.hasPass) return false
+    try { servers = await api.invoke('servers:save', { ...s, resetAuth: true }); renderServers(); return true } catch (e) { toast(errText(e), true); return false }
+  }
   if(s.vaultId){toast(t('vault.ssh_failed'),true);return false}
-  const v = await modal(t('pw.title', { target: serverTarget(s) }), [{ name: 'pass', label: t(s.type === 's3' ? 'f.secret_key' : s.type === 'azure' ? 'f.account_key' : 'f.pass'), type: 'password' }], t('btn.connect'))
+  const v = await modal(t('pw.title', { target: serverTarget(s) }), [{ name: 'pass', label: t(s.type === 's3' ? 'f.secret_key' : ['azure', 'azurefiles'].includes(s.type) ? 'f.account_key' : 'f.pass'), type: 'password' }], t('btn.connect'))
   if (!v?.pass) return false
   try { servers = await api.invoke('servers:save', { ...s, pass: v.pass }); renderServers(); return true } catch (e) { toast(errText(e), true); return false }
 }
@@ -301,7 +288,17 @@ async function deleteServerWithProgress(s){
 }
 
 const isShell = s => !s.type || s.type === 'ssh'
-const serverTarget = s => s.type === 's3' ? `S3 · ${s.bucket || s.host}` : s.type === 'webdav' ? `WebDAV · ${s.host}` : s.type === 'azure' ? `Azure · ${s.user}${s.bucket ? '/' + s.bucket : ''}` : s.type === 'ftp' ? `${s.security === 'none' ? 'FTP' : 'FTPS'} · ${s.user}@${s.host}` : `${s.user}@${s.host}`
+// SSH servers and FTP (SITE CHMOD) expose Unix permissions
+// S3 (presigned URL) and Azure (SAS) can hand out time-limited read links
+const canLink = s => s.type === 's3' || (s.type === 'azure' && s.azureAuth !== 'entra')
+const hasPerms = s => isShell(s) || s.type === 'ftp' || (s.type === 'local' && api.platform !== 'win32')
+const premiumActive = () => (typeof accountState !== 'undefined' && !!accountState?.premium) || (typeof premiumState !== 'undefined' && !!premiumState?.active)
+const isDrive = s => ['dropbox', 'onedrive', 'gdrive'].includes(s.type)
+const LOCAL_PANE_SERVER = { id: 'local', type: 'local', name: 'Local' }
+const serverTarget = s => s.type === 'local' ? t('ex.local_name') : ({
+  s3: `S3 · ${s.bucket || s.host}`, webdav: `WebDAV · ${s.host}`, azure: `Azure · ${s.user}${s.bucket ? '/' + s.bucket : ''}`, azurefiles: `Azure Files · ${s.user}${s.bucket ? '/' + s.bucket : ''}`,
+  ftp: `${s.security === 'none' ? 'FTP' : 'FTPS'} · ${s.user}@${s.host}`, smb: `SMB · ${s.host}/${s.bucket}`, dropbox: 'Dropbox', onedrive: 'OneDrive', gdrive: 'Google Drive',
+}[s.type] ?? `${s.user}@${s.host}`)
 const hue = name => Math.abs([...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7)) % 360
 let dragId = null
 let dragGroup = null
@@ -546,6 +543,7 @@ async function openSettingsModal(initialPage = 'general') {
   }
   const restoreInput = h('input', { type: 'checkbox', checked: !!current.restoreConnections })
   const autoDownloadInput = h('input', { type: 'checkbox', checked: !!current.autoDownload })
+  const localPaneInput = h('input', { type: 'checkbox', checked: !!current.showLocalPane })
   const settingsPage = (name, display, ...children) => {
     const page = h('div', { className: 'settings-page', style: `display: ${display}; flex-direction: column; gap: 12px;` }, ...children)
     page.dataset.page = name
@@ -555,6 +553,8 @@ async function openSettingsModal(initialPage = 'general') {
   const generalPage = settingsPage('general', 'flex',
     h('label', { className: 'check' }, restoreInput, h('span', { textContent: t('settings.restore_connections') })),
     h('div', { className: 'note', textContent: t('settings.restore_help') }),
+    h('label', { className: 'check' }, localPaneInput, h('span', { textContent: t('settings.local_pane') })),
+    h('div', { className: 'note', textContent: t('settings.local_pane_help') }),
     h('label', {}, t('settings.lang'), langSel),
     h('label', {}, t('settings.theme'), themeSel),
     h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
@@ -623,6 +623,7 @@ async function openSettingsModal(initialPage = 'general') {
         defaultEditor: editorInput.value,
         autoDownload: autoDownloadInput.checked,
         restoreConnections: restoreInput.checked,
+        showLocalPane: localPaneInput.checked,
       }
       const configChanged = patch.configPath !== current.configPath
       if (patch.configPath && configChanged) {
@@ -632,6 +633,7 @@ async function openSettingsModal(initialPage = 'general') {
       }
       const next = await api.invoke('settings:set', patch)
       settings = next
+      document.querySelectorAll('.js-local-btn').forEach(b => { b.hidden = !settings.showLocalPane })
       rememberConnections()
       lang = next.lang || 'en'
       theme = next.theme in THEMES ? next.theme : 'dracula'
@@ -686,6 +688,7 @@ function closeTab(id) {
   tb.closed = true
   if(typeof cancelPremiumConnection==='function')cancelPremiumConnection(tb.server.id)
   if (tb.connId) api.invoke('conn:close', tb.connId)
+  for (const p of tb.panes) if (p.localPane && p.connId) api.invoke('conn:close', p.connId)
   closeTerminal(tb)
   pollStop(tb)
   leavePanel(tb)
@@ -826,6 +829,13 @@ const nameCell = (iconHtml, kind, text) => h('div', { className: 'nm' }, h('span
 
 // la connexion SFTP est partagée par tout l'onglet : on l'écrit toujours sur l'onglet racine, jamais sur un volet
 async function ensure(tab) {
+  if (tab.localPane) { // the local pane has a connection of its own
+    if (tab.connId) return
+    if (tab.connecting) return tab.connecting
+    tab.connecting = (async () => { const r = await api.invoke('files:openLocal'); tab.connId = r.id; tab.home = r.home })()
+    try { await tab.connecting } finally { tab.connecting = null }
+    return
+  }
   const T = tab.root || tab
   if (T.connId) return
   if (T.connecting) return T.connecting
@@ -990,6 +1000,23 @@ async function extractArchive(tab, file, toFolder) {
   if ($('#toast').textContent.startsWith(t('t.extracting', { name: file.name }))) $('#toast').hidden = true
 }
 
+// Premium: copy files straight to another saved server, connection to connection
+async function copyToServer(tab, files) {
+  const choices = servers.filter(x => !x.loading && !x.vaultId)
+  const v = await modal(t('ctx.copy_to_server'), [
+    { name: 'server', label: t('copy.server'), type: 'select', value: choices.find(x => x.id !== tab.server.id)?.id || choices[0].id, options: choices.map(x => [x.id, `${x.name} — ${serverTarget(x)}`]) },
+    { name: 'dir', label: t('copy.dir'), value: '/' },
+  ], t('btn.copy'))
+  if (!v) return
+  try { await api.invoke('transfer:copyToServer', tab.connId, files, v.server, v.dir.trim() || '/') } catch (e) { toast(/premium_required/.test(e.message) ? t('premium.required') : errText(e), true) }
+}
+
+async function shareLink(tab, file) {
+  const v = await modal(t('ctx.share_link'), [{ name: 'ttl', label: t('share.expiry'), type: 'select', value: '86400', options: [['3600', t('share.1h')], ['86400', t('share.1d')], ['604800', t('share.7d')]] }], t('btn.copy'))
+  if (!v) return
+  try { await navigator.clipboard.writeText(await api.invoke('storage:link', tab.connId, file, +v.ttl)); toast(t('t.link_copied')) } catch (e) { toast(errText(e), true) }
+}
+
 function ctxMenu(tab, e) {
   e.preventDefault()
   const base = [
@@ -1004,10 +1031,12 @@ function ctxMenu(tab, e) {
   const one = sel.length === 1 ? sel[0] : null
   const full = x => join(tab.path, x.name)
   menu(e.clientX, e.clientY, [
-    { label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
+    ...(tab.server.type !== 'local' ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) }] : []),
+    ...(tab.server.type !== 'local' && premiumActive() && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
-    ...(one && isShell(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
+    ...(one && hasPerms(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
+    ...(one && !one.isDir && canLink(tab.server) ? [{ label: t('ctx.share_link'), icon: 'link', fn: () => shareLink(tab, full(one)) }] : []),
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
     ...(one && !one.isDir && isShell(tab.server) && archive.kind(one.name)
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
@@ -1120,15 +1149,17 @@ function makeExplorer(tab) {
   ex.statusR = h('span')
   ex.transfer = buildTransfers(ex)
   ex.splitBtn = ib('split', 'ex.split', () => toggleSplit(ex))
+  ex.localBtn = ib('monitor', 'ex.local', () => toggleLocal(ex), 'js-local-btn')
+  ex.localBtn.hidden = !settings.showLocalPane // off by default; Settings -> General
   ex.pathsBtn = ib('bookmark', 'paths.title', () => { ex.pathsBox.hidden = !ex.pathsBox.hidden; if (!ex.pathsBox.hidden) paintPathsBox(ex) }, 'pbtn js-paths-btn')
   ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
   buildSearch(ex)
   const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
-  ex.explorer = h('div', { className: 'explorer' + (isShell(tab.server) ? '' : ' nofs') },
+  ex.explorer = h('div', { className: 'explorer' + (hasPerms(tab.server) ? '' : ' nofs') },
     h('div', { className: 'toolbar' },
       ex.back, h('div', { className: 'pathbox' }, ex.pathInput, ex.pathsBtn),
       ...(isShell(tab.server) ? [ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn')] : []),
-      ex.splitBtn,
+      ex.splitBtn, ex.localBtn,
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
       ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false))),
@@ -1164,6 +1195,12 @@ function layoutExplorers(tab) {
   tab.panes.forEach(p => { p.splitBtn.classList.toggle('on', split); p.explorer.classList.toggle('active', split && p === tab.active) })
 }
 
+function closePane(tab, pane) {
+  if (pane.localPane && pane.connId) api.invoke('conn:close', pane.connId)
+  tab.panes.splice(tab.panes.indexOf(pane), 1)
+  tab.active = tab.panes[0]
+  layoutExplorers(tab)
+}
 function toggleSplit(ex) {
   const tab = ex.root
   if (tab.panes.length === 1) {
@@ -1173,11 +1210,22 @@ function toggleSplit(ex) {
     tab.active = p
     layoutExplorers(tab)
     load(p, ex.path || null)
-  } else {
-    tab.panes.splice(tab.panes.indexOf(ex), 1)
-    tab.active = tab.panes[0]
-    layoutExplorers(tab)
-  }
+  } else closePane(tab, ex)
+}
+// The local pane: this computer's files next to the server, as a second pane with its own connection
+function toggleLocal(ex) {
+  const tab = ex.root
+  const existing = tab.panes.find(p => p.localPane)
+  if (existing) return closePane(tab, existing)
+  if (tab.panes.length > 1) closePane(tab, tab.panes[1])
+  const p = makeExplorer(tab)
+  Object.assign(p, { localPane: true, server: LOCAL_PANE_SERVER, connId: null, home: null, sort: { ...ex.sort } })
+  p.pathsBtn.hidden = true
+  p.explorer.classList.toggle('nofs', !hasPerms(p.server))
+  tab.panes.push(p)
+  tab.active = p
+  layoutExplorers(tab)
+  load(p, null)
 }
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------

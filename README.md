@@ -21,7 +21,23 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ## In development: licensed Premium teams
 
-Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0-beta.2 includes a Test-mode Premium preview; commercial sales are not open yet.
+Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0 includes a Test-mode Premium preview; commercial sales are not open yet.
+
+## New in 1.7.0
+
+- **New server types:** SMB / Windows shares (through the system's own SMB client: `mount_smbfs` on macOS, UNC paths on Windows), Azure Files, Dropbox, OneDrive and Google Drive (OAuth sign-in in your browser; enter the client ID of your own application, or use the one bundled by the maintainers).
+- **WebDAV:** Digest and Bearer-token authentication, automatic scheme detection, same-origin redirects, and an option to accept untrusted certificates.
+- **Proxy:** FTP, S3, Azure, WebDAV and the cloud drives can go through an HTTP (CONNECT) or SOCKS5 proxy, with optional credentials (Options tab).
+- **Local pane:** a button next to the split button opens this computer's files beside the server. Hidden by default: enable it in Settings → General. Dragging files between the panes uploads and downloads; deleting in the local pane sends files to the Trash.
+- **Resume interrupted transfers:** a failed or cancelled transfer keeps its plan; **Resume** skips finished files and continues the partial one where both ends allow it (SFTP, FTP, local, SMB and ranged downloads from every protocol; object-storage uploads restart that file). Unfinished transfers survive a restart.
+- **Premium: server-to-server copy** from the context menu (**Copy to another server…**), connection to connection without staging files on disk.
+
+## Also in 1.7.0: protocols and Premium preview
+
+- **FTP:** streamed uploads (progress follows the network), Unix permissions (owner, group, mode columns and **Permissions…** through `SITE CHMOD`), and import of FTP/FTPS sites from FileZilla, WinSCP and Cyberduck.
+- **S3:** AWS profiles from `~/.aws` (static keys, `credential_process`, IAM Identity Center after `aws sso login`, role assumption) or environment variables, automatic bucket-region detection, and **Copy shared link** (presigned URL, up to 7 days).
+- **Azure:** Microsoft Entra ID sign-in (service principal secret, device code for your app registration, or Azure CLI `az login`) and **Copy shared link** (read-only SAS) for account-key servers.
+- FTP and Azure now have automated tests (an in-process FTP/FTPS server and the Azurite emulator).
 
 ## New in 1.7.0-beta.3
 

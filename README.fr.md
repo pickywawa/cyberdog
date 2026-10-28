@@ -21,7 +21,23 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ## En développement : équipes avec licence Premium
 
-La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. La préversion 1.7.0-beta.2 inclut cet aperçu Premium en mode Test ; la vente commerciale n’est pas encore ouverte.
+La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. La version 1.7.0 inclut cet aperçu Premium en mode Test ; la vente commerciale n’est pas encore ouverte.
+
+## Nouveautés de 1.7.0
+
+- **Nouveaux types de serveur :** SMB / partages Windows (via le client SMB du système : `mount_smbfs` sur macOS, chemins UNC sous Windows), Azure Files, Dropbox, OneDrive et Google Drive (connexion OAuth dans le navigateur ; saisissez l'ID client de votre propre application, ou utilisez celui fourni par les mainteneurs).
+- **WebDAV :** authentification Digest et jeton Bearer, détection automatique du schéma, redirections de même origine et option pour accepter les certificats non approuvés.
+- **Proxy :** FTP, S3, Azure, WebDAV et les drives cloud peuvent passer par un proxy HTTP (CONNECT) ou SOCKS5, avec identifiants facultatifs (onglet Options).
+- **Volet local :** un bouton à côté du bouton de scission ouvre les fichiers de cet ordinateur à côté du serveur. Masqué par défaut : à activer dans Réglages → Général. Glisser des fichiers entre les volets envoie ou télécharge ; supprimer dans le volet local envoie à la corbeille.
+- **Reprise des transferts interrompus :** un transfert en échec ou annulé garde son plan ; **Reprendre** saute les fichiers terminés et continue le fichier partiel là où les deux extrémités le permettent (SFTP, FTP, local, SMB et lectures partielles de tous les protocoles ; les envois vers le stockage objet repartent du début pour ce fichier). Les transferts non terminés survivent à un redémarrage.
+- **Premium : copie de serveur à serveur** depuis le menu contextuel (**Copier vers un autre serveur…**), de connexion à connexion sans passer par le disque.
+
+## Aussi dans 1.7.0 : protocoles et aperçu Premium
+
+- **FTP :** envois en flux (la progression suit le réseau), permissions Unix (colonnes propriétaire, groupe, droits et **Permissions…** via `SITE CHMOD`) et import des sites FTP/FTPS de FileZilla, WinSCP et Cyberduck.
+- **S3 :** profils AWS de `~/.aws` (clés, `credential_process`, IAM Identity Center après `aws sso login`, rôles) ou variables d'environnement, détection automatique de la région du bucket et **Copier le lien partagé** (URL présignée, 7 jours maximum).
+- **Azure :** connexion Microsoft Entra ID (secret d'un principal de service, code appareil pour votre application, ou Azure CLI `az login`) et **Copier le lien partagé** (SAS en lecture seule) pour les serveurs à clé de compte.
+- FTP et Azure ont désormais des tests automatiques (serveur FTP/FTPS en processus et émulateur Azurite).
 
 ## Nouveautés de 1.7.0-beta.3
 

@@ -10,7 +10,7 @@ function load(context){
  context.accountIPC('teams:status',state)
  context.accountIPC('premium:open',unavailable)
  return{
-  available:false,init:async()=>state(),refresh:async()=>{},servers:()=>[],owns:()=>false,
+  available:false,hasPremium:async()=>false,init:async()=>state(),refresh:async()=>{},servers:()=>[],owns:()=>false,
   handlesServerData:d=>{if(d.teamId)unavailable();return false},
   saveServer:unavailable,removeServer:unavailable,updateServer:unavailable,resolveServer:unavailable,
   connectionAuth:async()=>null,saveCredentials:unavailable,resolveAction:unavailable,

@@ -66,11 +66,11 @@ try {
   assert.throws(()=>readList(saved),'corrupt data is never silently treated as empty')
   const xml = '<FileZilla3><Servers><Folder>Prod<Server><Name>API &amp; SSH</Name><Host>api.test</Host><Port>2222</Port><Protocol>1</Protocol><User>app</User><Pass>SECRET</Pass></Server><Server><Host>ftp.test</Host><Protocol>0</Protocol></Server></Folder></Servers></FileZilla3>'
   const sites = clients.filezilla(xml)
-  assert.equal(sites.length,1);assert.equal(sites[0].name,'API & SSH');assert.equal(sites[0].group,'Prod');assert.equal(sites[0].port,2222);assert.equal(sites[0].pass,undefined)
+  assert.equal(sites.length,2);assert.deepEqual([sites[1].type,sites[1].host,sites[1].port,sites[1].security],['ftp','ftp.test',21,'explicit']);assert.equal(sites[0].name,'API & SSH');assert.equal(sites[0].group,'Prod');assert.equal(sites[0].port,2222);assert.equal(sites[0].pass,undefined)
   assert.throws(()=>clients.filezilla('<!DOCTYPE x [<!ENTITY e "oops">]><FileZilla3/>'))
   assert.throws(()=>clients.filezilla('<Other/>'))
   const ini = '[Sessions\\Default%20Settings]\nUserName=default\n[Sessions\\Prod/API%20SSH]\nHostName=api.test\nPortNumber=2222\nFSProtocol=2\nPassword=SECRET\n[Sessions\\FTP]\nHostName=ftp.test\nFSProtocol=5\n'
   const sessions=clients.winscp(ini)
-  assert.equal(sessions.length,1);assert.equal(sessions[0].name,'API SSH');assert.equal(sessions[0].group,'Prod');assert.equal(sessions[0].user,'default');assert.equal(sessions[0].port,2222);assert.equal(sessions[0].pass,undefined)
+  assert.equal(sessions.length,2);assert.deepEqual([sessions[1].type,sessions[1].host,sessions[1].port,sessions[1].security],['ftp','ftp.test',21,'none']);assert.equal(sessions[0].name,'API SSH');assert.equal(sessions[0].group,'Prod');assert.equal(sessions[0].user,'default');assert.equal(sessions[0].port,2222);assert.equal(sessions[0].pass,undefined)
   console.log('configuration transfer and persistence ok')
 } finally { fs.rmSync(tmp,{recursive:true,force:true}) }

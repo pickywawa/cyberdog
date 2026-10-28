@@ -8,10 +8,14 @@ function filezilla(xml) {
   const out = []
   for (const s of Array.from(doc.getElementsByTagName('Server'))) {
     const val = key => Array.from(s.childNodes).find(n => n.nodeType === 1 && n.nodeName === key)?.textContent.trim() || ''
-    if (val('Protocol') !== '1' || !val('Host')) continue
+    // FileZilla protocol ids: 1 SFTP, 0 FTP (explicit TLS when available), 4 FTPES, 3 FTPS (implicit), 6 plain FTP
+    const protocol = val('Protocol'), ftp = { 0: 'explicit', 4: 'explicit', 3: 'implicit', 6: 'none' }[protocol]
+    if ((protocol !== '1' && !ftp) || !val('Host')) continue
     const folders = []
     for (let p = s.parentNode; p; p = p.parentNode) if (p.nodeName === 'Folder') folders.unshift(Array.from(p.childNodes).filter(n => n.nodeType === 3).map(n => n.nodeValue).join('').trim())
-    out.push({ name: val('Name') || val('Host'), host: val('Host'), port: Number(val('Port')) || 22, user: val('User'), key: val('Keyfile') || undefined, group: folders.filter(Boolean).join(' / ') || undefined })
+    const group = folders.filter(Boolean).join(' / ') || undefined
+    if (ftp) out.push({ name: val('Name') || val('Host'), host: val('Host'), port: Number(val('Port')) || (ftp === 'implicit' ? 990 : 21), user: val('User'), type: 'ftp', security: ftp, group })
+    else out.push({ name: val('Name') || val('Host'), host: val('Host'), port: Number(val('Port')) || 22, user: val('User'), key: val('Keyfile') || undefined, group })
   }
   return out
 }
@@ -29,8 +33,13 @@ function winscp(ini) {
   const defaults = sections.find(s => s.name === 'Default Settings')?.values || {}
   return sections.filter(s => s.name !== 'Default Settings').flatMap(s => {
     const v = { ...defaults, ...s.values }
-    if (!v.hostname || !['1', '2'].includes(v.fsprotocol || '1')) return []
     const parts = s.name.split('/')
+    // WinSCP fsprotocol 5 = FTP; ftps: 0 none, 1 implicit, 2/3 explicit
+    if (v.hostname && v.fsprotocol === '5') {
+      const security = { 1: 'implicit', 2: 'explicit', 3: 'explicit' }[v.ftps] || 'none'
+      return [{ name: parts.pop(), group: parts.join(' / ') || undefined, host: v.hostname, port: Number(v.portnumber) || (security === 'implicit' ? 990 : 21), user: v.username || '', type: 'ftp', security }]
+    }
+    if (!v.hostname || !['1', '2'].includes(v.fsprotocol || '1')) return []
     return [{ name: parts.pop(), group: parts.join(' / ') || undefined, host: v.hostname, port: Number(v.portnumber) || 22, user: v.username || '', key: v.publickeyfile || undefined }]
   })
 }

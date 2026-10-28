@@ -19,20 +19,21 @@ function buildTransfers(ex) {
   widget.onkeydown = e => { if (e.key === 'Escape') { summary.focus(); toggle(false) } }
   const paint = () => {
     if (!ex.explorer?.isConnected) return
-    const items = [...transferItems.values()].filter(x => x.connId === ex.connId)
+    const items = [...transferItems.values()].filter(x => x.connId === ex.connId || (!x.connId && x.serverIds?.includes(ex.server?.id)))
     widget.hidden = !items.length
     if (!items.length) return
     const running = items.filter(x => x.state === 'running')
     const latest = running.at(-1) || items.at(-1)
     const percent = x => x.total > 0 ? Math.min(100, x.done / x.total * 100) : x.state === 'done' ? 100 : 0
     const progress = x => h('progress', { max: 100, value: percent(x), ariaLabel: x.name + ' ' + Math.round(percent(x)) + '%' })
-    summary.replaceChildren(h('span', { innerHTML: icon(latest.direction === 'upload' ? 'upload' : 'download') }), h('span', { className: 'transfer-name', textContent: latest.name }), h('span', { textContent: latest.state === 'running' ? `${Math.round(percent(latest))}%${running.length > 1 ? ' · ' + running.length : ''}` : t('transfer.' + latest.state) }), progress(latest))
+    summary.replaceChildren(h('span', { innerHTML: icon(latest.direction === 'upload' || latest.direction === 'copy' ? 'upload' : 'download') }), h('span', { className: 'transfer-name', textContent: latest.name }), h('span', { textContent: latest.state === 'running' ? `${Math.round(percent(latest))}%${running.length > 1 ? ' · ' + running.length : ''}` : t('transfer.' + latest.state) }), progress(latest))
     summary.title = transferText(latest)
     const focused = popover.contains(document.activeElement) ? document.activeElement.dataset.transferId || 'clear' : null
     const clear = h('button', { className: 'chip', textContent: t('transfer.clear'), onclick: () => { for (const x of items) if (x.state !== 'running') transferItems.delete(x.id); paintTransfers() } })
     popover.replaceChildren(h('div', { className: 'transfer-heading' }, h('b', { textContent: t('transfer.title') }), clear), h('small', { className: 'dim', textContent: t('transfer.partial') }))
     for (const x of items.slice().reverse()) {
-      const row = h('div', { className: 'transfer-row' }, h('div', { className: 'transfer-heading' }, h('span', { innerHTML: icon(x.direction === 'upload' ? 'upload' : 'download') }), h('b', { className: 'transfer-name', textContent: x.name, title: x.name }), h('span', { textContent: t('transfer.' + x.direction) })))
+      const row = h('div', { className: 'transfer-row' }, h('div', { className: 'transfer-heading' }, h('span', { innerHTML: icon(x.direction === 'upload' || x.direction === 'copy' ? 'upload' : 'download') }), h('b', { className: 'transfer-name', textContent: x.name, title: x.name }), h('span', { textContent: t('transfer.' + x.direction) })))
+      if (x.resumable) row.firstChild.append(h('button', { className: 'chip', textContent: t('transfer.resume'), onclick: () => api.invoke('transfers:resume', x.id).catch(e => toast(errText(e), true)) }))
       if (x.state === 'running') row.firstChild.append(h('button', { className: 'ib', innerHTML: icon('x'), title: t('btn.cancel'), ariaLabel: t('btn.cancel'), onclick: () => api.invoke('transfers:cancel', x.id).catch(e => toast(errText(e), true)) }))
       if (x.state === 'running') row.querySelector('button').dataset.transferId = x.id
       row.append(progress(x), h('small', { className: x.state === 'error' ? 'err' : 'dim', textContent: x.state === 'error' ? x.error : transferText(x) }))

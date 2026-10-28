@@ -7,8 +7,8 @@ const { Transfers } = require('../src/transfers')
 const { resolveDirectory } = require('../src/sftp-navigation')
 const { parseAuthorizedKeys } = require('../src/ssh-keys')
 ;(async () => {
-  const events = [], manager = new Transfers((_, e) => events.push(e))
-  const { executeTransfer } = require('../src/transfer-files')(manager)
+  let engine
+  const events = [], manager = new Transfers((_, e) => events.push(e), null, (job, resuming) => engine.runJob(job, resuming))
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cyberdog-transfers-'))
   try {
     const local = path.join(root, 'local'), remote = path.join(root, 'remote'), result = path.join(root, 'result')
@@ -19,21 +19,21 @@ const { parseAuthorizedKeys } = require('../src/ssh-keys')
       readdir: (p, cb) => fs.readdir(p, (e, names) => cb(e, names?.map(filename => ({ filename })))),
       mkdir: (p, cb) => fs.mkdir(p, cb), createReadStream: p => fs.createReadStream(p), createWriteStream: p => fs.createWriteStream(p),
     }
-    assert.equal(await manager.run('c', 'upload', 'local', job => executeTransfer(s, 'upload', [local], () => path.join(remote, 'copy'), job)), true)
+    engine = require('../src/transfer-files')(manager, ref => ref.disk ? null : s)
+    const up = (name, source, target) => manager.run('c', 'upload', name, { refs: { src: { disk: true }, dst: { connId: 'c' } }, top: [{ source, target }] })
+    const down = (name, source, target) => manager.run('c', 'download', name, { refs: { src: { connId: 'c' }, dst: { disk: true } }, top: [{ source, target }] })
+    assert.equal(await up('local', local, path.join(remote, 'copy')), true)
     let last = manager.list().at(-1); assert.equal(last.total, 512000); assert.equal(last.done, 512000); assert.equal(last.state, 'done'); assert(!('stream' in last))
-    await manager.run('c', 'download', 'copy', job => executeTransfer(s, 'download', [path.join(remote, 'copy')], () => result, job))
+    await down('copy', path.join(remote, 'copy'), result)
     assert.deepEqual(fs.readFileSync(path.join(result, 'nested/data')), fs.readFileSync(path.join(local, 'nested/data')))
     assert(fs.existsSync(path.join(result, 'empty')))
-    await assert.rejects(manager.run('c', 'download', 'missing', job => executeTransfer(s, 'download', [path.join(root, 'missing')], () => result, job)), /ENOENT/)
+    await assert.rejects(down('missing', path.join(root, 'missing'), result), /ENOENT/)
     assert.equal(manager.list().at(-1).state, 'error')
-    const cancelled = await manager.run('c', 'upload', 'slow', async job => {
-      const stream = job.stream = new PassThrough()
-      const error = new Promise((resolve, reject) => stream.on('error', reject))
-      manager.cancel(job.id); await error
-    })
-    assert.equal(cancelled, false); assert.equal(manager.list().at(-1).state, 'cancelled')
+    engine = require('../src/transfer-files')(manager, ref => ref.disk ? null : s)
+    const cancelling = new Transfers(() => {}, null, async job => { const stream = job.stream = new PassThrough(); const error = new Promise((resolve, reject) => stream.on('error', reject)); cancelling.cancel(job.id); await error })
+    assert.equal(await cancelling.run('c', 'upload', 'slow', {}), false); assert.equal(cancelling.list().at(-1).state, 'cancelled')
     fs.symlinkSync(local, path.join(local, 'cycle'), process.platform === 'win32' ? 'junction' : 'dir')
-    await assert.rejects(manager.run('c', 'upload', 'cycle', job => executeTransfer(s, 'upload', [local], () => path.join(remote, 'cycle'), job)), /symlink cycle/)
+    await assert.rejects(up('cycle', local, path.join(remote, 'cycle')), /symlink cycle/)
     const nav = { realpath: (p, cb) => cb(null, p === '.' ? '/home/test' : p), stat: (p, cb) => cb(null, { isDirectory: () => !p.endsWith('authorized_keys') }) }
     assert.deepEqual(await resolveDirectory(nav, '~/.ssh/'), { path:'/home/test/.ssh/', selected:null })
     assert.deepEqual(await resolveDirectory(nav, '~/.ssh/authorized_keys'), { path:'/home/test/.ssh', selected:'authorized_keys' })

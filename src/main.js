@@ -1,3 +1,7 @@
+const localSshKeys=require('./local-ssh-keys')
+const {serverOptions}=require('./server-options')
+const serverType=require('./server-type')
+const objectStorage=require('./object-storage')
 const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net } = require('electron')
 const path = require('path')
 const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('./config-path')
@@ -59,6 +63,9 @@ const extension=require('./premium-extension').load({
  get groups(){return groups},set groups(value){groups=value},saveGroups:()=>saveGroups(),
  get actions(){return actions},set actions(value){actions=value},persistActions:()=>persistActions(),
  get savedPaths(){return savedPaths},set savedPaths(value){savedPaths=value},writePaths:()=>writePaths(),
+ serverOptions,readPrivateKey:localSshKeys.readPrivateKey,keyPassphrase:id=>keyPassphrases.get(id),
+ ssh:{Client,utils:sshUtils},
+ credentials:async s=>{const a=await extension.connectionAuth(s);return{password:s.authMode==='key'?undefined:a?.password??secret(s),privateKey:s.authMode==='password'?undefined:a?.privateKey||(s.key?fs.readFileSync(s.key):undefined),passphrase:a?.passphrase||(s.key?keyPassphrases.get(s.key):undefined),agent:a?undefined:process.env.SSH_AUTH_SOCK||(isWin?'\\\\.\\pipe\\openssh-ssh-agent':undefined)}},
  allGroups:()=>allGroups(),allActions:()=>allActions(),allPaths:()=>allPaths(),
 })
 
@@ -164,7 +171,7 @@ ipcMain.handle('settings:pick-config', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-const pub = s => ({ id: s.id, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass, group: s.group, favorite: !!s.favorite, teamId:s.teamId, teamRole:s.teamRole,canEditServers:s.canEditServers,personal:s.personal,vaultId:s.vaultId,vaultName:s.vaultName,vaultProvider:s.vaultProvider,itemId:s.vaultId?s.itemId:undefined })
+const pub = s => ({ id: s.id, type: s.type, url: s.url, region: s.region, bucket: s.bucket, preset: s.preset, virtualHost: s.virtualHost, security: s.security, insecureTls: s.insecureTls, hasToken: !!s.token, name: s.name, host: s.host, port: s.port, user: s.user, hasPass: !!s.pass||!!s.hasPass,authMode:s.authMode||(s.key?'key':'password'),hasSyncedCredential:!!s.hasSyncedCredential,hasStoredKey:!!s.keyData||!!s.hasStoredKey,key:s.key, website:s.website,tags:s.tags,downloadDir:s.downloadDir,loading:!!s.loading, group: s.group, favorite: !!s.favorite, teamId:s.teamId, teamRole:s.teamRole,canEditServers:s.canEditServers,personal:s.personal,networkAccess:s.networkAccess,vaultId:s.vaultId,vaultName:s.vaultName,vaultProvider:s.vaultProvider,itemId:s.vaultId?s.itemId:undefined })
 const list = () => [...servers,...extension.servers()].map(pub)
 const secret = s => (s.pass ? safeStorage.decryptString(Buffer.from(s.pass, 'base64')) : undefined)
 const find = id => [...servers,...extension.servers()].find(s => s.id === id) ?? (() => { throw new Error(t('err.server_not_found')) })()
@@ -371,7 +378,11 @@ autoUpdater.on('update-not-available', () => {
   if (updateMode === 'install' && updateVersion) useManualUpdate(new Error('The release does not contain a compatible update package.'))
 })
 
-async function connect(s) {
+async function connect(s, options = {}) {
+  if(s.networkAccess&&s.networkAccess.mode!=='direct'){
+    if(!extension.openConnection)throw Error('premium_required')
+    return extension.openConnection(s, options)
+  }
   const auth=await extension.connectionAuth(s)
   let pending
   return new Promise((resolve, reject) => {
@@ -381,13 +392,13 @@ async function connect(s) {
     const t0 = Date.now()
     c.on('ready', () => { c.connectMs = Date.now() - t0; resolve(c) })
     c.on('error', e => reject(mismatch ? new Error(t('err.hostkey')) : auth?new Error(auth.error||'connection_failed'):e))
-    c.on('keyboard-interactive', (n, i, l, prompts, finish) => finish(prompts.map(() => auth?.password ?? secret(s) ?? '')))
-    const privateKey = auth?.privateKey || (s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined)
+    c.on('keyboard-interactive', (n, i, l, prompts, finish) => finish(prompts.map(() => s.authMode==='key'?'':auth?.password ?? secret(s) ?? '')))
+    const privateKey = s.authMode==='password'?undefined:auth?.privateKey || (s.key && fs.existsSync(s.key) ? fs.readFileSync(s.key) : undefined)
     if (privateKey) {
       const parsed = sshUtils.parseKey(privateKey, auth?.passphrase || keyPassphrases.get(s.key))
       if (parsed instanceof Error) {
         if(auth){reject(new Error(auth.keyError||'invalid_key'));return}
-        if (/encrypted|passphrase|decrypt|integrity check/i.test(parsed.message)) { keyPassphrases.delete(s.key); reject(new Error('KEY_PASSPHRASE_REQUIRED')); return }
+        if (/encrypted|passphrase|decrypt|integrity check/i.test(parsed.message)) { keyPassphrases.delete(s.key||'cloud:'+s.id); reject(new Error('KEY_PASSPHRASE_REQUIRED')); return }
         reject(parsed); return
       }
     }
@@ -395,7 +406,7 @@ async function connect(s) {
       host: s.host,
       port: s.port,
       username: s.user,
-      password: auth?.password || secret(s),
+      password: s.authMode==='key'?undefined:auth?.password || secret(s),
       privateKey,
       passphrase: auth?.passphrase || (s.key ? keyPassphrases.get(s.key) : undefined),
       agent: auth ? undefined : process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
@@ -424,21 +435,38 @@ function drop(id) {
 
 const S = id => conns.get(id)?.sftp ?? (() => { throw new Error(t('err.lost')) })()
 
-ipcMain.handle('servers:list', async () => { await extension.init(); return list() })
+ipcMain.handle('servers:list', () => { Promise.resolve(extension.init()).catch(()=>{}); return list() })
+ipcMain.handle('app:downloads',()=>app.getPath('downloads'))
 
 ipcMain.handle('servers:save', async (_, d) => {
   if(extension.handlesServerData(d))return extension.saveServer(d)
 
-  const name = d.name?.trim(), host = d.host?.trim(), user = d.user?.trim()
-  if (!host || !user) throw new Error(t('err.host_user_required'))
+  if(d.authMode!==undefined&&!['password','key'].includes(d.authMode))throw Error('invalid_auth_mode')
+  if(d.key)localSshKeys.readPrivateKey(d.key)
+  const options=serverOptions(d,servers.find(s=>s.id===(d.id||d.copyFrom)))
+  const networkAccess=await extension.validateServer?.(d)
+  if(d.networkAccess?.mode!=='direct'&&d.networkAccess&&!extension.validateServer)throw Error('premium_required')
+  const storage = serverType.storageFields({ ...d, type: d.type || servers.find(x => x.id === (d.id || d.copyFrom))?.type })
+  const name = d.name?.trim(), host = storage ? storage.host : d.host?.trim(), user = d.user?.trim()
+  if (!host || !user) throw new Error(t(storage ? 'err.url_user_required' : 'err.host_user_required'))
+  if(!storage&&(!Number.isInteger(Number(d.port??22))||Number(d.port??22)<1||Number(d.port??22)>65535))throw Error('invalid_server')
   let s = servers.find(x => x.id === d.id)
   if (!s) servers.push((s = { id: crypto.randomUUID() }))
-  Object.assign(s, { name: name || host, host, port: +d.port || 22, user, fp: undefined })
+  Object.assign(s, options, { name: name || host, host, port: +d.port || 22, user, fp: undefined }, storage)
+  if(networkAccess!==undefined)s.networkAccess=networkAccess
+  if(d.authMode!==undefined){s.authMode=d.authMode;if(s.authMode==='password'){delete s.key;delete s.keyData}else delete s.pass}
+  if(d.key&&d.authMode!=='password'){s.key=d.key;delete s.keyData}
   if ('group' in d) { if (d.group && groups.some(g => g.id === d.group)) s.group = d.group; else delete s.group }
   // duplication : sans nouveau mot de passe, on reprend celui (chiffré) du serveur d'origine
   const src = d.copyFrom && servers.find(x => x.id === d.copyFrom)
-  if (src && !d.pass) Object.assign(s, { pass: src.pass, key: src.key })
-  if (d.pass) {
+  if (src && !d.pass) {if(d.authMode!=='key')s.pass=src.pass;if(d.authMode!=='password'&&!d.key)s.key=src.key}
+  if (storage?.type === 's3' && d.token) {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
+    s.token = safeStorage.encryptString(d.token.trim()).toString('base64')
+  }
+  if (storage?.type === 's3' && d.clearToken) delete s.token
+  if (src && storage?.type === 's3' && !d.token && !d.clearToken) s.token = src.token
+  if (d.pass&&d.authMode!=='key') {
     if (!safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
     s.pass = safeStorage.encryptString(d.pass).toString('base64')
   }
@@ -446,7 +474,7 @@ ipcMain.handle('servers:save', async (_, d) => {
   return list()
 })
 
-ipcMain.handle('servers:delete', async (_,id)=>{if(extension.owns(id))return extension.removeServer(id);servers=servers.filter(s=>s.id!==id);persist();return list()})
+ipcMain.handle('servers:delete', async (_,id)=>{await extension.beforeDeleteServer?.(id);if(extension.owns(id))return extension.removeServer(id);servers=servers.filter(s=>s.id!==id);persist();return list()})
 
 ipcMain.handle('servers:reorder', (_, ids) => {
   servers.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
@@ -599,18 +627,19 @@ ipcMain.handle('config:catalog', () => { checkConfigRoot(); if (pathsLoadError) 
 ipcMain.handle('config:export', async (_, selection) => {
   if (pathsLoadError) throw pathsLoadError
   // Add portable server references before filtering: a path can target an existing server on import.
-  const data = configTransfer.select(configTransfer.portable(configData()), selection)
+  let data = configTransfer.select(configTransfer.portable(configData()), selection)
+  if(extension.prepareExport)data=extension.prepareExport(data)
   const count = configTransfer.TYPES.reduce((n, k) => n + data[k].length, 0)
   if (!count) throw new Error(t('config.empty'))
   const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('downloads'), 'cyberdog-config.zip'), filters: [{ name: 'Zip', extensions: ['zip'] }] })
   if (r.canceled) return null
-  configTransfer.writeBundle(data, r.filePath)
+  configTransfer.writeBundle(data, r.filePath, extension.bundleOptions?.(data))
   return { path: r.filePath, count }
 })
 function mergeConfiguration(data) {
   checkConfigRoot()
   if (pathsLoadError) throw pathsLoadError
-  const result = configTransfer.merge(configData(), data)
+  const result = configTransfer.merge(configData(), data, extension.finalizeImport)
   const before = configData()
   try {
     ;({ groups, servers, actions, paths: savedPaths } = result.data)
@@ -625,7 +654,7 @@ function mergeConfiguration(data) {
 ipcMain.handle('config:import', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Cyberdog configuration ZIP', extensions: ['zip'] }] })
   if (r.canceled) return null
-  return mergeConfiguration(configTransfer.readBundle(r.filePaths[0]))
+  return mergeConfiguration(configTransfer.readBundle(r.filePaths[0],extension.readBundleOptions?.()))
 })
 ipcMain.handle('config:import-client', async (_, source) => {
   if (!['filezilla', 'winscp'].includes(source)) throw new Error('Unsupported import source')
@@ -640,16 +669,24 @@ ipcMain.handle('config:import-client', async (_, source) => {
 
 // ---------- SFTP ----------
 ipcMain.handle('files:open', async (_, sid) => {
-  const server = extension.owns(sid) ? await extension.resolveServer(sid) : find(sid)
-  const client = await connect(server)
-  const sftp = await P(client, 'sftp')
-  const id = crypto.randomUUID()
-  conns.set(id, { client, sftp, tmp: [], server, connectMs: client.connectMs })
-  client.on('close', () => drop(id))
-  return { id, home: await P(sftp, 'realpath', '.') }
+  const ticket=extension.beginConnection?.(sid)
+  let client
+  try{
+    const server=extension.owns(sid)?await extension.resolveServer(sid):find(sid)
+    if(!serverType.isShell(server)){
+      const t0=Date.now(),sftp=await objectStorage.open(server,secret(server),{token:server.token?safeStorage.decryptString(Buffer.from(server.token,'base64')):undefined}),id=crypto.randomUUID()
+      conns.set(id,{sftp,tmp:[],server,connectMs:Date.now()-t0})
+      return{id,home:'/'}
+    }
+    client=await connect(server,{ticket})
+    const sftp=await P(client,'sftp'),home=await P(sftp,'realpath','.'),id=crypto.randomUUID()
+    conns.set(id,{client,sftp,tmp:[],server,connectMs:client.connectMs})
+    client.on('close',()=>drop(id))
+    return{id,home}
+  }catch(e){client?.end();throw e}finally{extension.endConnection?.(ticket)}
 })
 
-ipcMain.handle('conn:close', (_, id) => { conns.get(id)?.client.end() })
+ipcMain.handle('conn:close', (_, id) => { const c = conns.get(id); if (c?.client) c.client.end(); else if (c) { c.sftp?.end?.(); drop(id) } })
 
 ipcMain.handle('sftp:list', async (_, id, dir) => {
   const s = S(id)
@@ -715,10 +752,10 @@ const { executeTransfer } = require('./transfer-files')(transfers)
 ipcMain.handle('transfers:list', () => transfers.list())
 ipcMain.handle('transfers:cancel', (_, id) => transfers.cancel(id))
 ipcMain.handle('sftp:download', async (_, id, paths) => {
-  const s = S(id), downloads = app.getPath('downloads')
+  const s = S(id), preferred=conns.get(id)?.server?.downloadDir, downloads = preferred&&path.isAbsolute(preferred)&&fs.existsSync(preferred)&&fs.statSync(preferred).isDirectory()?preferred:app.getPath('downloads')
   let target, single = paths.length === 1 && !(await P(s, 'stat', paths[0])).isDirectory()
   if (single) { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(downloads, posix.basename(paths[0])) }); if (r.canceled) return null; target = r.filePath }
-  else { const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; target = r.filePaths[0] }
+  else { const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), defaultPath:downloads, properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; target = r.filePaths[0] }
   const ok = await transfers.run(id, 'download', posix.basename(paths[0]), job => executeTransfer(s, 'download', paths, p => single ? target : path.join(target, posix.basename(p)), job))
   return ok ? target : null
 })
@@ -836,6 +873,8 @@ ipcMain.handle('keys:remote', async (_, id) => {
   catch (e) { if (e.code === 2) return { path: file, items: [] }; throw e }
   return { path: file, items: sshKeys.parseAuthorizedKeys(String(contents)) }
 })
+ipcMain.handle('keys:available',()=>localSshKeys.listPrivateKeys(os.homedir(),[path.join(app.getPath('userData'),'keys')]))
+ipcMain.handle('keys:choose',async()=>{const r=await dialog.showOpenDialog(win,{properties:['openFile'],defaultPath:path.join(os.homedir(),'.ssh')});return r.canceled?null:localSshKeys.readPrivateKey(r.filePaths[0]).info})
 ipcMain.handle('keys:list', () => localKeyStore().list())
 ipcMain.handle('keys:generate', async (_, options) => {
   const key = await localKeyStore().generate(options)
@@ -859,16 +898,19 @@ ipcMain.handle('keys:use', async (_, serverId, keyId) => {
   if (!key.hasPrivate) throw new Error(t('keys.no_private'))
   const server = extension.owns(serverId) ? await extension.resolveServer(serverId) : find(serverId)
   if(server.vaultId)throw new Error('extension_managed')
-  server.key = key.privatePath
-  if(extension.owns(server.id))extension.saveCredentials(server,{key:key.privatePath});else persist()
+  if(extension.owns(server.id))return extension.saveServer({...server,authMode:'key',key:key.privatePath,syncCredentials:false})
+  server.key=key.privatePath;server.authMode='key';delete server.pass;delete server.keyData;persist()
   return list()
 })
 ipcMain.handle('keys:unlock', async (_, serverId, passphrase) => {
   const server = extension.owns(serverId) ? await extension.resolveServer(serverId) : find(serverId)
-  if (!server.key || typeof passphrase !== 'string' || passphrase.length > 1024) throw new Error(t('keys.unlock_failed'))
-  const parsed = sshUtils.parseKey(fs.readFileSync(server.key), passphrase)
+  if(typeof passphrase!=='string'||passphrase.length>1024)throw new Error(t('keys.unlock_failed'))
+  const auth=await extension.connectionAuth(server)
+  const privateKey=auth?.privateKey||(server.key&&fs.readFileSync(server.key))
+  if(!privateKey)throw new Error(t('keys.unlock_failed'))
+  const parsed=sshUtils.parseKey(privateKey,passphrase)
   if (parsed instanceof Error) throw new Error(t('keys.unlock_failed'))
-  keyPassphrases.set(server.key, passphrase)
+  keyPassphrases.set(server.key||'cloud:'+server.id,passphrase)
 })
 ipcMain.handle('keys:reveal', (_, keyId) => { const key = localKeyStore().get(keyId); shell.showItemInFolder(key.publicPath) })
 
@@ -1137,14 +1179,16 @@ ipcMain.handle('docker:action', async (_, id, target, action) => {
 
 // ---------- Terminal ----------
 ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
-  const server = extension.owns(sid) ? await extension.resolveServer(sid) : find(sid)
-  const client = await connect(server)
-  const stream = await P(client, 'shell', { term: 'xterm-256color', cols, rows })
-  conns.set(id, { client, stream, server, tmp: [] })
-  stream.on('data', d => send('term:data', id, d))
-  stream.on('close', () => client.end())
-  client.on('close', () => drop(id))
-  if (cwd) stream.write(`cd ${q(cwd)}\n`)
+  const ticket=extension.beginConnection?.(sid)
+  let client
+  try{
+    const server=extension.owns(sid)?await extension.resolveServer(sid):find(sid)
+    client=await connect(server,{ticket})
+    const stream=await P(client,'shell',{term:'xterm-256color',cols,rows})
+    conns.set(id,{client,stream,server,tmp:[]})
+    stream.on('data',d=>send('term:data',id,d));stream.on('close',()=>client.end());client.on('close',()=>drop(id))
+    if(cwd)stream.write(`cd ${q(cwd)}\n`)
+  }catch(e){client?.end();throw e}finally{extension.endConnection?.(ticket)}
 })
 ipcMain.on('term:write', (_, id, d) => conns.get(id)?.stream?.write(d))
 ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindow(rows, cols, 0, 0))

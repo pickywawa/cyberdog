@@ -15,5 +15,6 @@ const handlers=new Map(),extension=moduleStub.exports.load({accountIPC:(name,fn)
  for(const name of ['cloud-account.js','secret-vaults.js','shared-ui.js','vault-ui.js'])assert(!fs.existsSync(path.join(__dirname,'../src',name)),name+' must stay in the private repository')
  const html=fs.readFileSync(path.join(__dirname,'../src/index.html'),'utf8');assert(!html.includes('btn-vaults'))
  const main=fs.readFileSync(path.join(__dirname,'../src/main.js'),'utf8');assert(!main.includes('createVaults'));assert(!main.includes('cyberdog-license'));assert(!main.includes('cloud.saveServer'))
+ const transfer=require('../src/config-transfer');const routed={groups:[],servers:[{id:'target',host:'private.test',port:22,user:'user',networkAccess:{version:1,mode:'bastion',bastionId:'jump'}}],actions:[],paths:[]};assert.throws(()=>transfer.merge({groups:[],servers:[],actions:[],paths:[]},routed),/Unsupported connection/);assert.throws(()=>transfer.writeBundle(routed,'unused.zip'),/Unsupported connection/);
  console.log('community extension boundary: free startup, denied private operations and no proprietary implementation in public sources ok')
 })().catch(error=>{console.error(error);process.exitCode=1})

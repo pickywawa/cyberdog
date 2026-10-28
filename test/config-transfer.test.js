@@ -6,7 +6,7 @@ const { readList, writeList } = require('../src/persistent-list')
 const clients = require('../src/client-import')
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cyberdog-bundle-'))
 try {
-  const data = { groups: [{id:'g',name:'Production',favorite:true}], servers: [{id:'s',name:'API',host:'example.org',port:22,user:'app',group:'g',pass:'SECRET',fp:'HOSTKEY',key:'/key'}], actions: [{id:'a',name:'Status',script:'uptime'}], paths: [{id:'p',name:'Logs',path:'/srv/logs',serverId:'s'},{id:'p2',name:'Tmp',path:'/tmp'}] }
+  const data = { groups: [{id:'g',name:'Production',favorite:true}], servers: [{id:'s',name:'API',host:'example.org',port:22,user:'app',group:'g',website:'https://example.org',tags:['production'],downloadDir:'/tmp/downloads',pass:'SECRET',fp:'HOSTKEY',key:'/key'}], actions: [{id:'a',name:'Status',script:'uptime'}], paths: [{id:'p',name:'Logs',path:'/srv/logs',serverId:'s'},{id:'p2',name:'Tmp',path:'/tmp'}] }
   const file = path.join(tmp, 'config.zip')
   const selection = Object.fromEntries(c.TYPES.map(k=>[k,data[k].map(x=>x.id)]))
   const linked = c.linkPaths(data.paths, data.servers)
@@ -29,6 +29,9 @@ try {
   assert.equal(imported.data.servers[0].group, imported.data.groups[0].id)
   assert.notEqual(imported.data.servers[0].id, 's')
   assert.equal(imported.data.groups[0].favorite, true)
+  assert.equal(imported.data.servers[0].website,'https://example.org')
+  assert.deepEqual(imported.data.servers[0].tags,['production'])
+  assert.equal(imported.data.servers[0].downloadDir,'/tmp/downloads')
   assert.deepEqual(c.merge(imported.data, read).added, {groups:0,servers:0,actions:0,paths:0}, 'reimport is idempotent')
   const current = { ...empty(), servers: [{id:'local',host:'EXAMPLE.ORG',port:22,user:'app',pass:'KEEP'}] }
   const merged = c.merge(current, read)

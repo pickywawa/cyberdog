@@ -91,7 +91,7 @@ function refreshLanguage() {
 const AUTH_FAIL = /authentication methods failed|authentication failure/i
 function errText(e) {
   const m = e.message || String(e)
-  if(m.startsWith('vault.'))return t(m)
+  if(m.startsWith('vault.')||m.startsWith('bastion.'))return t(m)
   if (['server_write_required','access_denied','owner_required','premium_required'].includes(m)) return t('err.denied')
   if(['group_in_use','invalid_group','invalid_asset','script_changed'].includes(m))return t('shared.'+m)
   if (m.includes('KEY_PASSPHRASE_REQUIRED')) return t('keys.unlock')
@@ -167,7 +167,7 @@ addEventListener('mousedown', e => {
 })
 addEventListener('keydown', e => {
   const tab = tabs.find(tb => tb.id === activeId)
-  if (tab && (e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); toggleSearch(tab.active, true) }
+  if (tab && isShell(tab.server) && (e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); toggleSearch(tab.active, true) }
 })
 addEventListener('blur', hideMenu)
 addEventListener('keydown', e => e.key === 'Escape' && hideMenu())
@@ -176,7 +176,16 @@ addEventListener('dragover', e => e.preventDefault())
 addEventListener('drop', e => e.preventDefault())
 
 // NB : un handler on* qui renvoie false annule l'action par défaut (focus, saisie) : toujours des blocs ici.
-function modal(title, fields, okLabel, { wide = false } = {}) {
+function tabLayout(tabs, fields, rows, extra) {
+  const pages = tabs.map(([key]) => h('section', { className: 'tab-page', hidden: key !== tabs[0][0] }, ...rows.filter((_, i) => fields[i].tab === key)))
+  if (extra) pages[0].append(extra)
+  const nav = h('nav', { className: 'tab-nav' }, ...tabs.map(([, label, ico], i) => h('button', {
+    type: 'button', ariaSelected: String(!i),
+    onclick: () => pages.forEach((pg, j) => { pg.hidden = j !== i; nav.children[j].setAttribute('aria-selected', String(j === i)) }),
+  }, h('span', { innerHTML: icon(ico) }), h('span', { textContent: label }))))
+  return h('div', { className: 'tab-layout' }, nav, h('div', { className: 'tab-pages' }, ...pages))
+}
+function modal(title, fields, okLabel, { wide = false, premiumHint = false, lockedRoute = false, tabs = [] } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
     const previous = !m.hidden ? {nodes:[...m.childNodes],mousedown:m.onmousedown} : null
@@ -192,14 +201,18 @@ function modal(title, fields, okLabel, { wide = false } = {}) {
     })
     const locationIndex=fields.findIndex(f=>f.name==='teamId')
     if(locationIndex>=0){const sync=()=>{const scope=inputs[locationIndex].value;fields.forEach((f,i)=>{if(f.name==='group'){for(const option of inputs[i].options){option.disabled=!!option.value&&option._scope!==scope;option.hidden=option.disabled}if(inputs[i].selectedOptions[0]?.disabled)inputs[i].value=''}if(f.requireScope!==undefined){inputs[i].disabled=f.requireScope!==scope;if(inputs[i].disabled)inputs[i].checked=true}})};inputs[locationIndex].onchange=sync;sync()}
+    const rows = fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i]))
+    const hint = h('div',{className:'community-bastion'},h('label',{className:'check'},h('input',{type:'checkbox',disabled:true,checked:lockedRoute}),h('span',{textContent:t('bastion.unavailable')})))
+    const typeAt = fields.findIndex(f => f.name === 'type')
+    if (typeAt >= 0) { const sync = () => { fields.forEach((f, i) => { if (f.types) rows[i].hidden = !f.types.includes(inputs[typeAt].value) }); hint.hidden = inputs[typeAt].value !== 'ssh' }; inputs[typeAt].onchange = sync; sync() }
     const close = v => { if(previous){m.replaceChildren(...previous.nodes);m.hidden=false;m.onmousedown=previous.mousedown}else{m.hidden=true;m.replaceChildren()} resolve(v) }
     const form = h('form', {
-      className: 'card' + (wide ? ' wide' : ''),
+      className: 'card' + (wide ? ' wide' : '') + (tabs.length ? ' tabbed' : ''),
       onsubmit: e => { e.preventDefault(); close(Object.fromEntries(fields.map((f, i) => [f.name, f.type === 'checkbox' ? inputs[i].checked : inputs[i].value]))) },
       onkeydown: e => { if (e.key === 'Escape') close(null) },
     },
       h('h3', { textContent: title }),
-      ...fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i])),
+      ...(tabs.length ? [tabLayout(tabs, fields, rows, premiumHint && hint)] : [...rows, ...(premiumHint ? [hint] : [])]),
       h('div', { className: 'btns' },
         h('button', { type: 'button', textContent: t('btn.cancel'), onclick: () => close(null) }),
         h('button', { className: 'primary', textContent: okLabel })))
@@ -216,29 +229,79 @@ let groups = []
 let srvQuery = ''
 
 // s : serveur à modifier ; duplicate : s sert de modèle pour un NOUVEAU serveur (mot de passe repris si laissé vide)
+const typeOptions = () => [['ssh', t('type.ssh')], ['ftp', t('type.ftp')], ['s3', t('type.s3')], ['azure', t('type.azure')], ['webdav', t('type.webdav')]]
+const s3Presets = () => [['', t('preset.aws')], ['gcs', 'Google Cloud Storage'], ['b2', 'Backblaze B2'], ['wasabi', 'Wasabi'], ['do', 'DigitalOcean Spaces'], ['scaleway', 'Scaleway']]
+const ftpSecurity = () => [['explicit', t('ftp.explicit')], ['implicit', t('ftp.implicit')], ['none', t('ftp.none')]]
 async function serverForm(s, { duplicate = false } = {}) {
+  if (typeof premiumServerForm === 'function' && await premiumServerForm(s, { duplicate })) return
   const edit = s && !duplicate
+  const keepPass = s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph')
+  const g = 'general'
   const v = await modal(edit ? t('form.edit_title') : t('form.add_title'), [
-    ...(sharedLocationField(duplicate?null:s)?[sharedLocationField(duplicate?null:s)]:[]),
-    { name: 'name', label: t('f.name'), value: duplicate ? t('srv.copy_name', { name: s.name }) : s?.name, placeholder: t('f.name_ph') },
-    { name: 'host', label: t('f.host'), value: s?.host, placeholder: '192.168.1.10' },
-    { name: 'port', label: t('f.port'), value: s?.port ?? 22 },
-    { name: 'user', label: t('f.user'), value: s?.user, placeholder: 'root' },
-    { name: 'pass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph') },
-    ...(groups.length ? [{ name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(g => [g.id, g.name,g.teamId||''])] }] : []),
-  ], edit ? t('btn.save') : t('btn.add_ok'))
+    { tab: g, name: 'type', label: t('f.type'), type: 'select', value: s?.type || 'ssh', disabled: !!s, options: typeOptions() },
+    ...(sharedLocationField(duplicate?null:s)?[{ tab: g, ...sharedLocationField(duplicate?null:s) }]:[]),
+    { tab: g, name: 'name', label: t('f.name'), value: duplicate ? t('srv.copy_name', { name: s.name }) : s?.name, placeholder: t('f.name_ph') },
+    ...(groups.length ? [{ tab: g, name: 'group', label: t('f.group'), type: 'select', value: s?.group || '', options: [['', t('f.group_none')], ...groups.map(x => [x.id, x.name, x.teamId || ''])] }] : []),
+    { tab: g, name: 'host', label: t('f.host'), value: s?.host, placeholder: '192.168.1.10', types: ['ssh'] },
+    { tab: g, name: 'port', label: t('f.port'), value: s?.port ?? 22, types: ['ssh'] },
+    { tab: g, name: 'user', label: t('f.user'), value: s?.user, placeholder: 'root', types: ['ssh'] },
+    { tab: g, name: 'pass', label: t('f.pass'), type: 'password', placeholder: keepPass, types: ['ssh'] },
+    { tab: g, name: 'ftphost', label: t('f.host'), value: s?.host, placeholder: 'ftp.example.com', types: ['ftp'] },
+    { tab: g, name: 'ftpport', label: t('f.port'), value: s?.port ?? '', placeholder: '21', types: ['ftp'] },
+    { tab: g, name: 'ftpsecurity', label: t('f.security'), type: 'select', value: s?.security || 'explicit', options: ftpSecurity(), types: ['ftp'] },
+    { tab: g, name: 'ftpinsecure', label: t('f.tls_insecure'), type: 'checkbox', value: !!s?.insecureTls, types: ['ftp'] },
+    { tab: g, name: 'ftpuser', label: t('f.user'), value: s?.user, placeholder: 'anonymous', types: ['ftp'] },
+    { tab: g, name: 'ftppass', label: t('f.pass'), type: 'password', placeholder: keepPass, types: ['ftp'] },
+    { tab: g, name: 'preset', label: t('f.preset'), type: 'select', value: s?.preset || '', options: s3Presets(), types: ['s3'] },
+    { tab: g, name: 's3url', label: t('f.url_s3'), value: s?.url, placeholder: 'https://s3.eu-west-1.amazonaws.com', types: ['s3'] },
+    { tab: g, name: 'region', label: t('f.region'), value: s?.region || '', placeholder: 'us-east-1', types: ['s3'] },
+    { tab: g, name: 's3bucket', label: t('f.bucket'), value: s?.bucket, types: ['s3'] },
+    { tab: g, name: 'virtualHost', label: t('f.virtual_host'), type: 'checkbox', value: !!s?.virtualHost, types: ['s3'] },
+    { tab: g, name: 's3user', label: t('f.access_key'), value: s?.user, types: ['s3'] },
+    { tab: g, name: 's3pass', label: t('f.secret_key'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['s3'] },
+    { tab: g, name: 'token', label: t('f.session_token'), type: 'password', placeholder: s?.hasToken ? keepPass : t('f.optional'), types: ['s3'] },
+    { tab: g, name: 'azurl', label: t('f.url_azure'), value: s?.url, placeholder: 'https://account.blob.core.windows.net', types: ['azure'] },
+    { tab: g, name: 'azbucket', label: t('f.container'), value: s?.bucket, types: ['azure'] },
+    { tab: g, name: 'azuser', label: t('f.account'), value: s?.user, types: ['azure'] },
+    { tab: g, name: 'azpass', label: t('f.account_key'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['azure'] },
+    { tab: g, name: 'davurl', label: t('f.url_dav'), value: s?.url, placeholder: 'https://cloud.example.com/remote.php/dav/files/me', types: ['webdav'] },
+    { tab: g, name: 'davuser', label: t('f.user'), value: s?.user, types: ['webdav'] },
+    { tab: g, name: 'davpass', label: t('f.pass'), type: 'password', placeholder: s?.hasPass ? keepPass : '', types: ['webdav'] },
+    { tab: 'options', name: 'website', label: t('f.website'), value: s?.website, placeholder: 'https://example.com' },
+    { tab: 'options', name: 'tags', label: t('f.tags'), value: (s?.tags || []).join(', '), placeholder: t('f.tags_ph') },
+    { tab: 'options', name: 'downloadDir', label: t('f.download_dir'), value: s?.downloadDir, placeholder: '~/Downloads' },
+  ], edit ? t('btn.save') : t('btn.add_ok'), { premiumHint: true, lockedRoute: s?.networkAccess?.mode === 'bastion', tabs: [[g, t('settings.tab.general'), 'server'], ['options', t('f.options'), 'sliders']] })
   if (!v) return
+  const prefix = { s3: 's3', webdav: 'dav', ftp: 'ftp', azure: 'az' }[v.type]
+  if (prefix) Object.assign(v, { url: v[prefix + 'url'], user: v[prefix + 'user'] ?? v.user, pass: v[prefix + 'pass'] })
+  if (v.type === 'ftp') Object.assign(v, { host: v.ftphost, port: v.ftpport, security: v.ftpsecurity, insecureTls: v.ftpinsecure })
+  if (v.type === 's3') v.bucket = v.s3bucket
+  if (v.type === 'azure') v.bucket = v.azbucket
+  for (const k of ['s3url', 's3user', 's3pass', 's3bucket', 'davurl', 'davuser', 'davpass', 'ftphost', 'ftpport', 'ftpsecurity', 'ftpinsecure', 'ftpuser', 'ftppass', 'azurl', 'azbucket', 'azuser', 'azpass']) delete v[k]
+  if (v.type !== 's3') { delete v.region; delete v.preset; delete v.virtualHost; delete v.token }
+  if (!['s3', 'azure'].includes(v.type)) delete v.bucket
+  if (!['ssh', 'ftp'].includes(v.type)) { delete v.host; delete v.port }
+  v.tags = v.tags.split(',').map(x => x.trim()).filter(Boolean)
   try { servers = await api.invoke('servers:save', { ...v, id: edit ? s.id : undefined, copyFrom: duplicate ? s.id : undefined }); renderServers() } catch (e) { toast(errText(e), true) }
 }
 
 // mot de passe manquant ou refusé : on le demande, on l'enregistre, l'appelant réessaie
 async function askPassword(s) {
   if(s.vaultId){toast(t('vault.ssh_failed'),true);return false}
-  const v = await modal(t('pw.title', { target: `${s.user}@${s.host}` }), [{ name: 'pass', label: t('f.pass'), type: 'password' }], t('btn.connect'))
+  const v = await modal(t('pw.title', { target: serverTarget(s) }), [{ name: 'pass', label: t(s.type === 's3' ? 'f.secret_key' : s.type === 'azure' ? 'f.account_key' : 'f.pass'), type: 'password' }], t('btn.connect'))
   if (!v?.pass) return false
   try { servers = await api.invoke('servers:save', { ...s, pass: v.pass }); renderServers(); return true } catch (e) { toast(errText(e), true); return false }
 }
 
+async function deleteServerWithProgress(s){
+ const content=h('div',{className:'server-operation',role:'status'},h('span',{className:'server-spinner'}),h('span',{textContent:typeof editorText==='function'?editorText('delete'):t('srv.delete')+'…'}))
+ let pending=true
+ const close=typeof showAccountDialog==='function'?showAccountDialog(content,t('srv.delete'),'server-operation-dialog',()=>{},{canClose:()=>!pending}):()=>{}
+ try{servers=await api.invoke('servers:delete',s.id);renderServers()}catch(e){toast(errText(e),true)}finally{pending=false;close()}
+}
+
+const isShell = s => !s.type || s.type === 'ssh'
+const serverTarget = s => s.type === 's3' ? `S3 · ${s.bucket || s.host}` : s.type === 'webdav' ? `WebDAV · ${s.host}` : s.type === 'azure' ? `Azure · ${s.user}${s.bucket ? '/' + s.bucket : ''}` : s.type === 'ftp' ? `${s.security === 'none' ? 'FTP' : 'FTPS'} · ${s.user}@${s.host}` : `${s.user}@${s.host}`
 const hue = name => Math.abs([...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7)) % 360
 let dragId = null
 let dragGroup = null
@@ -264,13 +327,15 @@ async function deleteGroup(g) {
 const starBtn = (on, onclick) => h('button', { className: 'ib fav' + (on ? ' favon' : ''), innerHTML: icon('star'), title: t(on ? 'fav.remove' : 'fav.add'), onclick: e => { e.stopPropagation(); onclick() } })
 
 function serverRow(s, activeServer) {
+  if(s.loading)return h('li',{className:'srv loading',ariaBusy:'true'},h('div',{className:'txt'},h('span',{className:'name',textContent:s.name}),h('small',{className:'host',textContent:typeof editorText==='function'?editorText('pending'):'…'})),h('span',{className:'server-spinner'}))
   const canManage = !s.vaultId && (!s.teamId || !!s.canEditServers)
   const hh = hue(s.name)
   const li = h('li', { className: 'srv' + (s.id === activeServer ? ' active' : ''), draggable: !s.teamId&&!s.vaultId },
-    h('span', { className: 'tile', innerHTML: icon('server'), style: `background: linear-gradient(135deg, hsl(${hh} 75% 58%), hsl(${(hh + 45) % 360} 75% 48%))` }),
-    h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` })),
+    h('span', { className: 'tile', innerHTML: icon(isShell(s) ? 'server' : 'cloud'), style: `background: linear-gradient(135deg, hsl(${hh} 75% 58%), hsl(${(hh + 45) % 360} 75% 48%))` }),
+    h('div', { className: 'txt' }, h('span', { className: 'name', textContent: s.name }), h('span', { className: 'host', textContent: isShell(s) ? `${s.user}@${s.host}${s.port !== 22 ? ':' + s.port : ''}` : serverTarget(s) })),
     ...(!s.teamId&&!s.vaultId ? [starBtn(s.favorite, () => setFavorite(s, !s.favorite))] : []),
     h('button', { className: 'ib edit', innerHTML: icon('pencil'), disabled:!canManage&&!s.vaultId, title: t(s.vaultId?'vault.edit_server':canManage?'srv.edit_tip':'team.permissions'), onclick: e => { e.stopPropagation(); s.vaultId?editVaultServer(s):serverForm(s) } }))
+  if(typeof connectionExtraLabel==='function'){const label=connectionExtraLabel(s);if(label)li.querySelector('.txt').append(h('small',{className:'srv-connection-label',textContent:label,title:label}))}
   li.onclick = e => { if (!e.target.closest('button')) openFiles(s) }
   li.tabIndex = 0
   li.onkeydown = e => { if (e.key === 'Enter' && e.target === li) openFiles(s) }
@@ -278,7 +343,7 @@ function serverRow(s, activeServer) {
     e.preventDefault()
     menu(e.clientX, e.clientY, [
       { label: t('srv.open'), icon: 'folder', fn: () => openFiles(s) },
-      { label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) },
+      ...(isShell(s) ? [{ label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) }] : []),
       '-',
       ...(!s.teamId&&!s.vaultId ? [{ label: t(s.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setFavorite(s, !s.favorite) }] : []),
       ...(canManage && groups.some(g=>(g.teamId||'')===(s.teamId||'')) ? [{ label: t('f.group'), icon: 'folder', children: async () => [{ label: t('f.group_none'), checked: !groupOf(s), fn: () => moveToGroup(s, '') }, ...groups.filter(g=>(g.teamId||'')===(s.teamId||'')).map(g => ({ label: g.name, checked: s.group === g.id, fn: () => moveToGroup(s, g.id) }))] }] : []),
@@ -286,7 +351,7 @@ function serverRow(s, activeServer) {
       ...(canManage ? [{ label: t('srv.edit'), icon: 'pencil', fn: () => serverForm(s) }] : []),
       ...(s.teamId?[{label:t('history.title'),icon:'server',fn:()=>showServerHistory(s)}]:[]),
       ...(!s.vaultId?[{ label: t('srv.duplicate'), icon: 'copy', fn: () => serverForm(s, { duplicate: true }) }]:[{label:t('vault.edit_server'),icon:'pencil',fn:()=>editVaultServer(s)},{label:t('vault.unpin'),icon:'trash',fn:async()=>{if(confirm(t('vault.confirm_unpin'))){servers=await api.invoke('vaults:unpin',s.id);renderServers()}}}]),
-      ...(canManage ? [{ label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { servers = await api.invoke('servers:delete', s.id); renderServers() } } }] : []),
+      ...(canManage ? [{ label: t('srv.delete'), icon: 'trash', danger: true, fn: async () => { if (confirm(t('srv.confirm_delete', { name: s.name }))) { await deleteServerWithProgress(s) } } }] : []),
     ])
   }
   li.ondragstart = e => { dragId = s.id; dragGroup = null; e.dataTransfer.effectAllowed = 'move' }
@@ -351,8 +416,8 @@ function renderServers() {
   ul.replaceChildren()
   const activeServer = tabs.find(tb => tb.id === activeId)?.server.id
   const q = srvQuery.trim().toLowerCase()
-  const has = (x, str) => str.toLowerCase().includes(x)
-  const srvMatch = s => !q || [s.name, s.host, s.user, s.vaultName||'', groupOf(s)?.name || ''].some(x => has(q, x))
+  const has = (x, str) => String(str||'').toLowerCase().includes(x)
+  const srvMatch = s => !q || [s.name, s.host, s.user, s.vaultName||'', s.website||'',s.downloadDir||'',...(s.tags||[]), groupOf(s)?.name || ''].some(x => has(q, x))
   const grpMatch = g => !!q && has(q, g.name)
   const localServers=servers.filter(s=>!s.teamId&&!s.vaultId)
   const sharedServers=servers.filter(s=>s.teamId)
@@ -599,7 +664,7 @@ async function openSettingsModal(initialPage = 'general') {
 
 // ---------- Onglets ----------
 function renderTabs() {
-  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : ''), title: tb.server.name, onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
+  $('#tabs').replaceChildren(...tabs.map(tb => h('div', { className: 'tab' + (tb.id === activeId ? ' active' : ''), title: tb.server.name+(typeof connectionExtraLabel==='function'?' · '+connectionExtraLabel(tb.server):''), onclick: () => activate(tb.id), onauxclick: e => { if (e.button === 1) closeTab(tb.id) } },
     h('span', { innerHTML: icon('folder'), style: 'display:inline-flex' }),
     h('span', { className: 't', textContent: tb.server.name }),
     h('span', { className: 'x', innerHTML: icon('x'), onclick: e => { e.stopPropagation(); closeTab(tb.id) } }))))
@@ -619,6 +684,7 @@ function closeTab(id) {
   const i = tabs.findIndex(tb => tb.id === id)
   const tb = tabs[i]
   tb.closed = true
+  if(typeof cancelPremiumConnection==='function')cancelPremiumConnection(tb.server.id)
   if (tb.connId) api.invoke('conn:close', tb.connId)
   closeTerminal(tb)
   pollStop(tb)
@@ -706,6 +772,9 @@ const PANELS = {
 }
 const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
 
+// Object storage / WebDAV servers have no shell: only the file explorer and saved paths make sense.
+const barFor = server => isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths')
+
 const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
   leavePanel(tab)
@@ -735,14 +804,14 @@ function updateBar(tab) {
   tab.barToggle.innerHTML = icon('chevron-right') + `<span class="rbar-label">${t('bar.collapse')}</span>`
   tab.barToggle.title = t(rightBarExpanded ? 'bar.collapse' : 'bar.expand')
   tab.barToggle.ariaExpanded = String(rightBarExpanded)
-  for (const [key, ic, title] of BAR) {
+  for (const [key, ic, title] of tab.barItems) {
     tab.bar[key].title = t(title)
     tab.bar[key].innerHTML = icon(ic)
     tab.bar[key].append(h('span', { className: 'rbar-label', textContent: t(title) }))
   }
-  tab.bar.term.classList.toggle('on', !!tab.term)
-  for (const [key] of BAR.slice(1)) tab.bar[key].classList.toggle('on', tab.panel === key)
-  tab.termTitle.textContent = `${t('term.title')} — ${tab.server.user}@${tab.server.host}`
+  tab.bar.term?.classList.toggle('on', !!tab.term)
+  for (const [key] of tab.barItems) if (key !== 'term') tab.bar[key].classList.toggle('on', tab.panel === key)
+  tab.termTitle.textContent = `${t('term.title')} — ${serverTarget(tab.server)}`
 }
 
 // ---------- Explorateur ----------
@@ -806,7 +875,7 @@ function updateStatus(tab) {
 function draw(tab) {
   tab.pathInput.value = tab.path || ''
   tab.back.disabled = !tab.hist.length
-  tab.statusR.textContent = `${tab.server.user}@${tab.server.host}`
+  tab.statusR.textContent = serverTarget(tab.server)
   const { key, dir } = tab.sort
   const val = e => (key === 'type' ? typeOf(e) : key === 'ext' ? extOf(e) : e[key])
   tab.view = [...tab.entries].sort((a, b) => b.isDir - a.isDir || cmp(val(a), val(b)) * dir)
@@ -825,7 +894,7 @@ function draw(tab) {
     const row = h('div', { className: 'row' },
       nameCell(icon(fi.name), fi.kind, e.name),
       h('div', { className: 'dim', textContent: e.isDir ? '—' : sizeOf(e.size) }),
-      h('div', { className: 'dim', textContent: dateOf(e.mtime) }),
+      h('div', { className: 'dim', textContent: e.mtime ? dateOf(e.mtime) : '—' }),
       h('div', { textContent: e.owner }),
       h('div', { textContent: e.group }),
       h('div', { className: 'mono', textContent: permsOf(e) }),
@@ -938,9 +1007,9 @@ function ctxMenu(tab, e) {
     { label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
-    ...(one ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
+    ...(one && isShell(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
-    ...(one && !one.isDir && archive.kind(one.name)
+    ...(one && !one.isDir && isShell(tab.server) && archive.kind(one.name)
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
          ...(archive.kind(one.name).single ? [] : [{ label: t('ctx.extract_to', { name: archive.folderName(one.name) }), icon: 'folder-plus', fn: () => extractArchive(tab, one, true) }])]
       : []),
@@ -1055,10 +1124,10 @@ function makeExplorer(tab) {
   ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
   buildSearch(ex)
   const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
-  ex.explorer = h('div', { className: 'explorer' },
+  ex.explorer = h('div', { className: 'explorer' + (isShell(tab.server) ? '' : ' nofs') },
     h('div', { className: 'toolbar' },
       ex.back, h('div', { className: 'pathbox' }, ex.pathInput, ex.pathsBtn),
-      ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn'),
+      ...(isShell(tab.server) ? [ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn')] : []),
       ex.splitBtn,
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
@@ -1113,6 +1182,7 @@ function toggleSplit(ex) {
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
 function openFiles(server, { terminal = false } = {}) {
+  if(server.loading)return
   const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
@@ -1130,7 +1200,7 @@ function openFiles(server, { terminal = false } = {}) {
   openingTitle.dataset.i18n = 'srv.opening'
   tab.openLoader = h('div', { className: 'connection-loader', role: 'status', ariaLive: 'polite' },
     h('img', { className: 'connection-dog', src: 'assets/icon.svg', alt: '' }), openingTitle,
-    h('small', { textContent: `${server.name} · ${server.user}@${server.host}` }))
+    h('small', { textContent: `${server.name} · ${serverTarget(server)}` }))
   tab.wsMain = h('div', { className: 'ws-main opening', ariaBusy: 'true' }, tab.explorers, tab.termWrap, tab.openLoader)
 
   // panneau de droite (largeur commune à tous les panneaux, redimensionnable)
@@ -1145,9 +1215,10 @@ function openFiles(server, { terminal = false } = {}) {
 
   // barre d'outils (tout à droite)
   tab.bar = {}
-  for (const [key, ic, title] of BAR) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
+  tab.barItems = barFor(server)
+  for (const [key, ic, title] of tab.barItems) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
   tab.barToggle = h('button', { className: 'ib rbar-toggle', onclick: toggleRightBar })
-  tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') }, tab.barToggle, ...BAR.map(([k]) => tab.bar[k]))
+  tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') }, tab.barToggle, ...tab.barItems.map(([k]) => tab.bar[k]))
   tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, tab.rightBar)
   applyI18n(tab.el)
   updateBar(tab)
@@ -1159,7 +1230,7 @@ function openFiles(server, { terminal = false } = {}) {
     tab.wsMain.ariaBusy = 'false'
     tab.openLoader.remove()
   })
-  if (terminal) openTerminal(tab)
+  if (terminal && isShell(server)) openTerminal(tab)
 }
 
 // ---------- Init ----------
@@ -1178,6 +1249,7 @@ function openFiles(server, { terminal = false } = {}) {
   applyTheme()
   refreshLanguage()
   servers = await api.invoke('servers:list')
+  renderServers()
   quickActions = await api.invoke('actions:list')
   logFavs = await api.invoke('favs:list')
   groups = await api.invoke('groups:list')
@@ -1185,6 +1257,7 @@ function openFiles(server, { terminal = false } = {}) {
   renderServers()
   api.invoke('premium:status').then(updatePremium).catch(() => {})
   await api.invoke('teams:status').then(updateAccount).catch(()=>{})
+  servers=await api.invoke('servers:list')
   renderServers()
   if (settings.restoreConnections) {
     const session = await api.invoke('session:get')

@@ -181,7 +181,7 @@ async function exportActions() {
 }
 
 // un onglet par serveur (le premier ouvert)
-const openServerTabs = () => [...new Map(tabs.map(tb => [tb.server.id, tb])).values()]
+const openServerTabs = () => [...new Map(tabs.filter(tb => isShell(tb.server)).map(tb => [tb.server.id, tb])).values()]
 
 async function runAction(tab, a, all) {
   const targets = (all ? openServerTabs() : [tab]).filter(tb=>sharedVisible(a,tb))

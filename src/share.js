@@ -5,6 +5,7 @@ const path = require('path')
 
 // Seuls les champs listés sortent (par défaut : jamais le mot de passe ni l'empreinte d'hôte).
 async function exportZip(items, file, fields = ['name', 'host', 'port', 'user', 'key']) {
+  if(items.some(s=>s.networkAccess?.mode==='bastion'))throw Error('Routed servers require a configuration ZIP with dependencies')
   const zip = new AdmZip()
   items.forEach((s, i) => {
     const name = `${String(i + 1).padStart(2, '0')}-${s.name.replace(/[^\w.-]+/g, '_')}.json`

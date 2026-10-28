@@ -1,9 +1,12 @@
+const {serverOptions}=require('./server-options')
+const {storageFields}=require('./server-type')
 const AdmZip = require('adm-zip')
 const fs = require('fs')
 const crypto = require('crypto')
 const TYPES = ['groups', 'servers', 'actions', 'paths']
 const pick = (o, fields) => Object.fromEntries(fields.filter(k => o[k] !== undefined).map(k => [k, o[k]]))
-const endpoint = s => JSON.stringify([s.host?.trim().toLowerCase(), Number(s.port) || 22, s.user || ''])
+const REF = ['host', 'port', 'user', 'type', 'bucket']
+const endpoint = s => JSON.stringify([s.host?.trim().toLowerCase(), Number(s.port) || 22, s.user || '', ...(s.type && s.type !== 'ssh' ? [s.type, s.bucket || ''] : [])])
 const empty = () => Object.fromEntries(TYPES.map(k => [k, []]))
 function select(data, selected) {
   const out = empty()
@@ -14,13 +17,15 @@ function select(data, selected) {
   }
   return out
 }
-function writeBundle(data, file) {
+function writeBundle(data, file, options = {}) {
+  if(!options.transformItem&&data.servers.some(s=>s.networkAccess&&s.networkAccess.mode!=='direct'))throw Error('Unsupported connection configuration; use an edition that preserves its metadata')
   const zip = new AdmZip()
-  zip.addFile('manifest.json', Buffer.from(JSON.stringify({ format: 'cyberdog-config', version: 1, created: new Date().toISOString(), counts: Object.fromEntries(TYPES.map(k => [k, data[k].length])) }, null, 2)))
+  zip.addFile('manifest.json', Buffer.from(JSON.stringify({ format: 'cyberdog-config', version: options.version || 1, ...(options.features?.length ? {features:options.features} : {}), created: new Date().toISOString(), counts: Object.fromEntries(TYPES.map(k => [k, data[k].length])) }, null, 2)))
   for (const k of TYPES) for (const [i, value] of data[k].entries()) {
-    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite'], actions: ['id', 'name', 'script'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
-    const item = pick(value, fields)
-    if (k === 'paths' && item.server) item.server = pick(item.server, ['host', 'port', 'user'])
+    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite', 'website', 'tags', 'downloadDir', 'authMode', 'type', 'url', 'region', 'bucket', 'preset', 'virtualHost', 'security', 'insecureTls'], actions: ['id', 'name', 'script'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
+    let item = pick(value, fields)
+    if(options.transformItem)item=options.transformItem(k,item,value)
+    if (k === 'paths' && item.server) item.server = pick(item.server, REF)
     const name = String(value.name || 'item').replace(/[^\w.-]+/g, '_').slice(0, 80)
     zip.addFile(`${k}/${String(i + 1).padStart(3, '0')}-${name}.json`, Buffer.from(JSON.stringify(item, null, 2)))
   }
@@ -30,13 +35,13 @@ function linkPaths(paths, servers) {
   return paths.map(p => {
     if (!p.serverId) return p
     const server = servers.find(s => s.id === p.serverId) || (p.server && servers.find(s => endpoint(s) === endpoint(p.server)))
-    return server ? { ...p, serverId: server.id, server: pick(server, ['host', 'port', 'user']) } : p
+    return server ? { ...p, serverId: server.id, server: pick(server, REF) } : p
   })
 }
 function portable(data) {
-  return { ...data, paths: data.paths.map(p => ({ ...p, ...(p.serverId && data.servers.find(s => s.id === p.serverId) ? { server: pick(data.servers.find(s => s.id === p.serverId), ['host', 'port', 'user']) } : {}) })) }
+  return { ...data, paths: data.paths.map(p => ({ ...p, ...(p.serverId && data.servers.find(s => s.id === p.serverId) ? { server: pick(data.servers.find(s => s.id === p.serverId), REF) } : {}) })) }
 }
-function readBundle(file) {
+function readBundle(file, options = {}) {
   if (fs.statSync(file).size > 32 * 1024 * 1024) throw new Error('Configuration ZIP exceeds 32 MB')
   const entries = new AdmZip(file).getEntries().filter(e => !e.isDirectory && !e.entryName.includes('__MACOSX') && !e.entryName.split('/').at(-1).startsWith('._'))
   if (entries.length > 10000 || entries.reduce((n, e) => n + e.header.size, 0) > 32 * 1024 * 1024) throw new Error('Configuration ZIP exceeds size limits')
@@ -45,7 +50,7 @@ function readBundle(file) {
   if (manifest) {
     if (manifest.header.size > 10000) throw new Error('Invalid configuration manifest')
     const m = JSON.parse(manifest.getData().toString('utf8'))
-    if (m.format !== 'cyberdog-config' || m.version !== 1) throw new Error('Unsupported configuration ZIP version')
+    if (m.format !== 'cyberdog-config' || !(options.versions || [1]).includes(m.version) || m.features && (!Array.isArray(m.features) || m.features.some(feature=>!(options.features||[]).includes(feature)))) throw new Error('Unsupported configuration ZIP version')
   }
   for (const e of entries) {
     if (!e.entryName.endsWith('.json') || e === manifest) continue
@@ -59,7 +64,8 @@ function readBundle(file) {
   }
   return data
 }
-function merge(current, incoming) {
+function merge(current, incoming, finalize) {
+  if(!finalize&&incoming.servers.some(s=>s.networkAccess&&s.networkAccess.mode!=='direct'))throw Error('Unsupported connection configuration; refusing to discard routing metadata')
   const out = Object.fromEntries(TYPES.map(k => [k, current[k].map(x => ({ ...x }))]))
   const added = Object.fromEntries(TYPES.map(k => [k, 0]))
   let skipped = 0
@@ -79,7 +85,7 @@ function merge(current, incoming) {
     let group = groupIds.get(s.group)
     // Legacy ZIPs stored the group name instead of its ID.
     if (!group && text(s.group) && !incoming.groups.some(g => g.id === s.group) && !s.id) group = ensureGroup({ name: s.group })
-    if (!existing) { existing = { id: crypto.randomUUID(), name: String(s.name || s.host), host: s.host.trim(), port: Number(s.port) || 22, user: String(s.user || ''), favorite: !!s.favorite, ...(typeof s.key === 'string' ? { key: s.key } : {}), ...(group ? { group } : {}) }; out.servers.push(existing); added.servers++ }
+    if (!existing) { const storage = storageFields(s); existing = { ...serverOptions(s), ...(['password','key'].includes(s.authMode)?{authMode:s.authMode}:{}), id: crypto.randomUUID(), name: String(s.name || s.host), host: s.host.trim(), port: Number(s.port) || 22, user: String(s.user || ''), favorite: !!s.favorite, ...(typeof s.key === 'string' ? { key: s.key } : {}), ...(group ? { group } : {}), ...storage }; out.servers.push(existing); added.servers++ }
     if (group && !existing.group) existing.group = group
     if (s.id) serverIds.set(s.id, existing.id)
   }
@@ -98,6 +104,7 @@ function merge(current, incoming) {
     if (out.paths.some(x => x.path === p.path && (x.serverId || '') === (serverId || '') && x.name === String(p.name || ''))) continue
     out.paths.push({ id: crypto.randomUUID(), name: String(p.name || ''), path: p.path, ...(serverId ? { serverId } : {}) }); added.paths++
   }
+  if(finalize)finalize(out,incoming,serverIds,current)
   return { data: out, added, skipped }
 }
 module.exports = { TYPES, select, writeBundle, portable, readBundle, merge, linkPaths }

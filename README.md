@@ -23,6 +23,13 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0-beta.2 includes a Test-mode Premium preview; commercial sales are not open yet.
 
+## New in 1.7.0-beta.3
+
+- **FTP / FTPS:** new server type with explicit or implicit TLS, an option to accept self-signed certificates, and up to three parallel control connections so browsing continues during transfers.
+- **S3 providers:** presets for Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces and Scaleway.
+- **S3 improvements:** optional session token (temporary credentials, stored encrypted), multipart upload for files above 64 MB, and virtual-hosted addressing (`bucket.host`).
+- **Azure Blob Storage:** new server type using an account key (SharedKey) or a SAS token; large files are sent as block lists.
+
 ## New in 1.7.0-beta.2
 
 - Private Premium modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.

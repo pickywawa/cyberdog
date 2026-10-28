@@ -44,7 +44,7 @@ async function exercise(security, insecureTls) {
     assert.strictEqual(typeof s.chmod, 'function')
     await call(s, 'chmod', '/d/a b.txt', 0o600)
     const [entry] = await call(s, 'readdir', '/d')
-    assert.strictEqual(entry.attrs.mode & 0o777, 0o600, 'mode ' + (entry.attrs.mode & 0o777).toString(8))
+    if (process.platform !== 'win32') assert.strictEqual(entry.attrs.mode & 0o777, 0o600, 'mode ' + (entry.attrs.mode & 0o777).toString(8)) // Windows file systems have no Unix mode bits
     assert(entry.attrs.isFile())
 
     // streamed upload (no staging file), parallel listing while a transfer runs, download, rename

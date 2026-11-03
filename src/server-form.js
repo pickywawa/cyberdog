@@ -1,5 +1,5 @@
-// Connection fields of the server types other than SSH. One definition feeds both the community server form
-// and the Premium editor, so every type is available (and looks the same) with or without Premium.
+// Connection fields of the server types other than SSH. One definition feeds the server form and the workspace editor,
+// so every type is available (and looks the same) in both.
 const SERVER_TYPES = [['ssh', 'type.ssh'], ['ftp', 'type.ftp'], ['smb', 'type.smb'], ['s3', 'type.s3'], ['azure', 'type.azure'], ['azurefiles', 'type.azurefiles'], ['webdav', 'type.webdav'], ['dropbox', 'type.dropbox'], ['onedrive', 'type.onedrive'], ['gdrive', 'type.gdrive']]
 const PROXIED = ['ftp', 's3', 'azure', 'azurefiles', 'webdav', 'dropbox', 'onedrive', 'gdrive']
 const DRIVES = ['dropbox', 'onedrive', 'gdrive']

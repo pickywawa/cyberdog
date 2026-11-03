@@ -19,9 +19,9 @@ A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, serve
 
 ---
 
-## In development: licensed Premium teams
+## New in 1.8.0: everything free, with accounts and teams
 
-Development builds support purchase-email and license-key activation without accounts or email codes. Active licenses allow team creation and shared servers; invitations use a member ID. The server verifies licensing and permissions for every operation. SSH passwords and keys stay local. Version 1.7.0 includes a Test-mode Premium preview; commercial sales are not open yet.
+Every feature is free. Sign in is optional and only needed for teams: create an account with your e-mail address in **Settings → Sign in**, create a team, then invite colleagues with an **invitation link** (valid 7 days, one or several uses, revocable). Permissions are verified server-side from your Supabase session for every operation. SSH passwords and keys stay local unless you choose to sync them for a shared server. Secret vaults and SSH bastions work without an account. The former Premium preview and its licensing have been removed.
 
 ## New in 1.7.0
 
@@ -30,9 +30,9 @@ Development builds support purchase-email and license-key activation without acc
 - **Proxy:** FTP, S3, Azure, WebDAV and the cloud drives can go through an HTTP (CONNECT) or SOCKS5 proxy, with optional credentials (Options tab).
 - **Local pane:** a button next to the split button opens this computer's files beside the server. Hidden by default: enable it in Settings → General. Dragging files between the panes uploads and downloads; deleting in the local pane sends files to the Trash.
 - **Resume interrupted transfers:** a failed or cancelled transfer keeps its plan; **Resume** skips finished files and continues the partial one where both ends allow it (SFTP, FTP, local, SMB and ranged downloads from every protocol; object-storage uploads restart that file). Unfinished transfers survive a restart.
-- **Premium: server-to-server copy** from the context menu (**Copy to another server…**), connection to connection without staging files on disk.
+- **Server-to-server copy** from the context menu (**Copy to another server…**), connection to connection without staging files on disk.
 
-## Also in 1.7.0: protocols and Premium preview
+## Also in 1.7.0: protocols and teams preview
 
 - **FTP:** streamed uploads (progress follows the network), Unix permissions (owner, group, mode columns and **Permissions…** through `SITE CHMOD`), and import of FTP/FTPS sites from FileZilla, WinSCP and Cyberduck.
 - **S3:** AWS profiles from `~/.aws` (static keys, `credential_process`, IAM Identity Center after `aws sso login`, role assumption) or environment variables, automatic bucket-region detection, and **Copy shared link** (presigned URL, up to 7 days).
@@ -48,10 +48,9 @@ Development builds support purchase-email and license-key activation without acc
 
 ## New in 1.7.0-beta.2
 
-- Private Premium modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.
+- Teams modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.
 - Ten local vault connectors, including TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server and Windows RDM. See [requirements and limits](docs/secret-vaults.md).
 - Settings with left navigation, theme-matched backgrounds, branded vault picker and save icon.
-- Premium is a Test-mode preview. The open-source core remains free; proprietary modules are assembled from the private repository.
 
 ## New in 1.6.3
 
@@ -260,7 +259,7 @@ System, Light, Dark, Midnight, Dracula, Forest and Sunset — the terminal follo
 - Passwords are **encrypted with your OS keychain** (macOS Keychain / Windows DPAPI) and never leave your machine. Exports never contain passwords or host fingerprints.
 - **Host keys** are pinned on first connection (trust on first use); a changed key blocks the connection until you accept it.
 - `sudo` passwords are sent over the encrypted SSH channel on stdin, never on a command line.
-- No telemetry. Community configuration stays local; optional Premium workspaces store explicitly shared metadata on Supabase.
+- No telemetry. Configuration stays local; the optional account stores only the metadata you explicitly share with a team on Supabase.
 
 Configuration lives in:
 
@@ -339,18 +338,18 @@ The SSH key manager also lists public keys authorized on the current server from
 
 The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Its static files live in [site/](site/), deployed by GitHub Actions when those files change on main. Preview locally with `python3 -m http.server 8765 --directory site`.
 
-### Premium shared assets and server history
+### Shared assets and server history
 
 Groups, quick actions and saved paths support **Local**, **My workspace** and writable **team** locations. Groups stay within their workspace; personal paths/actions can be used on your servers, while team paths/actions apply to that team's servers. Shared scripts require full preview and are revalidated before execution. Do not embed credentials in shared scripts.
 
 Member read/write permissions cover shared configuration and server restoration. Catalogs load at startup and after your own changes; other members' changes are available on the next launch.
 
-Open server history from a shared server's context menu or the Premium personal/team panel, including deleted servers. Revisions record the verified license identity, email, time and configuration. Restoring creates another revision and requires write permission. Snapshots include only name, host, port, SSH username and group, never SSH credentials. Local configurations have no cloud history. Attribution identifies a license, not individual people sharing that license.
+Open server history from a shared server's context menu or the personal/team panel in Settings → Sign in, including deleted servers. Revisions record the signed-in account, email, time and configuration. Restoring creates another revision and requires write permission. Snapshots include only name, host, port, SSH username and group, never SSH credentials. Local configurations have no cloud history. Attribution identifies the account that made the change.
 
-### Premium secret vault integrations
+### Secret vault integrations
 
-**Settings → Secret vaults** (Premium star) adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** and **Windows Remote Desktop Manager** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
+**Settings → Secret vaults** adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** and **Windows Remote Desktop Manager** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
 
 See the [setup guide and provider comparison](./docs/secret-vaults.md) for CLI prerequisites, sessions, Vault policies and custom field mapping.
 
-Settings now use a left navigation. Premium implementations live in the private repository; a community checkout runs independently.
+Settings use a left navigation, with a **Sign in** tab for the optional account.

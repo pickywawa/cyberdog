@@ -58,7 +58,7 @@ const accountIPC = (channel, handler) => ipcMain.handle(channel, (event,...args)
   if(!win || event.sender!==win.webContents || event.senderFrame!==win.webContents.mainFrame || event.senderFrame.url.split(/[?#]/)[0]!==expected) throw new Error('access_denied')
   return handler(...args)
 })
-const extension=require('./premium-extension').load({
+const extension=require('./workspace/main').createExtension({
  accountIPC,send:(...args)=>send(...args),conns,pendingVaultClients,list:()=>list(),t:(...a)=>t(...a),
  get servers(){return servers},set servers(value){servers=value},persist:()=>persist(),
  get groups(){return groups},set groups(value){groups=value},saveGroups:()=>saveGroups(),
@@ -382,7 +382,6 @@ autoUpdater.on('update-not-available', () => {
 
 async function connect(s, options = {}) {
   if(s.networkAccess&&s.networkAccess.mode!=='direct'){
-    if(!extension.openConnection)throw Error('premium_required')
     return extension.openConnection(s, options)
   }
   const auth=await extension.connectionAuth(s)
@@ -447,7 +446,6 @@ ipcMain.handle('servers:save', async (_, d) => {
   if(d.key)localSshKeys.readPrivateKey(d.key)
   const options=serverOptions(d,servers.find(s=>s.id===(d.id||d.copyFrom)))
   const networkAccess=await extension.validateServer?.(d)
-  if(d.networkAccess?.mode!=='direct'&&d.networkAccess&&!extension.validateServer)throw Error('premium_required')
   const prev = servers.find(x => x.id === (d.id || d.copyFrom))
   const form = { ...d, type: d.type || prev?.type }
   // an endpoint that was only derived from the previous preset/region must follow the new ones
@@ -823,9 +821,8 @@ ipcMain.handle('sftp:upload', async (_, id, locals, dir) => {
   return transfers.run(id, 'upload', path.basename(locals[0]), { refs: { src: { disk: true }, dst: { connId: id, serverId: sid } }, serverIds: [sid], top: locals.map(p => ({ source: p, target: posix.join(dir, path.basename(p)) })) })
 })
 ipcMain.handle('transfers:resume', (_, id) => transfers.resume(id).then(ok => ok, e => { throw e }))
-// Copy between two servers, straight from one connection to the other (Premium)
+// Copy between two servers, straight from one connection to the other
 ipcMain.handle('transfer:copyToServer', async (_, id, paths, serverId, dir) => {
-  if (!(await extension.hasPremium?.())) throw new Error('premium_required')
   const from = conns.get(id)?.server, to = (await resolveRef({ serverId })) && [...conns.values()].find(c => c.server?.id === serverId)?.server
   if (!from || !to) throw new Error(t('err.lost'))
   return transfers.run(id, 'copy', posix.basename(paths[0]), { refs: { src: { connId: id, serverId: from.id }, dst: { serverId } }, serverIds: [from.id, to.id], top: paths.map(p => ({ source: p, target: posix.join(dir, posix.basename(p)) })) })
@@ -1263,6 +1260,24 @@ ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
 ipcMain.on('term:write', (_, id, d) => conns.get(id)?.stream?.write(d))
 ipcMain.on('term:resize', (_, id, cols, rows) => conns.get(id)?.stream?.setWindow(rows, cols, 0, 0))
 
+// ---------- Liens d'invitation (cyberdog://invite/<jeton>) ----------
+const INVITE_PREFIX = 'cyberdog://invite/'
+const inviteFrom = args => args.find(a => typeof a === 'string' && a.startsWith(INVITE_PREFIX) && a.length < 200)
+let pendingInvite = inviteFrom(process.argv) || null
+function receiveInvite(link) {
+  if (!link) return
+  if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+    send('invite:received', link)
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  } else pendingInvite = link
+}
+accountIPC('invite:take', () => { const link = pendingInvite; pendingInvite = null; return link })
+if (!app.requestSingleInstanceLock()) app.quit()
+else app.on('second-instance', (_, argv) => receiveInvite(inviteFrom(argv)))
+app.on('open-url', (event, url) => { event.preventDefault(); if (url.startsWith(INVITE_PREFIX) && url.length < 200) receiveInvite(url) })
+if (app.isPackaged) app.setAsDefaultProtocolClient('cyberdog')
+
 // ---------- Fenêtre ----------
 app.whenReady().then(() => {
   require('./smb-storage').cleanupStaleMounts().catch(() => {}) // shares left mounted by a crash
@@ -1308,7 +1323,7 @@ app.whenReady().then(() => {
     ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } } : app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16171d' : '#ffffff',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:true,additionalArguments:extension.available?['--cyberdog-premium']:[] },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:true },
   })
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}))
   win.webContents.on('will-navigate',event=>event.preventDefault())

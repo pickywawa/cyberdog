@@ -1,6 +1,6 @@
-# Coffres de secrets — Premium
+# Coffres de secrets
 
-L’onglet **Paramètres → Coffres de secrets**, identifié par une étoile Premium, permet d’ajouter un coffre, de parcourir ses entrées et de choisir celles à afficher. Chaque coffre possède sa section dans la liste. Un raccourci fixe le nom, l’hôte, le port et l’utilisateur SSH ; son bouton crayon modifie cette cible localement.
+L’onglet **Paramètres → Coffres de secrets** permet d’ajouter un coffre, de parcourir ses entrées et de choisir celles à afficher. Chaque coffre possède sa section dans la liste. Un raccourci fixe le nom, l’hôte, le port et l’utilisateur SSH ; son bouton crayon modifie cette cible localement.
 
 Les identifiants sont lus à chaque ouverture SFTP ou terminal. Les changements de mot de passe sont donc pris en compte à la prochaine connexion, sans toucher aux connexions déjà établies. Les cibles des raccourcis ne changent pas automatiquement lorsque l’entrée du coffre est modifiée. Il faut modifier explicitement le raccourci pour changer de serveur ou de compte SSH.
 
@@ -108,7 +108,7 @@ Exemple d’entrée KV v2 :
 - Les connecteurs, raccourcis et empreintes des serveurs résident dans un fichier chiffré par le système, dans le profil local de l’application. Le stockage en texte clair de secours sous Linux est refusé.
 - Aucun mot de passe SSH, clé privée ou phrase secrète lu depuis une entrée n’est enregistré par Cyberdog ni envoyé à son interface. Ils sont utilisés en mémoire pour la connexion SSH. Les logiciels fournisseurs conservent leurs propres caches et sessions.
 - Les connecteurs et raccourcis sont exclus des exports de configuration, des transferts vers une équipe et de Supabase. Les fichiers déjà téléchargés par SSH restent des fichiers ordinaires locaux.
-- L’activation Premium existante est vérifiée avant les opérations d’accès au coffre. Cette vérification utilise le backend de licence, sans transmettre de contenu du coffre. Une vérification qui échoue ne donne pas accès aux secrets.
+- Les coffres fonctionnent sans compte : aucun contenu de coffre n’est transmis à un service Cyberdog.
 - Retirer une entrée de Cyberdog ne supprime jamais le secret chez son fournisseur. Verrouiller dans Cyberdog ne verrouille pas l’application 1Password/Bitwarden et ne révoque pas les autorisations externes.
 - La confiance initiale et le contrôle de l’empreinte SSH restent actifs. Changer la cible d’un raccourci réinitialise son empreinte ; renommer seulement le raccourci la conserve.
 
@@ -125,9 +125,7 @@ L’architecture sépare le stockage local, la normalisation des champs et les a
 
 ## Vérifications
 
-`npm test` dans le dépôt public valide le fonctionnement gratuit et l’absence d’implémentations Premium dans ses sources. `npm test` dans le dépôt privé valide les dix adaptateurs, les permissions et le stockage.
-
-Après `npm run premium:install`, lancer depuis le dépôt public `npx electron ../cyberdog-premium/smoke/vaults-ui.cjs` pour les tests SFTP/SSH isolés ; `npx electron test/manual/settings-ui.cjs` teste une copie publique sans aucun module privé. Les comptes réels des fournisseurs doivent être validés avec leurs propres autorisations.
+`npm test` valide les dix adaptateurs, les permissions et le stockage ; `node test/smoke/vault-protocol-sandbox.cjs` exerce les protocoles HTTPS locaux et des CLI simulées. Les comptes réels des fournisseurs doivent être validés avec leurs propres autorisations.
 
 ### Connecteurs d’entreprise et validation
 

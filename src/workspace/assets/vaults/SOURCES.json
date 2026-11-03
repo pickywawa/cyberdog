@@ -1,0 +1,12 @@
+{
+  "onepassword": "https://1password.com/favicon.ico",
+  "bitwarden": "https://bitwarden.com/favicon.ico",
+  "hashicorp": "https://developer.hashicorp.com/favicon.ico",
+  "aws": "https://aws.amazon.com/favicon.ico",
+  "azure": "https://azure.microsoft.com/favicon.ico",
+  "teampass": "https://raw.githubusercontent.com/nilsteampassnet/TeamPass/master/public/assets/images/teampass-logo2-login.png",
+  "keeper": "https://www.keepersecurity.com/favicon.ico",
+  "rdm": "https://devolutions.net/favicon.ico",
+  "manageengine": "https://www.manageengine.com/favicon.ico",
+  "devolutions": "https://devolutions.net/favicon.ico"
+}

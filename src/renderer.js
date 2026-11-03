@@ -92,7 +92,7 @@ const AUTH_FAIL = /authentication methods failed|authentication failure/i
 function errText(e) {
   const m = e.message || String(e)
   if(m.startsWith('vault.')||m.startsWith('bastion.'))return t(m)
-  if (['server_write_required','access_denied','owner_required','premium_required'].includes(m)) return t('err.denied')
+  if (['server_write_required','access_denied','owner_required','auth_required'].includes(m)) return t('err.denied')
   if(['group_in_use','invalid_group','invalid_asset','script_changed'].includes(m))return t('shared.'+m)
   if (m.includes('KEY_PASSPHRASE_REQUIRED')) return t('keys.unlock')
   if (AUTH_FAIL.test(m)) return t('err.auth')
@@ -176,16 +176,15 @@ addEventListener('dragover', e => e.preventDefault())
 addEventListener('drop', e => e.preventDefault())
 
 // NB : un handler on* qui renvoie false annule l'action par défaut (focus, saisie) : toujours des blocs ici.
-function tabLayout(tabs, fields, rows, extra) {
+function tabLayout(tabs, fields, rows) {
   const pages = tabs.map(([key]) => h('section', { className: 'tab-page', hidden: key !== tabs[0][0] }, ...rows.filter((_, i) => fields[i].tab === key)))
-  if (extra) pages[0].append(extra)
   const nav = h('nav', { className: 'tab-nav' }, ...tabs.map(([, label, ico], i) => h('button', {
     type: 'button', ariaSelected: String(!i),
     onclick: () => pages.forEach((pg, j) => { pg.hidden = j !== i; nav.children[j].setAttribute('aria-selected', String(j === i)) }),
   }, h('span', { innerHTML: icon(ico) }), h('span', { textContent: label }))))
   return h('div', { className: 'tab-layout' }, nav, h('div', { className: 'tab-pages' }, ...pages))
 }
-function modal(title, fields, okLabel, { wide = false, premiumHint = false, lockedRoute = false, tabs = [] } = {}) {
+function modal(title, fields, okLabel, { wide = false, tabs = [] } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
     const previous = !m.hidden ? {nodes:[...m.childNodes],mousedown:m.onmousedown} : null
@@ -197,12 +196,11 @@ function modal(title, fields, okLabel, { wide = false, premiumHint = false, lock
         sel.value = f.value || ''
         return sel
       }
-      return h('input', { type: f.type || 'text', value: f.value || '', placeholder: f.placeholder || '' })
+      return h('input', { type: f.type || 'text', value: f.value || '', placeholder: f.placeholder || '', readOnly:!!f.readOnly })
     })
     const locationIndex=fields.findIndex(f=>f.name==='teamId')
     if(locationIndex>=0){const sync=()=>{const scope=inputs[locationIndex].value;fields.forEach((f,i)=>{if(f.name==='group'){for(const option of inputs[i].options){option.disabled=!!option.value&&option._scope!==scope;option.hidden=option.disabled}if(inputs[i].selectedOptions[0]?.disabled)inputs[i].value=''}if(f.requireScope!==undefined){inputs[i].disabled=f.requireScope!==scope;if(inputs[i].disabled)inputs[i].checked=true}})};inputs[locationIndex].onchange=sync;sync()}
     const rows = fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i]))
-    const hint = h('div',{className:'community-bastion'},h('label',{className:'check'},h('input',{type:'checkbox',disabled:true,checked:lockedRoute}),h('span',{textContent:t('bastion.unavailable')})))
     const typeAt = fields.findIndex(f => f.name === 'type')
     if (typeAt >= 0) {
       // a field is shown for its `types`, and only while its controlling field (`when: [name, value]`) has that value
@@ -212,7 +210,6 @@ function modal(title, fields, okLabel, { wide = false, premiumHint = false, lock
           const ctl = f.when && inputs[fields.findIndex(x => x.name === f.when[0])]
           rows[i].hidden = !!(f.types && !f.types.includes(inputs[typeAt].value)) || !!(ctl && !whenMatches(f.when, ctl.value))
         })
-        hint.hidden = inputs[typeAt].value !== 'ssh'
       }
       inputs[typeAt].onchange = sync
       fields.forEach(f => { if (f.when) { const c = inputs[fields.findIndex(x => x.name === f.when[0])]; if (c) c.addEventListener('change', sync) } })
@@ -225,7 +222,7 @@ function modal(title, fields, okLabel, { wide = false, premiumHint = false, lock
       onkeydown: e => { if (e.key === 'Escape') close(null) },
     },
       h('h3', { textContent: title }),
-      ...(tabs.length ? [tabLayout(tabs, fields, rows, premiumHint && hint)] : [...rows, ...(premiumHint ? [hint] : [])]),
+      ...(tabs.length ? [tabLayout(tabs, fields, rows)] : rows),
       h('div', { className: 'btns' },
         h('button', { type: 'button', textContent: t('btn.cancel'), onclick: () => close(null) }),
         h('button', { className: 'primary', textContent: okLabel })))
@@ -243,7 +240,7 @@ let srvQuery = ''
 
 // s : serveur à modifier ; duplicate : s sert de modèle pour un NOUVEAU serveur (mot de passe repris si laissé vide)
 async function serverForm(s, { duplicate = false } = {}) {
-  if (typeof premiumServerForm === 'function' && await premiumServerForm(s, { duplicate })) return
+  if (await workspaceServerForm(s, { duplicate })) return
   const edit = s && !duplicate
   const keepPass = s?.hasPass ? t(duplicate ? 'f.pass_same' : 'f.pass_keep') : t('f.pass_ph')
   const g = 'general'
@@ -260,7 +257,7 @@ async function serverForm(s, { duplicate = false } = {}) {
     { tab: 'options', name: 'website', label: t('f.website'), value: s?.website, placeholder: 'https://example.com' },
     { tab: 'options', name: 'tags', label: t('f.tags'), value: (s?.tags || []).join(', '), placeholder: t('f.tags_ph') },
     { tab: 'options', name: 'downloadDir', label: t('f.download_dir'), value: s?.downloadDir, placeholder: '~/Downloads' },
-  ], edit ? t('btn.save') : t('btn.add_ok'), { premiumHint: true, lockedRoute: s?.networkAccess?.mode === 'bastion', tabs: [[g, t('settings.tab.general'), 'server'], ['options', t('f.options'), 'sliders']] })
+  ], edit ? t('btn.save') : t('btn.add_ok'), { tabs: [[g, t('settings.tab.general'), 'server'], ['options', t('f.options'), 'sliders']] })
   if (!form) return
   const v = storagePayload(form, storageFieldDefs(null, ''))
   v.tags = v.tags.split(',').map(x => x.trim()).filter(Boolean)
@@ -292,7 +289,6 @@ const isShell = s => !s.type || s.type === 'ssh'
 // S3 (presigned URL) and Azure (SAS) can hand out time-limited read links
 const canLink = s => s.type === 's3' || (s.type === 'azure' && s.azureAuth !== 'entra')
 const hasPerms = s => isShell(s) || s.type === 'ftp' || (s.type === 'local' && api.platform !== 'win32')
-const premiumActive = () => (typeof accountState !== 'undefined' && !!accountState?.premium) || (typeof premiumState !== 'undefined' && !!premiumState?.active)
 const isDrive = s => ['dropbox', 'onedrive', 'gdrive'].includes(s.type)
 const LOCAL_PANE_SERVER = { id: 'local', type: 'local', name: 'Local' }
 const serverTarget = s => s.type === 'local' ? t('ex.local_name') : ({
@@ -509,7 +505,7 @@ $('#btn-lang').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect()
   menu(r.left, r.top - 4, Object.entries(LANGS).map(([k, name]) => ({ label: name, checked: k === lang, fn: () => setLang(k) })), { up: true })
 }
-$('#btn-premium').onclick = () => openPremiumDialog()
+$('#btn-account').onclick = () => openSettingsModal('account')
 $('#btn-settings').onclick = () => openSettingsModal()
 api.on('app:open-settings', openSettingsModal)
 function setTheme(name) { theme = name; settings.theme = name; applyTheme(); api.invoke('settings:set', { theme }) }
@@ -595,19 +591,22 @@ async function openSettingsModal(initialPage = 'general') {
   }
   paintSettingsUpdate()
 
+  const accountPage=settingsPage('account','none')
+  let accountMounted=false
   const vaultsPage=settingsPage('vaults','none')
   let vaultsMounted=false
-  const pages=[generalPage,editorPage,updatesPage,vaultsPage]
-  const sections=[['general','cog','settings.tab.general'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']]
+  const pages=[generalPage,accountPage,editorPage,updatesPage,vaultsPage]
+  const sections=[['general','cog','settings.tab.general'],['account','user','account.connect'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']]
   const buttons=new Map()
   const sidebar=h('nav',{className:'settings-nav',role:'tablist',ariaLabel:t('settings.title'),ariaOrientation:'vertical'})
   const switchTab=name=>{
     for(const [key,button] of buttons){const active=key===name;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1}
     for(const page of pages)page.style.display=page.dataset.page===name?'flex':'none'
+    if(name==='account'&&!accountMounted){accountMounted=true;accountPage.append(buildAccountSettings())}
     if(name==='vaults'&&!vaultsMounted){vaultsMounted=true;vaultsPage.append(buildVaultSettings())}
   }
   for(const [name,symbol,label] of sections){
-    const button=h('button',{type:'button',className:'settings-nav-item',role:'tab',id:'settings-tab-'+name,ariaControls:'settings-page-'+name,onclick:()=>switchTab(name)},h('span',{innerHTML:icon(symbol)}),h('span',{textContent:t(label)}),...(name==='vaults'?[h('span',{className:'settings-premium-mark',innerHTML:icon('star'),title:t('premium.title'),ariaLabel:t('premium.title')})]:[]))
+    const button=h('button',{type:'button',className:'settings-nav-item',role:'tab',id:'settings-tab-'+name,ariaControls:'settings-page-'+name,onclick:()=>switchTab(name)},h('span',{innerHTML:icon(symbol)}),h('span',{textContent:t(label)}))
     button.onkeydown=event=>{if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;event.preventDefault();const index=sections.findIndex(section=>section[0]===name),next=event.key==='Home'?0:event.key==='End'?sections.length-1:(index+(event.key==='ArrowDown'?1:-1)+sections.length)%sections.length;switchTab(sections[next][0]);buttons.get(sections[next][0]).focus()}
     buttons.set(name,button);sidebar.append(button)
   }
@@ -686,7 +685,7 @@ function closeTab(id) {
   const i = tabs.findIndex(tb => tb.id === id)
   const tb = tabs[i]
   tb.closed = true
-  if(typeof cancelPremiumConnection==='function')cancelPremiumConnection(tb.server.id)
+  cancelBastionConnection(tb.server.id)
   if (tb.connId) api.invoke('conn:close', tb.connId)
   for (const p of tb.panes) if (p.localPane && p.connId) api.invoke('conn:close', p.connId)
   closeTerminal(tb)
@@ -1000,7 +999,7 @@ async function extractArchive(tab, file, toFolder) {
   if ($('#toast').textContent.startsWith(t('t.extracting', { name: file.name }))) $('#toast').hidden = true
 }
 
-// Premium: copy files straight to another saved server, connection to connection
+// Copy files straight to another saved server, connection to connection
 async function copyToServer(tab, files) {
   const choices = servers.filter(x => !x.loading && !x.vaultId)
   const v = await modal(t('ctx.copy_to_server'), [
@@ -1008,7 +1007,7 @@ async function copyToServer(tab, files) {
     { name: 'dir', label: t('copy.dir'), value: '/' },
   ], t('btn.copy'))
   if (!v) return
-  try { await api.invoke('transfer:copyToServer', tab.connId, files, v.server, v.dir.trim() || '/') } catch (e) { toast(/premium_required/.test(e.message) ? t('premium.required') : errText(e), true) }
+  try { await api.invoke('transfer:copyToServer', tab.connId, files, v.server, v.dir.trim() || '/') } catch (e) { toast(errText(e), true) }
 }
 
 async function shareLink(tab, file) {
@@ -1032,7 +1031,7 @@ function ctxMenu(tab, e) {
   const full = x => join(tab.path, x.name)
   menu(e.clientX, e.clientY, [
     ...(tab.server.type !== 'local' ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) }] : []),
-    ...(tab.server.type !== 'local' && premiumActive() && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
+    ...(tab.server.type !== 'local' && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
     { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
     { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
     ...(one && hasPerms(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
@@ -1303,7 +1302,6 @@ function openFiles(server, { terminal = false } = {}) {
   groups = await api.invoke('groups:list')
   savedPaths = await api.invoke('paths:list')
   renderServers()
-  api.invoke('premium:status').then(updatePremium).catch(() => {})
   await api.invoke('teams:status').then(updateAccount).catch(()=>{})
   servers=await api.invoke('servers:list')
   renderServers()

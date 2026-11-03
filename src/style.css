@@ -560,7 +560,7 @@ body.resizing-y { cursor: row-resize; }
   .kvrow { grid-template-columns: 75px minmax(0, 1fr); }
   .security-tools > input { min-width: 0; width: 100%; }
 }
-/* Premium is optional; the local explorer remains available without an account. */
+/* The account is optional; the local explorer works without signing in. */
 
 
 
@@ -575,7 +575,7 @@ body.resizing-y { cursor: row-resize; }
 .workspace-actions { display:flex; align-items:center; gap:5px; padding:0 10px; flex:none; -webkit-app-region:no-drag }
 .workspace-actions button { border:0; background:transparent; padding:6px 10px; font-size:12px; border-radius:6px; color:var(--dim); white-space:nowrap }
 .workspace-actions button:hover { background:var(--hover); color:var(--text) }
-.workspace-actions .menu-premium,.workspace-actions .menu-premium:hover { color:#e6b84b; font-weight:600 }
+.workspace-actions .menu-account.signed-in { color:var(--text) }
 
 /* Settings: persistent navigation on the left, one scrollable panel on the right. */
 .settings-card{width:min(940px,calc(100vw - 40px));height:min(690px,calc(100vh - 56px));padding:0;gap:0;border-radius:16px}
@@ -590,14 +590,9 @@ body.resizing-y { cursor: row-resize; }
 .settings-nav-item:hover{background:var(--hover);color:var(--text)}
 .settings-nav-item.active{color:var(--text);background:var(--bg);border-color:var(--line);box-shadow:0 2px 8px color-mix(in srgb,var(--shadow) 20%,transparent)}
 .settings-nav-item.active>span:first-child{color:var(--accent)}
-.settings-nav-item .settings-premium-mark{display:flex;flex:none;color:#e6b84b}
-.settings-premium-mark svg{width:13px;height:13px}
 .settings-card .settings-panels{padding:24px;overflow-y:auto}
 .settings-card .settings-page{min-width:0}
 .settings-card>.btns{margin:0;padding:15px 24px;border-top:1px solid var(--line);background:var(--side)}
-.premium-placeholder{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:30px 12px}
-.premium-placeholder h3,.premium-placeholder p{margin:0}
-.premium-emblem{display:flex;padding:12px;color:#e6b84b;background:color-mix(in srgb,#e6b84b 12%,transparent);border-radius:12px}
 @media(max-width:660px){.settings-layout{grid-template-columns:154px minmax(0,1fr)}.settings-nav{padding:10px 7px}.settings-nav-item{padding:10px 8px;gap:7px;font-size:11px}.settings-card .settings-panels{padding:16px}}
 
 /* Match Cyberfox settings surfaces: content uses the app background, not menu gray. */

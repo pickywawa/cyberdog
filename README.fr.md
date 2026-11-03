@@ -19,9 +19,9 @@ Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal int�
 
 ---
 
-## En développement : équipes avec licence Premium
+## Nouveautés de 1.8.0 : tout est gratuit, avec comptes et équipes
 
-La version de développement propose une activation par email d’achat et clé de licence, sans compte ni code email. Une licence active permet de créer des équipes et de partager des serveurs ; les invitations utilisent un identifiant de membre. Le serveur vérifie la licence et les permissions à chaque opération. Les mots de passe et clés SSH restent locaux. La version 1.7.0 inclut cet aperçu Premium en mode Test ; la vente commerciale n’est pas encore ouverte.
+Toutes les fonctions sont gratuites. La connexion est facultative et ne sert qu’aux équipes : créez un compte avec votre email dans **Paramètres → Connexion**, créez une équipe, puis invitez vos collègues avec un **lien d’invitation** (valable 7 jours, à usage unique ou multiple, révocable). Le serveur vérifie les permissions à chaque opération à partir de votre session Supabase. Les mots de passe et clés SSH restent locaux, sauf si vous choisissez de les synchroniser pour un serveur partagé. Les coffres de secrets et les bastions SSH fonctionnent sans compte. L’ancien aperçu Premium et ses licences ont été supprimés.
 
 ## Nouveautés de 1.7.0
 
@@ -30,9 +30,9 @@ La version de développement propose une activation par email d’achat et clé 
 - **Proxy :** FTP, S3, Azure, WebDAV et les drives cloud peuvent passer par un proxy HTTP (CONNECT) ou SOCKS5, avec identifiants facultatifs (onglet Options).
 - **Volet local :** un bouton à côté du bouton de scission ouvre les fichiers de cet ordinateur à côté du serveur. Masqué par défaut : à activer dans Réglages → Général. Glisser des fichiers entre les volets envoie ou télécharge ; supprimer dans le volet local envoie à la corbeille.
 - **Reprise des transferts interrompus :** un transfert en échec ou annulé garde son plan ; **Reprendre** saute les fichiers terminés et continue le fichier partiel là où les deux extrémités le permettent (SFTP, FTP, local, SMB et lectures partielles de tous les protocoles ; les envois vers le stockage objet repartent du début pour ce fichier). Les transferts non terminés survivent à un redémarrage.
-- **Premium : copie de serveur à serveur** depuis le menu contextuel (**Copier vers un autre serveur…**), de connexion à connexion sans passer par le disque.
+- **Copie de serveur à serveur** depuis le menu contextuel (**Copier vers un autre serveur…**), de connexion à connexion sans passer par le disque.
 
-## Aussi dans 1.7.0 : protocoles et aperçu Premium
+## Aussi dans 1.7.0 : protocoles et aperçu des équipes
 
 - **FTP :** envois en flux (la progression suit le réseau), permissions Unix (colonnes propriétaire, groupe, droits et **Permissions…** via `SITE CHMOD`) et import des sites FTP/FTPS de FileZilla, WinSCP et Cyberduck.
 - **S3 :** profils AWS de `~/.aws` (clés, `credential_process`, IAM Identity Center après `aws sso login`, rôles) ou variables d'environnement, détection automatique de la région du bucket et **Copier le lien partagé** (URL présignée, 7 jours maximum).
@@ -48,10 +48,9 @@ La version de développement propose une activation par email d’achat et clé 
 
 ## Nouveautés de 1.7.0-beta.2
 
-- Modules Premium privés : espace personnel, équipes, serveurs et groupes/actions/chemins partagés, permissions et restauration des versions.
+- Modules d’équipe : espace personnel, équipes, serveurs et groupes/actions/chemins partagés, permissions et restauration des versions.
 - Dix connecteurs de coffres locaux, dont TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server et RDM sous Windows. Voir les [prérequis et limites](docs/secret-vaults.md).
 - Paramètres avec navigation à gauche, fond adapté au thème, logos des coffres et icône Enregistrer.
-- Le Premium est un aperçu en mode Test. Le cœur open source reste gratuit ; les modules propriétaires sont assemblés depuis le dépôt privé.
 
 ## Nouveautés de la version 1.6.3
 
@@ -260,7 +259,7 @@ Système, Clair, Sombre, Minuit, Dracula, Forêt et Coucher de soleil — le ter
 - Les mots de passe sont **chiffrés par le trousseau de votre système** (Trousseau macOS / DPAPI Windows) et ne quittent jamais votre machine. Les exports ne contiennent ni mots de passe ni empreintes d'hôte.
 - Les **clés d'hôte** sont mémorisées à la première connexion (trust on first use) ; une clé modifiée bloque la connexion tant que vous ne l'acceptez pas.
 - Les mots de passe `sudo` transitent par le canal SSH chiffré, sur stdin, jamais en ligne de commande.
-- Aucune télémétrie, aucun compte, aucun cloud : votre configuration, ce sont des fichiers JSON sur votre disque.
+- Aucune télémétrie, aucun compte obligatoire : votre configuration, ce sont des fichiers JSON sur votre disque. Le compte facultatif ne stocke que les métadonnées que vous partagez avec une équipe.
 
 La configuration se trouve dans :
 
@@ -339,18 +338,18 @@ Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le 
 
 Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Ses fichiers statiques sont dans [site/](site/), déployés par GitHub Actions lorsqu’ils changent sur main. Prévisualisation locale : `python3 -m http.server 8765 --directory site`.
 
-### Éléments partagés et historique Premium
+### Éléments partagés et historique
 
 Les formulaires des groupes, actions rapides et chemins enregistrés proposent **Local**, **Mon espace** et les **équipes** disposant du droit de modification. Les groupes restent propres à leur espace ; les chemins et actions personnels sont disponibles sur vos serveurs, ceux d’une équipe sur les serveurs de cette équipe. Un script partagé est affiché intégralement avant exécution et vérifié à nouveau côté serveur avant lancement. Évitez de placer des secrets dans ces scripts partagés.
 
 Les droits lecture seule/modification des membres couvrent les serveurs et ces éléments partagés. Le catalogue est chargé au démarrage et après vos modifications ; les changements des autres membres apparaissent au prochain lancement.
 
-Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. Le panneau Premium donne également accès à l’historique de Mon espace et de chaque équipe, y compris aux serveurs supprimés. Chaque version indique la date, l’adresse email et l’identifiant de licence de l’auteur. Une restauration crée une nouvelle version et nécessite le droit de modification. Seuls le nom, l’hôte, le port, l’utilisateur SSH et le groupe sont historisés : aucun mot de passe ou clé SSH. Les anciennes configurations locales ne sont pas historisées. Une licence partagée identifie la licence, pas la personne qui l’utilise.
+Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. Paramètres → Connexion donne également accès à l’historique de Mon espace et de chaque équipe, y compris aux serveurs supprimés. Chaque version indique la date, l’adresse email et l’identifiant du compte de l’auteur. Une restauration crée une nouvelle version et nécessite le droit de modification. Seuls le nom, l’hôte, le port, l’utilisateur SSH et le groupe sont historisés : aucun mot de passe ou clé SSH. Les anciennes configurations locales ne sont pas historisées. L’auteur est le compte qui a fait la modification.
 
-### Coffres de secrets Premium
+### Coffres de secrets
 
-L’onglet **Paramètres → Coffres de secrets** (étoile Premium) permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** et **Remote Desktop Manager sous Windows** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
+L’onglet **Paramètres → Coffres de secrets** permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** et **Remote Desktop Manager sous Windows** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
 
 Voir le [guide de configuration et les fournisseurs étudiés](./docs/secret-vaults.md) pour les prérequis CLI, sessions, droits Vault et champs personnalisés.
 
-Les paramètres utilisent désormais une navigation latérale. Les implémentations Premium sont conservées dans le dépôt privé ; une copie publique fonctionne sans elles.
+Les paramètres utilisent une navigation latérale, avec un onglet **Connexion** pour le compte facultatif.

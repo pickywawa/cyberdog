@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="workspace/style.css">
 </head>
 <body>
   <aside id="sidebar">
@@ -33,8 +34,8 @@
   <main>
     <div class="workspace-menu">
       <div id="tabs"></div>
-      <nav class="workspace-actions" aria-label="Premium">
-        <button id="btn-premium" type="button" class="menu-premium" data-i18n="premium.title">Premium</button>
+      <nav class="workspace-actions" aria-label="Account">
+        <button id="btn-account" type="button" class="menu-account" data-i18n="account.connect">Sign in</button>
       </nav>
     </div>
     <div id="panes">
@@ -69,7 +70,12 @@
   <script src="server-form.js"></script>
   <script src="renderer.js"></script>
   <script src="transfer-ui.js"></script>
-  <script src="premium-ui.js"></script>
+  <script src="workspace/i18n.js"></script>
+  <script src="workspace/ui/account-ui.js"></script>
+  <script src="workspace/ui/shared-ui.js"></script>
+  <script src="workspace/ui/vault-ui.js"></script>
+  <script src="workspace/ui/server-list.js"></script>
+  <script src="workspace/ui/bastions-ui.js"></script>
   <script src="panels.js"></script>
   <script src="ops.js"></script>
   <script src="config-ui.js"></script>

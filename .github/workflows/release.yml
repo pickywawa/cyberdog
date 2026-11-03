@@ -1,6 +1,6 @@
-name: Community builds
+name: Release
 
-# Public workflows build Community artifacts only; no private source or credentials are fetched.
+# Builds the installers on every version tag and publishes them as a GitHub release.
 on:
   push:
     tags: ['v*']
@@ -59,4 +59,26 @@ jobs:
           path: ${{ matrix.files }}
           if-no-files-found: error
 
-# Official Premium releases are assembled and published from the private repository.
+  publish:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in *-*) PRERELEASE="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" assets/* --title "Cyberdog ${GITHUB_REF_NAME#v}" --generate-notes $PRERELEASE

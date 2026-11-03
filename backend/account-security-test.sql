@@ -1,0 +1,44 @@
+begin;
+select set_config('cyberdog.uid_a',public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000001','same@fixture.invalid')::text,true);
+select set_config('cyberdog.uid_b',public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000002','same@fixture.invalid')::text,true);
+select set_config('cyberdog.uid_c',public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000003','other@fixture.invalid')::text,true);
+do $$begin if current_setting('cyberdog.uid_a')=current_setting('cyberdog.uid_b') then raise exception 'Email aliasing identities';end if;end $$;
+create function pg_temp.denied(lic text,a text,p jsonb,e text) returns void language plpgsql as $$begin
+ perform public.cyberdog_member_action(lic,a,p);raise exception 'TEST FAILED: allowed %',a;
+ exception when others then if sqlerrm<>e then raise exception 'TEST FAILED: expected %, got %',e,sqlerrm;end if;
+end $$;
+select set_config('cyberdog.tid',public.cyberdog_member_action('00000000-0000-4000-8000-000000000001','create_team','{"name":"Licensed fixture"}')->>'teamId',true);
+select pg_temp.denied('00000000-0000-4000-8000-000000000002','details',jsonb_build_object('teamId',current_setting('cyberdog.tid')),'access_denied');
+select public.cyberdog_member_action('00000000-0000-4000-8000-000000000001','invite',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'recipientId',current_setting('cyberdog.uid_b')));
+select set_config('cyberdog.iid',public.cyberdog_member_action('00000000-0000-4000-8000-000000000002','list')->'invitations'->0->>'id',true);
+select pg_temp.denied('00000000-0000-4000-8000-000000000003','accept_invite',jsonb_build_object('id',current_setting('cyberdog.iid')),'invitation_unavailable');
+select public.cyberdog_member_action('00000000-0000-4000-8000-000000000002','accept_invite',jsonb_build_object('id',current_setting('cyberdog.iid')));
+select pg_temp.denied('00000000-0000-4000-8000-000000000002','accept_invite',jsonb_build_object('id',current_setting('cyberdog.iid')),'invitation_unavailable');
+select pg_temp.denied('00000000-0000-4000-8000-000000000002','server_save',jsonb_build_object('teamId',current_setting('cyberdog.tid')),'server_write_required');
+select set_config('cyberdog.sid',public.cyberdog_member_action('00000000-0000-4000-8000-000000000001','server_save',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'name','VM','host','host.test','port',22,'user','root'))->>'serverId',true);
+select public.cyberdog_member_action('00000000-0000-4000-8000-000000000002','server_get',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'id',current_setting('cyberdog.sid')));
+select public.cyberdog_member_action('00000000-0000-4000-8000-000000000001','remove_member',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'userId',current_setting('cyberdog.uid_b')));
+select pg_temp.denied('00000000-0000-4000-8000-000000000002','server_get',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'id',current_setting('cyberdog.sid')),'access_denied');
+select pg_temp.denied('00000000-0000-4000-8000-000000000001','server_save',jsonb_build_object('teamId',current_setting('cyberdog.tid'),'pass','secret'),'secrets_forbidden');
+update cyberdog_private.license_identities set blocked=true where license_id='00000000-0000-4000-8000-000000000001';
+select public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000001','same@fixture.invalid');
+select pg_temp.denied('00000000-0000-4000-8000-000000000001','list','{}','access_denied');
+update cyberdog_private.license_identities set checked_at=now()-interval '5 minutes' where license_id='00000000-0000-4000-8000-000000000002';
+select pg_temp.denied('00000000-0000-4000-8000-000000000002','list','{}','access_denied');
+set local role authenticated;
+do $$begin
+ begin perform public.cyberdog_account('list');raise exception 'Legacy JWT allowed';exception when insufficient_privilege then null;end;
+ begin perform public.cyberdog_member_action('00000000-0000-4000-8000-000000000003','list');raise exception 'Client supplied actor allowed';exception when insufficient_privilege then null;end;
+ begin perform public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000999','forged@fixture.invalid');raise exception 'Self-granted identity';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+select set_config('cyberdog.link_team',public.cyberdog_member_action('00000000-0000-4000-8000-000000000003','create_team','{"name":"Link fixture"}')->>'teamId',true);
+select public.cyberdog_invite_link_create('00000000-0000-4000-8000-000000000003',current_setting('cyberdog.link_team')::uuid,repeat('a',64),1);
+select public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000004','joiner@fixture.invalid');
+do $$begin
+ perform public.cyberdog_invite_link_accept('00000000-0000-4000-8000-000000000004',repeat('a',64));
+ begin perform public.cyberdog_invite_link_accept('00000000-0000-4000-8000-000000000004',repeat('a',64));raise exception 'Link reused';exception when others then if sqlerrm<>'invitation_unavailable' then raise;end if;end;
+ begin perform public.cyberdog_invite_link_create('00000000-0000-4000-8000-000000000004',current_setting('cyberdog.link_team')::uuid,repeat('b',64),1);raise exception 'Plain member created a link';exception when others then if sqlerrm<>'admin_required' then raise;end if;end;
+ begin perform public.cyberdog_invite_link_accept('00000000-0000-4000-8000-000000000005',repeat('c',64));raise exception 'Unknown link accepted';exception when others then if sqlerrm<>'invitation_unavailable' then raise;end if;end;
+end $$;
+rollback;

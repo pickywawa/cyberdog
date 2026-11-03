@@ -4,7 +4,7 @@ select set_config('cyberdog.uid_b',public.cyberdog_bind_auth('00000000-0000-4000
 select set_config('cyberdog.uid_c',public.cyberdog_bind_auth('00000000-0000-4000-8000-000000000003','other@fixture.invalid')::text,true);
 do $$begin if current_setting('cyberdog.uid_a')=current_setting('cyberdog.uid_b') then raise exception 'Email aliasing identities';end if;end $$;
 create function pg_temp.denied(lic text,a text,p jsonb,e text) returns void language plpgsql as $$begin
- perform public.cyberdog_member_action(lic,a,p);raise exception 'TEST FAILED: allowed %',a;
+ perform public.cyberdog_member_action(lic::uuid,a,p);raise exception 'TEST FAILED: allowed %',a;
  exception when others then if sqlerrm<>e then raise exception 'TEST FAILED: expected %, got %',e,sqlerrm;end if;
 end $$;
 select set_config('cyberdog.tid',public.cyberdog_member_action('00000000-0000-4000-8000-000000000001','create_team','{"name":"Licensed fixture"}')->>'teamId',true);

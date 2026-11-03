@@ -4,7 +4,7 @@ select set_config('bastion.b',public.cyberdog_bind_auth('00000000-0000-4000-8000
 select set_config('bastion.pa',public.cyberdog_member_action('00000000-0000-4000-8000-000000001101','list')->>'personalSpaceId',true);
 select set_config('bastion.pb',public.cyberdog_member_action('00000000-0000-4000-8000-000000001102','list')->>'personalSpaceId',true);
 create function pg_temp.route_denied(lic text,a text,p jsonb,e text) returns void language plpgsql as $$begin
- perform public.cyberdog_member_action(lic,a,p);raise exception 'TEST FAILED allowed %',a;
+ perform public.cyberdog_member_action(lic::uuid,a,p);raise exception 'TEST FAILED allowed %',a;
  exception when others then if sqlerrm<>e then raise exception 'TEST FAILED expected %, got %',e,sqlerrm;end if;
 end $$;
 select set_config('bastion.jump',public.cyberdog_member_action('00000000-0000-4000-8000-000000001101','server_save',jsonb_build_object('teamId',current_setting('bastion.pa'),'name','Jump','host','jump.test','port',22,'user','jump'))->>'serverId',true);

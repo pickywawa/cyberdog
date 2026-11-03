@@ -9,7 +9,7 @@ do $$begin
  if jsonb_array_length(public.cyberdog_member_action('00000000-0000-4000-8000-000000000011','list')->'teams')<>0 then raise exception 'Personal space exposed as team';end if;
 end $$;
 create function pg_temp.denied(lic text,a text,p jsonb,e text) returns void language plpgsql as $$begin
- perform public.cyberdog_member_action(lic,a,p);raise exception 'TEST FAILED: allowed %',a;
+ perform public.cyberdog_member_action(lic::uuid,a,p);raise exception 'TEST FAILED: allowed %',a;
  exception when others then if sqlerrm<>e then raise exception 'TEST FAILED: expected %, got %',e,sqlerrm;end if;
 end $$;
 select set_config('space.sid',public.cyberdog_member_action('00000000-0000-4000-8000-000000000011','server_save',jsonb_build_object('teamId',current_setting('space.pa'),'name','Private','host','private.test','user','me','port',22))->>'serverId',true);

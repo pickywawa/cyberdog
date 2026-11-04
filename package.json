@@ -1,8 +1,8 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.8.0",
-  "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS & Windows).",
+  "version": "1.9.0",
+  "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS, Windows & Linux).",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -11,6 +11,7 @@
     "dist": "electron-builder --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:win": "electron-builder --win --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
     "dev": "electron .",
     "test:portable": "node test/run-portable.cjs"
   },
@@ -45,6 +46,26 @@
           "target": "dmg",
           "arch": [
             "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "synopsis": "SFTP explorer, terminal and server-health dashboard",
+      "maintainer": "pickywawa <44199439+pickywawa@users.noreply.github.com>",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
             "x64"
           ]
         }

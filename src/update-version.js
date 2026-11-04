@@ -13,9 +13,10 @@ function isNewerVersion(latest, current) {
 }
 
 function selectUpdateAsset(release, platform, arch, version) {
-  const name = platform === 'darwin'
-    ? `Cyberdog-${version}-mac-${arch}.dmg`
-    : `Cyberdog-${version}-portable-x64.exe`
+  const name = platform === 'darwin' ? `Cyberdog-${version}-mac-${arch}.dmg`
+    : platform === 'win32' ? `Cyberdog-${version}-portable-x64.exe`
+    : ''
+  if (!name) return undefined // Linux : mise à jour manuelle depuis la page de release
   const asset = Array.isArray(release.assets) && release.assets.find(item => item.name === name)
   if (!asset || !/^https:\/\/github\.com\/pickywawa\/cyberdog\/releases\/download\//.test(asset.browser_download_url)) return undefined
   return {

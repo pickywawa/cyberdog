@@ -18,6 +18,7 @@ assert.deepEqual(selectUpdateAsset({
   digest: 'abc123',
 })
 assert.equal(selectUpdateAsset({ assets: [] }, 'darwin', 'arm64', '1.3.0'), undefined)
+assert.equal(selectUpdateAsset({ assets: [{ name: 'Cyberdog-1.3.0-portable-x64.exe', browser_download_url: 'https://github.com/pickywawa/cyberdog/releases/download/v1.3.0/Cyberdog-1.3.0-portable-x64.exe' }] }, 'linux', 'x64', '1.3.0'), undefined, 'Linux never gets the Windows exe')
 // Installation handoff: cancellation never opens/quits; failed DMG opening never quits.
 ;(async () => {
   const calls = []

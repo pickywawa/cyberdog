@@ -42,6 +42,7 @@ jobs:
       matrix:
         include:
           - { name: macOS, os: macos-latest, script: 'dist:mac', files: 'dist/*.dmg' }
+          - { name: Linux, os: ubuntu-latest, script: 'dist:linux', files: "dist/*.AppImage\ndist/*.deb" }
           - { name: Windows, os: windows-latest, script: 'dist:win', files: "dist/*.exe\ndist/latest.yml\ndist/*.blockmap" }
     steps:
       - uses: actions/checkout@v7

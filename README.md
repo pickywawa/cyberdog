@@ -1,66 +1,28 @@
 <div align="center">
 
+### 🌐 **[pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/)**
+**Website · screenshots · comparisons · downloads**
+
 <img src="docs/logo.png" alt="Cyberdog" width="128" height="128">
 
 # Cyberdog
 
 **Your SSH servers, one beautiful window.**<br>
-A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, server-health dashboard and one-click scripts — for macOS and Windows.
+A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer, built-in terminal, server-health dashboard and one-click scripts. Also speaks FTP, S3, Azure, WebDAV and cloud drives. For macOS, Windows and Linux.
 
-![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-5b6cff)
+[**🌐 Website**](https://pickywawa.github.io/cyberdog/) · [**⬇️ Download**](https://github.com/pickywawa/cyberdog/releases/latest) · [**Cyberduck alternative**](https://pickywawa.github.io/cyberdog/cyberduck-alternative.html) · [**WinSCP alternative**](https://pickywawa.github.io/cyberdog/winscp-alternative.html) · [**Termius alternative**](https://pickywawa.github.io/cyberdog/termius-alternative.html)
+
+![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-5b6cff)
 ![Languages](https://img.shields.io/badge/languages-14-19c3d6)
 ![License](https://img.shields.io/badge/license-MIT-2fbf71)
 
 **English** · [Français](README.fr.md)
 
-<img src="docs/screenshots/hero.png" alt="Cyberdog: explorer, terminal and server health side by side" width="100%">
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/screenshots/hero.png" alt="Cyberdog: explorer, terminal and server health side by side" width="100%"></a>
 
 </div>
 
 ---
-
-## New in 1.8.0: everything free, with accounts and teams
-
-Every feature is free. Sign in is optional and only needed for teams: create an account with your e-mail address in **Settings → Sign in**, create a team, then invite colleagues with an **invitation link** (valid 7 days, one or several uses, revocable). Permissions are verified server-side from your Supabase session for every operation. SSH passwords and keys stay local unless you choose to sync them for a shared server. Secret vaults and SSH bastions work without an account. The former Premium preview and its licensing have been removed.
-
-## New in 1.7.0
-
-- **New server types:** SMB / Windows shares (through the system's own SMB client: `mount_smbfs` on macOS, UNC paths on Windows), Azure Files, Dropbox, OneDrive and Google Drive (OAuth sign-in in your browser; enter the client ID of your own application, or use the one bundled by the maintainers).
-- **WebDAV:** Digest and Bearer-token authentication, automatic scheme detection, same-origin redirects, and an option to accept untrusted certificates.
-- **Proxy:** FTP, S3, Azure, WebDAV and the cloud drives can go through an HTTP (CONNECT) or SOCKS5 proxy, with optional credentials (Options tab).
-- **Local pane:** a button next to the split button opens this computer's files beside the server. Hidden by default: enable it in Settings → General. Dragging files between the panes uploads and downloads; deleting in the local pane sends files to the Trash.
-- **Resume interrupted transfers:** a failed or cancelled transfer keeps its plan; **Resume** skips finished files and continues the partial one where both ends allow it (SFTP, FTP, local, SMB and ranged downloads from every protocol; object-storage uploads restart that file). Unfinished transfers survive a restart.
-- **Server-to-server copy** from the context menu (**Copy to another server…**), connection to connection without staging files on disk.
-
-## Also in 1.7.0: protocols and teams preview
-
-- **FTP:** streamed uploads (progress follows the network), Unix permissions (owner, group, mode columns and **Permissions…** through `SITE CHMOD`), and import of FTP/FTPS sites from FileZilla, WinSCP and Cyberduck.
-- **S3:** AWS profiles from `~/.aws` (static keys, `credential_process`, IAM Identity Center after `aws sso login`, role assumption) or environment variables, automatic bucket-region detection, and **Copy shared link** (presigned URL, up to 7 days).
-- **Azure:** Microsoft Entra ID sign-in (service principal secret, device code for your app registration, or Azure CLI `az login`) and **Copy shared link** (read-only SAS) for account-key servers.
-- FTP and Azure now have automated tests (an in-process FTP/FTPS server and the Azurite emulator).
-
-## New in 1.7.0-beta.3
-
-- **FTP / FTPS:** new server type with explicit or implicit TLS, an option to accept self-signed certificates, and up to three parallel control connections so browsing continues during transfers.
-- **S3 providers:** presets for Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces and Scaleway.
-- **S3 improvements:** optional session token (temporary credentials, stored encrypted), multipart upload for files above 64 MB, and virtual-hosted addressing (`bucket.host`).
-- **Azure Blob Storage:** new server type using an account key (SharedKey) or a SAS token; large files are sent as block lists.
-
-## New in 1.7.0-beta.2
-
-- Teams modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.
-- Ten local vault connectors, including TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server and Windows RDM. See [requirements and limits](docs/secret-vaults.md).
-- Settings with left navigation, theme-matched backgrounds, branded vault picker and save icon.
-
-## New in 1.6.3
-
-The right panel can be narrowed to 290 px (about 60% of its previous minimum width). Drag its left edge to resize it; your chosen width is remembered.
-
-## New in 1.6.2
-
-- **Optional session restoration:** enable **Reopen connections at startup** in Settings → General to reopen server tabs and terminals left open when quitting. Disabled by default; terminal commands are never replayed. Only references to configured servers and terminal visibility are stored. Deleted servers are skipped, and disabling the option removes the saved session.
-- **Shared saved paths:** the saved-path dialog includes **Available on all servers**, unchecked by default when saving from the explorer. Check it to share the path across servers; leave it unchecked to keep it on the current server. You can also change this scope when editing an existing saved path.
-- **New website:** discover Cyberdog, browse screenshots and download the latest macOS or Windows build at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). The site supports French and English, mobile layouts, an interactive gallery and reduced-motion preferences.
 
 ## ✨ Why Cyberdog?
 
@@ -71,8 +33,87 @@ The right panel can be narrowed to 290 px (about 60% of its previous minimum wid
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
 | ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. |
+| 🔌 **Many protocols** | SFTP, FTP/FTPS, S3 and compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob and Files, WebDAV, SMB, Dropbox, OneDrive and Google Drive, all in the same explorer. |
+| 🛡️ **Bastions** | Reach private servers through a reusable bastion, with a route test and fingerprint checks. |
+| 👥 **Free teams** | Share servers, scripts and paths with roles, invitation links and history. The account is optional. |
+| 🔐 **Secret vaults** | 1Password, Bitwarden, HashiCorp Vault, AWS Secrets Manager, Azure Key Vault and five more: credentials are read at connection time. |
 | 🔁 **Share your setup** | Selectively export groups, servers, actions and paths to ZIP. Import configuration, **Cyberduck**, **FileZilla XML** and **WinSCP INI**. |
 | 🎨 **Made to look good** | 7 themes, 14 languages, discreet scrollbars, tabs for as many servers as you like. |
+
+---
+
+## 🔌 Supported protocols
+
+Every protocol opens in the same explorer, with the same tabs, split view, search, drag & drop and transfer manager. Terminal, health, services, logs and Docker are for SSH servers.
+
+| Protocol | What you get |
+|---|---|
+| **SFTP / SSH** | Explorer, terminal, health dashboard, services, logs, Docker, processes, SSL certificates and SSH keys. Password, key or SSH agent, and jump hosts through a bastion (see below). |
+| **FTP / FTPS** | Explicit or implicit TLS, option to accept self-signed certificates, streamed uploads, Unix permissions (`SITE CHMOD`), up to three parallel control connections. |
+| **S3 and compatible** | AWS (profiles from `~/.aws`, IAM Identity Center, role assumption), Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces, Scaleway or any custom endpoint. Session tokens, multipart uploads above 64 MB, virtual-hosted addressing and **shared links** (presigned URLs, up to 7 days). |
+| **Azure Blob Storage** | Account key, SAS token or Microsoft Entra ID (service principal, device code, Azure CLI), plus read-only SAS **shared links**. |
+| **Azure Files** | File shares of an Azure storage account. |
+| **WebDAV** | Basic, Digest and Bearer-token authentication, automatic scheme detection, option to accept untrusted certificates. |
+| **SMB / Windows shares** | Through the system's own SMB client (`mount_smbfs` on macOS, UNC paths on Windows). |
+| **Dropbox, OneDrive, Google Drive** | OAuth sign-in in your browser. Enter the client ID of your own application, or use the one bundled by the maintainers. |
+
+FTP, S3, Azure, WebDAV and the cloud drives can go through an **HTTP (CONNECT) or SOCKS5 proxy**, with optional credentials. Interrupted transfers can be **resumed**, files can be copied **from one server to another** without staging them on disk, and an optional **local pane** opens this computer's files beside the server.
+
+<img src="docs/screenshots/protocols.png" alt="Adding an S3 server: provider, endpoint, region, bucket and credentials" width="100%">
+<img src="docs/screenshots/protocols-list.png" alt="Server list mixing SSH, S3, WebDAV, FTPS, Azure and Google Drive" width="100%">
+
+## 🔁 Coming from Cyberduck, WinSCP, FileZilla or Termius?
+
+- **Import your servers:** the import menu reads **Cyberduck** bookmarks, **FileZilla** (`sitemanager.xml` or an XML export), **WinSCP** (INI from *Tools → Export/Backup configuration*) and Cyberdog ZIP files. Third-party passwords are not imported.
+- **Comparisons, including where the others are better:** [Cyberdog vs Cyberduck](https://pickywawa.github.io/cyberdog/cyberduck-alternative.html) · [Cyberdog vs WinSCP](https://pickywawa.github.io/cyberdog/winscp-alternative.html) · [Cyberdog vs Termius](https://pickywawa.github.io/cyberdog/termius-alternative.html).
+
+---
+
+## 🛡️ Bastions (jump hosts)
+
+Reach servers that are only visible from a bastion, without opening a terminal on the bastion first. In a server's form, choose **Network access → Via a bastion** and pick the bastion among your servers.
+
+<img src="docs/screenshots/bastion.png" alt="Server form with Via a bastion selected: this device, bastion, target" width="100%">
+
+- **How it works:** Cyberdog connects to the bastion over SSH, opens a channel to the target's SSH port, then starts a **second SSH session from your computer** through that channel. The final session stays end-to-end encrypted: the bastion sees where you connect, not what you do, and never receives the target's private key. Nothing to install on the bastion, whose SSH server must allow TCP forwarding.
+- **Reusable:** a bastion is an ordinary server entry, with its own credentials, used by as many servers as you like. One hop per server: a bastion cannot itself go through another bastion. The bastion and the target must live in the same space (local, personal or the same team).
+- **Test the route before saving:** configuration, SSH connection to the bastion, channel to the target, target authentication and an SFTP check. The test saves nothing and closes its temporary connections.
+- **Fingerprints:** the bastion and target host keys are shown for verification the first time, a changed fingerprint blocks the connection, and trust can be reset from the server's form.
+- **Interactive authentication:** passphrases and keyboard-interactive or MFA prompts appear when connecting.
+- **Same route everywhere:** files, terminal, health dashboard, services, logs and Docker all use it.
+
+<img src="docs/screenshots/bastion-test.png" alt="Route test: bastion connection, channel to the target, target authentication and SFTP verified" width="100%">
+
+---
+
+## 👥 Teams, sharing and secret vaults
+
+Cyberdog works without an account. A free, optional account adds teams:
+
+- **Sign in** from *Settings → Sign in* with your e-mail address; a code sent by e-mail verifies it. You can delete your account from the same page.
+- **Personal space and teams**, with roles (owner, administrator, member) and read-only or edit rights per member on the shared configuration.
+- **Invitation links**, valid 7 days, for one or several uses, revocable.
+- **Shared servers, groups, quick actions and saved paths**, in *Local*, *My workspace* or a team you can edit.
+- **Server history:** who changed what and when, and restore a previous version.
+- SSH passwords and keys stay on your computer unless you choose to sync them for a shared server, in which case they are encrypted server-side.
+
+<img src="docs/screenshots/teams.png" alt="Settings: team members with roles and permissions on the shared configuration" width="100%">
+
+### Shared assets and server history
+
+Groups, quick actions and saved paths support **Local**, **My workspace** and writable **team** locations. Groups stay within their workspace; personal paths/actions can be used on your servers, while team paths/actions apply to that team's servers. Shared scripts require full preview and are revalidated before execution. Do not embed credentials in shared scripts.
+
+Member read/write permissions cover shared configuration and server restoration. Catalogs load at startup and after your own changes; other members' changes are available on the next launch.
+
+Open server history from a shared server's context menu or the personal/team panel in Settings → Sign in, including deleted servers. Revisions record the signed-in account, email, time and configuration. Restoring creates another revision and requires write permission. Snapshots include only name, host, port, SSH username and group, never SSH credentials. Local configurations have no cloud history. Attribution identifies the account that made the change.
+
+### Secret vault integrations
+
+<img src="docs/screenshots/vaults.png" alt="Choosing a secret vault: 1Password, Bitwarden, HashiCorp Vault, AWS, Azure, TeamPass and more" width="100%">
+
+**Settings → Secret vaults** adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** and **Windows Remote Desktop Manager** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
+
+See the [setup guide and provider comparison](./docs/secret-vaults.md) for CLI prerequisites, sessions, Vault policies and custom field mapping.
 
 ---
 
@@ -113,6 +154,11 @@ Update checks and downloads use Electron’s native networking to honor the syst
 > On first launch Windows SmartScreen may warn about an unrecognized publisher (the app is not code-signed yet): click **More info → Run anyway**.
 
 Each release also ships a `SHA256SUMS.txt` so you can verify your download.
+
+### Linux (x64)
+
+- **AppImage:** `Cyberdog-<version>-linux-x86_64.AppImage`. Make it executable (`chmod +x`) and run it.
+- **Debian / Ubuntu:** `Cyberdog-<version>-linux-amd64.deb`, installed with `sudo apt install ./Cyberdog-<version>-linux-amd64.deb`.
 
 ---
 
@@ -215,6 +261,8 @@ Expiry alerts can be set to **7, 14, 30, 60 or 90 days**, with separate states f
 
 **Install on this server** appends the public key to the connected account’s `~/.ssh/authorized_keys`, preserving existing keys and avoiding duplicates. **Use for this server** selects the local private key for future connections without interrupting the current connection. Required passphrases are requested and kept only in memory until the app closes.
 
+The SSH key manager also lists public keys authorized on the current server from `~/.ssh/authorized_keys`, with their SHA-256 fingerprints. These are shown separately from locally managed keys. Reading requires permission on the remote file; private keys are never read from the server.
+
 ### Services
 
 The ⚙️ button lists your `systemctl` services with their state, a search box and filters (running / failed / stopped). Start a stopped service, restart or stop a running one — `sudo` is handled for you when you are not root — or jump to its logs in one click.
@@ -240,6 +288,12 @@ Save your everyday bash snippets (restart a stack, clean logs, disk report…) n
 
 <img src="docs/screenshots/actions.png" alt="Quick actions" width="100%">
 
+### Transfer manager and remote navigation
+
+The explorer footer shows the current upload or download. Hover over it or click it to see concurrent transfers, byte progress, transfer speed, approximate remaining time, cancellation and recent results. Folder transfers include nested files. Cancelling can leave a partial destination file; completed files are kept. Recent transfer history is held in memory and can be cleared.
+
+The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
+
 ### Themes & languages
 
 System, Light, Dark, Midnight, Dracula, Forest and Sunset — the terminal follows. The interface is available in **14 languages**: English, Français, Deutsch, Italiano, Español, Português, 中文, العربية (right-to-left), हिन्दी, Русский, 日本語, 한국어, Türkçe and Bahasa Indonesia.
@@ -256,7 +310,7 @@ System, Light, Dark, Midnight, Dracula, Forest and Sunset — the terminal follo
 
 ## 🔒 Security & privacy
 
-- Passwords are **encrypted with your OS keychain** (macOS Keychain / Windows DPAPI) and never leave your machine. Exports never contain passwords or host fingerprints.
+- Passwords are **encrypted with your OS keychain** (macOS Keychain, Windows DPAPI, Linux secret service) and never leave your machine. Exports never contain passwords or host fingerprints.
 - **Host keys** are pinned on first connection (trust on first use); a changed key blocks the connection until you accept it.
 - `sudo` passwords are sent over the encrypted SSH channel on stdin, never on a command line.
 - No telemetry. Configuration stays local; the optional account stores only the metadata you explicitly share with a team on Supabase.
@@ -267,6 +321,7 @@ Configuration lives in:
 |---|---|
 | macOS | `~/Library/Application Support/Cyberdog/` |
 | Windows | `%APPDATA%\Cyberdog\` |
+| Linux | `~/.config/Cyberdog/` |
 
 (`servers/` and `actions/` hold one JSON file per item, `settings.json` holds language and theme.)
 
@@ -285,6 +340,7 @@ npm start          # run the app
 npm test           # unit tests
 npm run dist:mac   # macOS .dmg (arm64 + x64)   — run on a Mac
 npm run dist:win   # Windows installer + portable — run on Windows
+npm run dist:linux # Linux AppImage + .deb       — run on Linux
 ```
 
 Installers are written to `dist/`. Icons are generated from `src/assets/icon.svg` with `npm run icons` (macOS).
@@ -305,7 +361,6 @@ git push --follow-tags   # builds Community artifacts only
 
 Publish official builds through the private repository workflow with that tag, Live configuration and the `CYBERDOG_RELEASE_TOKEN` secret.
 
-
 ---
 
 ## 🧱 Tech
@@ -322,34 +377,62 @@ src/health.js      remote health script + parsers
 src/i18n.js        translations (EN/FR/DE/IT)
 ```
 
+## 🌐 Website
+
+The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Its static files live in [site/](site/), deployed by GitHub Actions when those files change on main. Preview locally with `python3 -m http.server 8765 --directory site`. The comparison pages (Cyberduck, Termius, WinSCP, in English and French) and the sitemap are generated by `python3 tools/build-compare-pages.py` from [tools/compare_data.py](tools/compare_data.py): edit the data there, then run the script.
+
+## 📰 Release notes
+
+See the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) for every version. Earlier notes:
+
+<details>
+<summary>Versions 1.6 to 1.8</summary>
+
+#### New in 1.8.0: everything free, with accounts and teams
+
+Every feature is free. Sign in is optional and only needed for teams: create an account with your e-mail address in **Settings → Sign in**, create a team, then invite colleagues with an **invitation link** (valid 7 days, one or several uses, revocable). Permissions are verified server-side from your Supabase session for every operation. SSH passwords and keys stay local unless you choose to sync them for a shared server. Secret vaults and SSH bastions work without an account. The former Premium preview and its licensing have been removed.
+
+#### New in 1.7.0
+
+- **New server types:** SMB / Windows shares (through the system's own SMB client: `mount_smbfs` on macOS, UNC paths on Windows), Azure Files, Dropbox, OneDrive and Google Drive (OAuth sign-in in your browser; enter the client ID of your own application, or use the one bundled by the maintainers).
+- **WebDAV:** Digest and Bearer-token authentication, automatic scheme detection, same-origin redirects, and an option to accept untrusted certificates.
+- **Proxy:** FTP, S3, Azure, WebDAV and the cloud drives can go through an HTTP (CONNECT) or SOCKS5 proxy, with optional credentials (Options tab).
+- **Local pane:** a button next to the split button opens this computer's files beside the server. Hidden by default: enable it in Settings → General. Dragging files between the panes uploads and downloads; deleting in the local pane sends files to the Trash.
+- **Resume interrupted transfers:** a failed or cancelled transfer keeps its plan; **Resume** skips finished files and continues the partial one where both ends allow it (SFTP, FTP, local, SMB and ranged downloads from every protocol; object-storage uploads restart that file). Unfinished transfers survive a restart.
+- **Server-to-server copy** from the context menu (**Copy to another server…**), connection to connection without staging files on disk.
+
+#### Also in 1.7.0: protocols and teams preview
+
+- **FTP:** streamed uploads (progress follows the network), Unix permissions (owner, group, mode columns and **Permissions…** through `SITE CHMOD`), and import of FTP/FTPS sites from FileZilla, WinSCP and Cyberduck.
+- **S3:** AWS profiles from `~/.aws` (static keys, `credential_process`, IAM Identity Center after `aws sso login`, role assumption) or environment variables, automatic bucket-region detection, and **Copy shared link** (presigned URL, up to 7 days).
+- **Azure:** Microsoft Entra ID sign-in (service principal secret, device code for your app registration, or Azure CLI `az login`) and **Copy shared link** (read-only SAS) for account-key servers.
+- FTP and Azure now have automated tests (an in-process FTP/FTPS server and the Azurite emulator).
+
+#### New in 1.7.0-beta.3
+
+- **FTP / FTPS:** new server type with explicit or implicit TLS, an option to accept self-signed certificates, and up to three parallel control connections so browsing continues during transfers.
+- **S3 providers:** presets for Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces and Scaleway.
+- **S3 improvements:** optional session token (temporary credentials, stored encrypted), multipart upload for files above 64 MB, and virtual-hosted addressing (`bucket.host`).
+- **Azure Blob Storage:** new server type using an account key (SharedKey) or a SAS token; large files are sent as block lists.
+
+#### New in 1.7.0-beta.2
+
+- Teams modules: personal space, team servers, shared groups/actions/paths, permissions and server revision restoration.
+- Ten local vault connectors, including TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server and Windows RDM. See [requirements and limits](docs/secret-vaults.md).
+- Settings with left navigation, theme-matched backgrounds, branded vault picker and save icon.
+
+#### New in 1.6.3
+
+The right panel can be narrowed to 290 px (about 60% of its previous minimum width). Drag its left edge to resize it; your chosen width is remembered.
+
+#### New in 1.6.2
+
+- **Optional session restoration:** enable **Reopen connections at startup** in Settings → General to reopen server tabs and terminals left open when quitting. Disabled by default; terminal commands are never replayed. Only references to configured servers and terminal visibility are stored. Deleted servers are skipped, and disabling the option removes the saved session.
+- **Shared saved paths:** the saved-path dialog includes **Available on all servers**, unchecked by default when saving from the explorer. Check it to share the path across servers; leave it unchecked to keep it on the current server. You can also change this scope when editing an existing saved path.
+- **New website:** discover Cyberdog, browse screenshots and download the latest macOS or Windows build at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). The site supports French and English, mobile layouts, an interactive gallery and reduced-motion preferences.
+
+</details>
+
 ## 📄 License
 
 [MIT](LICENSE) © pickywawa
-
-### Transfer manager and remote navigation
-
-The explorer footer shows the current upload or download. Hover over it or click it to see concurrent transfers, byte progress, transfer speed, approximate remaining time, cancellation and recent results. Folder transfers include nested files. Cancelling can leave a partial destination file; completed files are kept. Recent transfer history is held in memory and can be cleared.
-
-The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
-
-The SSH key manager also lists public keys authorized on the current server from `~/.ssh/authorized_keys`, with their SHA-256 fingerprints. These are shown separately from locally managed keys. Reading requires permission on the remote file; private keys are never read from the server.
-
-## Website
-
-The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Its static files live in [site/](site/), deployed by GitHub Actions when those files change on main. Preview locally with `python3 -m http.server 8765 --directory site`.
-
-### Shared assets and server history
-
-Groups, quick actions and saved paths support **Local**, **My workspace** and writable **team** locations. Groups stay within their workspace; personal paths/actions can be used on your servers, while team paths/actions apply to that team's servers. Shared scripts require full preview and are revalidated before execution. Do not embed credentials in shared scripts.
-
-Member read/write permissions cover shared configuration and server restoration. Catalogs load at startup and after your own changes; other members' changes are available on the next launch.
-
-Open server history from a shared server's context menu or the personal/team panel in Settings → Sign in, including deleted servers. Revisions record the signed-in account, email, time and configuration. Restoring creates another revision and requires write permission. Snapshots include only name, host, port, SSH username and group, never SSH credentials. Local configurations have no cloud history. Attribution identifies the account that made the change.
-
-### Secret vault integrations
-
-**Settings → Secret vaults** adds **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** and **Windows Remote Desktop Manager** entries to dedicated sections in the server list. Connectors and shortcuts stay local, excluded from exports and Supabase. Passwords and SSH keys are read on connection; locking a vault closes its connections.
-
-See the [setup guide and provider comparison](./docs/secret-vaults.md) for CLI prerequisites, sessions, Vault policies and custom field mapping.
-
-Settings use a left navigation, with a **Sign in** tab for the optional account.

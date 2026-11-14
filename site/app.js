@@ -1,10 +1,14 @@
 'use strict'
 let language = 'fr'
 try { language = localStorage.getItem('cyberdog.site.language') === 'en' ? 'en' : 'fr' } catch {}
+// Comparison pages link here with ?lang=en or ?lang=fr so visitors stay in their language.
+try { const asked = new URLSearchParams(location.search).get('lang'); if (asked === 'en' || asked === 'fr') { language = asked; localStorage.setItem('cyberdog.site.language', asked) } } catch {}
 const views = {
   explorer: { image:'assets/explorer.png', fr:'Fichiers distants, recherche et permissions : un explorateur pensé pour le quotidien.', en:'Remote files, search and permissions: an explorer built for everyday work.' },
   dashboard: { image:'assets/dashboard.png', fr:'CPU, mémoire, stockage et alertes : prenez le pouls de votre serveur.', en:'CPU, memory, storage and alerts: take your server’s pulse.' },
-  docker: { image:'assets/docker-logs.png', fr:'Conteneurs et logs en direct, sans quitter votre espace de travail.', en:'Containers and live logs, without leaving your workspace.' }
+  docker: { image:'assets/docker-logs.png', fr:'Conteneurs et logs en direct, sans quitter votre espace de travail.', en:'Containers and live logs, without leaving your workspace.' },
+  actions: { image:'assets/actions.png', fr:'Vos scripts enregistrés, lancés sur un serveur ou sur tous les serveurs ouverts, avec le résultat de chacun.', en:'Your saved scripts, run on one server or on every open server, with each result.' },
+  teams: { image:'assets/teams.png', fr:'Équipes, rôles et permissions : partagez vos serveurs tout en gardant la main.', en:'Teams, roles and permissions: share your servers while staying in control.' }
 }
 let selectedView = 'explorer', demoPaused = matchMedia('(prefers-reduced-motion: reduce)').matches
 function updateView(key) {
@@ -19,6 +23,7 @@ function updateView(key) {
 function translate() {
   document.documentElement.lang = language
   document.querySelectorAll('[data-fr][data-en]').forEach(el => { el.textContent = el.dataset[language].replaceAll('\\n', '\n') })
+  document.querySelectorAll('[data-href-fr][data-href-en]').forEach(el => { el.href = language === 'fr' ? el.dataset.hrefFr : el.dataset.hrefEn })
   document.title = language === 'fr' ? 'Cyberdog — Vos serveurs, une seule fenêtre.' : 'Cyberdog — Your servers, one window.'
   const langButton = document.querySelector('#language')
   langButton.textContent = language === 'fr' ? 'EN' : 'FR'

@@ -1,5 +1,7 @@
 # Bastions SSH — étude, spécification et plan Cyberdog
 
+> **Mise à jour :** cette spécification est implémentée dans Cyberdog et gratuite. Le placement « Premium » évoqué plus bas a été abandonné avec la suppression des licences. La description de la fonction pour les utilisateurs se trouve dans la section « Bastions » du [README](../../README.fr.md).
+
 Statut : proposition de conception, sans implémentation réseau. Recherche documentaire et inspection du code le 27 octobre 2026. Les produits concurrents n’ont pas été installés ni testés pour cette étude. Les fonctionnalités ci-dessous sont celles documentées par leurs éditeurs, sans affirmation sur les tarifs ou éditions non vérifiés.
 
 Livrables : [maquette interactive](./maquette.html), [capture Dracula](./maquette.png), [plan de développement et recette](./plan-developpement.md).

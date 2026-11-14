@@ -1,66 +1,28 @@
 <div align="center">
 
+### 🌐 **[pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/)**
+**Site web · captures · comparatifs · téléchargements**
+
 <img src="docs/logo.png" alt="Cyberdog" width="128" height="128">
 
 # Cyberdog
 
 **Tous vos serveurs SSH dans une seule belle fenêtre.**<br>
-Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal intégré, tableau de bord de santé des serveurs et scripts en un clic — pour macOS et Windows.
+Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explorateur SFTP, terminal intégré, tableau de bord de santé des serveurs et scripts en un clic. Parle aussi FTP, S3, Azure, WebDAV et les drives cloud. Pour macOS, Windows et Linux.
 
-![Plateformes](https://img.shields.io/badge/plateforme-macOS%20%7C%20Windows-5b6cff)
+[**🌐 Site web**](https://pickywawa.github.io/cyberdog/) · [**⬇️ Télécharger**](https://github.com/pickywawa/cyberdog/releases/latest) · [**Alternative à Cyberduck**](https://pickywawa.github.io/cyberdog/fr/alternative-cyberduck.html) · [**Alternative à WinSCP**](https://pickywawa.github.io/cyberdog/fr/alternative-winscp.html) · [**Alternative à Termius**](https://pickywawa.github.io/cyberdog/fr/alternative-termius.html)
+
+![Plateformes](https://img.shields.io/badge/plateforme-macOS%20%7C%20Windows%20%7C%20Linux-5b6cff)
 ![Langues](https://img.shields.io/badge/langues-14-19c3d6)
 ![Licence](https://img.shields.io/badge/licence-MIT-2fbf71)
 
 [English](README.md) · **Français**
 
-<img src="docs/screenshots/hero.png" alt="Cyberdog : explorateur, terminal et santé du serveur côte à côte" width="100%">
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/screenshots/hero.png" alt="Cyberdog : explorateur, terminal et santé du serveur côte à côte" width="100%"></a>
 
 </div>
 
 ---
-
-## Nouveautés de 1.8.0 : tout est gratuit, avec comptes et équipes
-
-Toutes les fonctions sont gratuites. La connexion est facultative et ne sert qu’aux équipes : créez un compte avec votre email dans **Paramètres → Connexion**, créez une équipe, puis invitez vos collègues avec un **lien d’invitation** (valable 7 jours, à usage unique ou multiple, révocable). Le serveur vérifie les permissions à chaque opération à partir de votre session Supabase. Les mots de passe et clés SSH restent locaux, sauf si vous choisissez de les synchroniser pour un serveur partagé. Les coffres de secrets et les bastions SSH fonctionnent sans compte. L’ancien aperçu Premium et ses licences ont été supprimés.
-
-## Nouveautés de 1.7.0
-
-- **Nouveaux types de serveur :** SMB / partages Windows (via le client SMB du système : `mount_smbfs` sur macOS, chemins UNC sous Windows), Azure Files, Dropbox, OneDrive et Google Drive (connexion OAuth dans le navigateur ; saisissez l'ID client de votre propre application, ou utilisez celui fourni par les mainteneurs).
-- **WebDAV :** authentification Digest et jeton Bearer, détection automatique du schéma, redirections de même origine et option pour accepter les certificats non approuvés.
-- **Proxy :** FTP, S3, Azure, WebDAV et les drives cloud peuvent passer par un proxy HTTP (CONNECT) ou SOCKS5, avec identifiants facultatifs (onglet Options).
-- **Volet local :** un bouton à côté du bouton de scission ouvre les fichiers de cet ordinateur à côté du serveur. Masqué par défaut : à activer dans Réglages → Général. Glisser des fichiers entre les volets envoie ou télécharge ; supprimer dans le volet local envoie à la corbeille.
-- **Reprise des transferts interrompus :** un transfert en échec ou annulé garde son plan ; **Reprendre** saute les fichiers terminés et continue le fichier partiel là où les deux extrémités le permettent (SFTP, FTP, local, SMB et lectures partielles de tous les protocoles ; les envois vers le stockage objet repartent du début pour ce fichier). Les transferts non terminés survivent à un redémarrage.
-- **Copie de serveur à serveur** depuis le menu contextuel (**Copier vers un autre serveur…**), de connexion à connexion sans passer par le disque.
-
-## Aussi dans 1.7.0 : protocoles et aperçu des équipes
-
-- **FTP :** envois en flux (la progression suit le réseau), permissions Unix (colonnes propriétaire, groupe, droits et **Permissions…** via `SITE CHMOD`) et import des sites FTP/FTPS de FileZilla, WinSCP et Cyberduck.
-- **S3 :** profils AWS de `~/.aws` (clés, `credential_process`, IAM Identity Center après `aws sso login`, rôles) ou variables d'environnement, détection automatique de la région du bucket et **Copier le lien partagé** (URL présignée, 7 jours maximum).
-- **Azure :** connexion Microsoft Entra ID (secret d'un principal de service, code appareil pour votre application, ou Azure CLI `az login`) et **Copier le lien partagé** (SAS en lecture seule) pour les serveurs à clé de compte.
-- FTP et Azure ont désormais des tests automatiques (serveur FTP/FTPS en processus et émulateur Azurite).
-
-## Nouveautés de 1.7.0-beta.3
-
-- **FTP / FTPS :** nouveau type de serveur, TLS explicite ou implicite, option pour accepter les certificats auto-signés et jusqu'à trois connexions de contrôle parallèles pour naviguer pendant les transferts.
-- **Fournisseurs S3 :** préréglages Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces et Scaleway.
-- **S3 amélioré :** jeton de session optionnel (identifiants temporaires, stocké chiffré), envoi multipart au-delà de 64 Mo et adressage virtual-hosted (`bucket.hôte`).
-- **Azure Blob Storage :** nouveau type de serveur par clé de compte (SharedKey) ou jeton SAS ; les gros fichiers partent en blocs.
-
-## Nouveautés de 1.7.0-beta.2
-
-- Modules d’équipe : espace personnel, équipes, serveurs et groupes/actions/chemins partagés, permissions et restauration des versions.
-- Dix connecteurs de coffres locaux, dont TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server et RDM sous Windows. Voir les [prérequis et limites](docs/secret-vaults.md).
-- Paramètres avec navigation à gauche, fond adapté au thème, logos des coffres et icône Enregistrer.
-
-## Nouveautés de la version 1.6.3
-
-Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’ancienne largeur minimale). Glissez sa bordure gauche pour le redimensionner ; la largeur choisie est mémorisée.
-
-## Nouveautés de la version 1.6.2
-
-- **Restauration facultative de la session :** activez **Rouvrir les connexions au démarrage** dans Paramètres → Général pour rouvrir les onglets serveurs et terminaux laissés ouverts à la fermeture. L’option est décochée par défaut et aucune commande n’est rejouée. Seules les références aux serveurs configurés et la présence du terminal sont enregistrées. Les serveurs supprimés sont ignorés et désactiver l’option efface la session mémorisée.
-- **Chemins partagés :** la fenêtre d’enregistrement propose **Disponible sur tous les serveurs**, décochée par défaut depuis l’explorateur. Cochez-la pour partager le chemin ; sinon, il reste associé au serveur courant. Ce choix peut aussi être modifié sur un chemin existant.
-- **Nouveau site web :** présentation, captures et téléchargements macOS / Windows sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Le site est disponible en français et anglais, adapté au mobile, avec une galerie interactive et le respect des préférences de réduction des animations.
 
 ## ✨ Pourquoi Cyberdog ?
 
@@ -71,8 +33,87 @@ Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’a
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
 | ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. |
+| 🔌 **Nombreux protocoles** | SFTP, FTP/FTPS, S3 et compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob et Files, WebDAV, SMB, Dropbox, OneDrive et Google Drive, dans le même explorateur. |
+| 🛡️ **Bastions** | Atteignez les serveurs privés par un bastion réutilisable, avec test du trajet et vérification des empreintes. |
+| 👥 **Équipes gratuites** | Partagez serveurs, scripts et chemins avec des rôles, des liens d'invitation et un historique. Le compte est facultatif. |
+| 🔐 **Coffres de secrets** | 1Password, Bitwarden, HashiCorp Vault, AWS Secrets Manager, Azure Key Vault et cinq autres : les identifiants sont lus à la connexion. |
 | 🔁 **Partagez votre configuration** | Export ZIP sélectif des groupes, serveurs, actions et chemins. Import de configuration, **Cyberduck**, **FileZilla XML** et **WinSCP INI**. |
 | 🎨 **Pensé pour être beau** | 7 thèmes, 14 langues, barres de défilement discrètes, autant d'onglets de serveurs que vous voulez. |
+
+---
+
+## 🔌 Protocoles pris en charge
+
+Chaque protocole s'ouvre dans le même explorateur, avec les mêmes onglets, la même vue scindée, la même recherche, le même glisser-déposer et le même gestionnaire de transferts. Le terminal, la santé, les services, les logs et Docker concernent les serveurs SSH.
+
+| Protocole | Ce que vous obtenez |
+|---|---|
+| **SFTP / SSH** | Explorateur, terminal, tableau de santé, services, logs, Docker, processus, certificats SSL et clés SSH. Mot de passe, clé ou agent SSH, et rebond par un bastion (voir plus bas). |
+| **FTP / FTPS** | TLS explicite ou implicite, option pour accepter les certificats auto-signés, envois en flux, permissions Unix (`SITE CHMOD`), jusqu'à trois connexions de contrôle en parallèle. |
+| **S3 et compatibles** | AWS (profils `~/.aws`, IAM Identity Center, prise de rôle), Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces, Scaleway ou tout point d'accès personnalisé. Jetons de session, envois multipart au-delà de 64 Mo, adressage virtual-hosted et **liens partagés** (URL présignées, jusqu'à 7 jours). |
+| **Azure Blob Storage** | Clé de compte, jeton SAS ou Microsoft Entra ID (principal de service, code d'appareil, Azure CLI), ainsi que des **liens partagés** SAS en lecture seule. |
+| **Azure Files** | Partages de fichiers d'un compte de stockage Azure. |
+| **WebDAV** | Authentification Basic, Digest et jeton Bearer, détection automatique du schéma, option pour accepter les certificats non approuvés. |
+| **SMB / partages Windows** | Via le client SMB du système (`mount_smbfs` sur macOS, chemins UNC sous Windows). |
+| **Dropbox, OneDrive, Google Drive** | Connexion OAuth dans votre navigateur. Saisissez l'identifiant client de votre propre application, ou utilisez celui fourni par les mainteneurs. |
+
+FTP, S3, Azure, WebDAV et les drives cloud peuvent passer par un **proxy HTTP (CONNECT) ou SOCKS5**, avec identifiants facultatifs. Les transferts interrompus peuvent être **repris**, les fichiers copiés **d'un serveur à un autre** sans passer par le disque, et un **volet local** facultatif ouvre les fichiers de cet ordinateur à côté du serveur.
+
+<img src="docs/screenshots/protocols.png" alt="Ajout d'un serveur S3 : fournisseur, point d'accès, région, bucket et identifiants" width="100%">
+<img src="docs/screenshots/protocols-list.png" alt="Liste de serveurs mêlant SSH, S3, WebDAV, FTPS, Azure et Google Drive" width="100%">
+
+## 🔁 Vous venez de Cyberduck, WinSCP, FileZilla ou Termius ?
+
+- **Importez vos serveurs :** le menu d'import lit les favoris **Cyberduck**, **FileZilla** (`sitemanager.xml` ou export XML), **WinSCP** (INI via *Outils → Exporter/Sauvegarder la configuration*) et les ZIP Cyberdog. Les mots de passe tiers ne sont pas importés.
+- **Comparatifs, y compris là où les autres sont meilleurs :** [Cyberdog et Cyberduck](https://pickywawa.github.io/cyberdog/fr/alternative-cyberduck.html) · [Cyberdog et WinSCP](https://pickywawa.github.io/cyberdog/fr/alternative-winscp.html) · [Cyberdog et Termius](https://pickywawa.github.io/cyberdog/fr/alternative-termius.html).
+
+---
+
+## 🛡️ Bastions (rebonds SSH)
+
+Atteignez les serveurs visibles uniquement depuis un bastion, sans ouvrir d'abord un terminal sur le bastion. Dans la fiche d'un serveur, choisissez **Accès réseau → Via un bastion** et sélectionnez le bastion parmi vos serveurs.
+
+<img src="docs/screenshots/bastion.png" alt="Fiche serveur avec Via un bastion : ce poste, bastion, cible" width="100%">
+
+- **Principe :** Cyberdog se connecte au bastion en SSH, ouvre un canal vers le port SSH de la cible, puis démarre une **seconde session SSH depuis votre poste** à travers ce canal. La session finale reste chiffrée de bout en bout : le bastion voit où vous vous connectez, pas ce que vous faites, et ne reçoit jamais la clé privée de la cible. Rien à installer sur le bastion, dont le serveur SSH doit autoriser la redirection TCP.
+- **Réutilisable :** un bastion est une fiche serveur ordinaire, avec ses propres identifiants, utilisée par autant de serveurs que vous voulez. Un saut par serveur : un bastion ne peut pas passer lui-même par un autre bastion. Le bastion et la cible doivent se trouver dans le même espace (local, personnel ou la même équipe).
+- **Testez le trajet avant d'enregistrer :** configuration, connexion SSH au bastion, canal vers la cible, authentification de la cible et vérification SFTP. Le test n'enregistre rien et ferme ses connexions temporaires.
+- **Empreintes :** les clés d'hôte du bastion et de la cible sont présentées pour vérification la première fois, une empreinte modifiée bloque la connexion, et la confiance peut être réinitialisée depuis la fiche du serveur.
+- **Authentification interactive :** phrases secrètes, invites keyboard-interactive ou MFA apparaissent à la connexion.
+- **Même trajet partout :** fichiers, terminal, tableau de santé, services, logs et Docker l'utilisent.
+
+<img src="docs/screenshots/bastion-test.png" alt="Test du trajet : connexion au bastion, canal vers la cible, authentification de la cible et SFTP vérifiés" width="100%">
+
+---
+
+## 👥 Équipes, partage et coffres de secrets
+
+Cyberdog fonctionne sans compte. Un compte facultatif et gratuit ajoute les équipes :
+
+- **Connexion** dans *Paramètres → Connexion* avec votre adresse e-mail ; un code envoyé par e-mail la vérifie. Vous pouvez supprimer votre compte depuis la même page.
+- **Espace personnel et équipes**, avec des rôles (propriétaire, administrateur, membre) et des droits lecture seule ou modification par membre sur la configuration partagée.
+- **Liens d'invitation**, valables 7 jours, pour une ou plusieurs utilisations, révocables.
+- **Serveurs, groupes, actions rapides et chemins enregistrés partagés**, dans *Local*, *Mon espace* ou une équipe que vous pouvez modifier.
+- **Historique des serveurs :** qui a modifié quoi et quand, et restauration d'une version précédente.
+- Les mots de passe et clés SSH restent sur votre ordinateur, sauf si vous choisissez de les synchroniser pour un serveur partagé : ils sont alors chiffrés côté serveur.
+
+<img src="docs/screenshots/teams.png" alt="Paramètres : membres d'une équipe avec rôles et permissions sur la configuration partagée" width="100%">
+
+### Éléments partagés et historique
+
+Les formulaires des groupes, actions rapides et chemins enregistrés proposent **Local**, **Mon espace** et les **équipes** disposant du droit de modification. Les groupes restent propres à leur espace ; les chemins et actions personnels sont disponibles sur vos serveurs, ceux d’une équipe sur les serveurs de cette équipe. Un script partagé est affiché intégralement avant exécution et vérifié à nouveau côté serveur avant lancement. Évitez de placer des secrets dans ces scripts partagés.
+
+Les droits lecture seule/modification des membres couvrent les serveurs et ces éléments partagés. Le catalogue est chargé au démarrage et après vos modifications ; les changements des autres membres apparaissent au prochain lancement.
+
+Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. Paramètres → Connexion donne également accès à l’historique de Mon espace et de chaque équipe, y compris aux serveurs supprimés. Chaque version indique la date, l’adresse email et l’identifiant du compte de l’auteur. Une restauration crée une nouvelle version et nécessite le droit de modification. Seuls le nom, l’hôte, le port, l’utilisateur SSH et le groupe sont historisés : aucun mot de passe ou clé SSH. Les anciennes configurations locales ne sont pas historisées. L’auteur est le compte qui a fait la modification.
+
+### Coffres de secrets
+
+<img src="docs/screenshots/vaults.png" alt="Choix d'un coffre de secrets : 1Password, Bitwarden, HashiCorp Vault, AWS, Azure, TeamPass et d'autres" width="100%">
+
+L’onglet **Paramètres → Coffres de secrets** permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** et **Remote Desktop Manager sous Windows** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
+
+Voir le [guide de configuration et les fournisseurs étudiés](./docs/secret-vaults.md) pour les prérequis CLI, sessions, droits Vault et champs personnalisés.
 
 ---
 
@@ -113,6 +154,11 @@ Les recherches et téléchargements de mises à jour utilisent le réseau natif 
 > Au premier lancement, Windows SmartScreen peut signaler un éditeur inconnu (l'app n'est pas encore signée) : cliquez sur **Informations complémentaires → Exécuter quand même**.
 
 Chaque release contient aussi un fichier `SHA256SUMS.txt` pour vérifier votre téléchargement.
+
+### Linux (x64)
+
+- **AppImage :** `Cyberdog-<version>-linux-x86_64.AppImage`. Rendez-le exécutable (`chmod +x`) puis lancez-le.
+- **Debian / Ubuntu :** `Cyberdog-<version>-linux-amd64.deb`, à installer avec `sudo apt install ./Cyberdog-<version>-linux-amd64.deb`.
 
 ---
 
@@ -215,6 +261,8 @@ Le bouton **Renouveler avec Certbot** est disponible pour les certificats géré
 
 **Installer sur ce serveur** ajoute la clé publique au `~/.ssh/authorized_keys` du compte SSH connecté, sans supprimer les clés existantes ni ajouter de doublon. **Utiliser pour ce serveur** choisit la clé privée locale pour les prochaines connexions, sans couper la connexion actuelle. Si une phrase secrète est nécessaire, elle est demandée et conservée uniquement en mémoire jusqu’à la fermeture de l’app.
 
+Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le serveur courant dans `~/.ssh/authorized_keys`, avec leurs empreintes SHA-256. Elles sont séparées des clés gérées localement. La lecture dépend des permissions du fichier distant ; aucune clé privée n’est lue sur le serveur.
+
 ### Services
 
 Le bouton ⚙️ liste vos services `systemctl` avec leur état, une recherche et des filtres (actifs / en échec / arrêtés). Démarrez un service arrêté, redémarrez ou arrêtez un service actif — `sudo` est géré pour vous si vous n'êtes pas root — ou ouvrez ses logs en un clic.
@@ -240,6 +288,12 @@ Enregistrez vos scripts bash du quotidien (redémarrer une stack, nettoyer les l
 
 <img src="docs/screenshots/actions.png" alt="Actions rapides" width="100%">
 
+### Gestionnaire de transferts et navigation distante
+
+Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Survolez-le ou cliquez dessus pour voir les transferts simultanés, leur progression, le débit, le temps restant estimé, les boutons d’annulation et les résultats récents. Les dossiers incluent leurs fichiers imbriqués. Une annulation peut laisser un fichier partiel à destination ; les fichiers déjà transférés sont conservés. L’historique récent reste en mémoire et peut être effacé.
+
+Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
+
 ### Thèmes et langues
 
 Système, Clair, Sombre, Minuit, Dracula, Forêt et Coucher de soleil — le terminal suit. L'interface existe en **14 langues** : English, Français, Deutsch, Italiano, Español, Português, 中文, العربية (de droite à gauche), हिन्दी, Русский, 日本語, 한국어, Türkçe et Bahasa Indonesia.
@@ -256,7 +310,7 @@ Système, Clair, Sombre, Minuit, Dracula, Forêt et Coucher de soleil — le ter
 
 ## 🔒 Sécurité et vie privée
 
-- Les mots de passe sont **chiffrés par le trousseau de votre système** (Trousseau macOS / DPAPI Windows) et ne quittent jamais votre machine. Les exports ne contiennent ni mots de passe ni empreintes d'hôte.
+- Les mots de passe sont **chiffrés par le trousseau de votre système** (Trousseau macOS, DPAPI Windows, service de secrets Linux) et ne quittent jamais votre machine. Les exports ne contiennent ni mots de passe ni empreintes d'hôte.
 - Les **clés d'hôte** sont mémorisées à la première connexion (trust on first use) ; une clé modifiée bloque la connexion tant que vous ne l'acceptez pas.
 - Les mots de passe `sudo` transitent par le canal SSH chiffré, sur stdin, jamais en ligne de commande.
 - Aucune télémétrie, aucun compte obligatoire : votre configuration, ce sont des fichiers JSON sur votre disque. Le compte facultatif ne stocke que les métadonnées que vous partagez avec une équipe.
@@ -267,6 +321,7 @@ La configuration se trouve dans :
 |---|---|
 | macOS | `~/Library/Application Support/Cyberdog/` |
 | Windows | `%APPDATA%\Cyberdog\` |
+| Linux | `~/.config/Cyberdog/` |
 
 (`servers/` et `actions/` contiennent un fichier JSON par élément, `settings.json` la langue et le thème.)
 
@@ -285,6 +340,7 @@ npm start          # lancer l'app
 npm test           # tests unitaires
 npm run dist:mac   # .dmg macOS (arm64 + x64)       — à lancer sur un Mac
 npm run dist:win   # installeur + portable Windows  — à lancer sur Windows
+npm run dist:linux # AppImage + .deb Linux        — à lancer sur Linux
 ```
 
 Les installeurs sont produits dans `dist/`. Les icônes se régénèrent depuis `src/assets/icon.svg` avec `npm run icons` (macOS).
@@ -305,7 +361,6 @@ git push --follow-tags   # compile uniquement les artefacts Community
 
 La publication officielle s’effectue ensuite dans le workflow du dépôt privé, avec ce tag, la configuration Live et le secret `CYBERDOG_RELEASE_TOKEN`.
 
-
 ---
 
 ## 🧱 Technique
@@ -322,34 +377,62 @@ src/health.js      script de santé distant + parseurs
 src/i18n.js        traductions (EN/FR/DE/IT)
 ```
 
+## 🌐 Site web
+
+Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Ses fichiers statiques sont dans [site/](site/), déployés par GitHub Actions lorsqu’ils changent sur main. Prévisualisation locale : `python3 -m http.server 8765 --directory site`. Les pages comparatives (Cyberduck, Termius, WinSCP, en anglais et en français) et le plan du site sont générés par `python3 tools/build-compare-pages.py` à partir de [tools/compare_data.py](tools/compare_data.py) : modifiez les données, puis lancez le script.
+
+## 📰 Notes de version
+
+Retrouvez chaque version dans les [releases GitHub](https://github.com/pickywawa/cyberdog/releases). Notes précédentes :
+
+<details>
+<summary>Versions 1.6 à 1.8</summary>
+
+#### Nouveautés de 1.8.0 : tout est gratuit, avec comptes et équipes
+
+Toutes les fonctions sont gratuites. La connexion est facultative et ne sert qu’aux équipes : créez un compte avec votre email dans **Paramètres → Connexion**, créez une équipe, puis invitez vos collègues avec un **lien d’invitation** (valable 7 jours, à usage unique ou multiple, révocable). Le serveur vérifie les permissions à chaque opération à partir de votre session Supabase. Les mots de passe et clés SSH restent locaux, sauf si vous choisissez de les synchroniser pour un serveur partagé. Les coffres de secrets et les bastions SSH fonctionnent sans compte. L’ancien aperçu Premium et ses licences ont été supprimés.
+
+#### Nouveautés de 1.7.0
+
+- **Nouveaux types de serveur :** SMB / partages Windows (via le client SMB du système : `mount_smbfs` sur macOS, chemins UNC sous Windows), Azure Files, Dropbox, OneDrive et Google Drive (connexion OAuth dans le navigateur ; saisissez l'ID client de votre propre application, ou utilisez celui fourni par les mainteneurs).
+- **WebDAV :** authentification Digest et jeton Bearer, détection automatique du schéma, redirections de même origine et option pour accepter les certificats non approuvés.
+- **Proxy :** FTP, S3, Azure, WebDAV et les drives cloud peuvent passer par un proxy HTTP (CONNECT) ou SOCKS5, avec identifiants facultatifs (onglet Options).
+- **Volet local :** un bouton à côté du bouton de scission ouvre les fichiers de cet ordinateur à côté du serveur. Masqué par défaut : à activer dans Réglages → Général. Glisser des fichiers entre les volets envoie ou télécharge ; supprimer dans le volet local envoie à la corbeille.
+- **Reprise des transferts interrompus :** un transfert en échec ou annulé garde son plan ; **Reprendre** saute les fichiers terminés et continue le fichier partiel là où les deux extrémités le permettent (SFTP, FTP, local, SMB et lectures partielles de tous les protocoles ; les envois vers le stockage objet repartent du début pour ce fichier). Les transferts non terminés survivent à un redémarrage.
+- **Copie de serveur à serveur** depuis le menu contextuel (**Copier vers un autre serveur…**), de connexion à connexion sans passer par le disque.
+
+#### Aussi dans 1.7.0 : protocoles et aperçu des équipes
+
+- **FTP :** envois en flux (la progression suit le réseau), permissions Unix (colonnes propriétaire, groupe, droits et **Permissions…** via `SITE CHMOD`) et import des sites FTP/FTPS de FileZilla, WinSCP et Cyberduck.
+- **S3 :** profils AWS de `~/.aws` (clés, `credential_process`, IAM Identity Center après `aws sso login`, rôles) ou variables d'environnement, détection automatique de la région du bucket et **Copier le lien partagé** (URL présignée, 7 jours maximum).
+- **Azure :** connexion Microsoft Entra ID (secret d'un principal de service, code appareil pour votre application, ou Azure CLI `az login`) et **Copier le lien partagé** (SAS en lecture seule) pour les serveurs à clé de compte.
+- FTP et Azure ont désormais des tests automatiques (serveur FTP/FTPS en processus et émulateur Azurite).
+
+#### Nouveautés de 1.7.0-beta.3
+
+- **FTP / FTPS :** nouveau type de serveur, TLS explicite ou implicite, option pour accepter les certificats auto-signés et jusqu'à trois connexions de contrôle parallèles pour naviguer pendant les transferts.
+- **Fournisseurs S3 :** préréglages Google Cloud Storage, Backblaze B2, Wasabi, DigitalOcean Spaces et Scaleway.
+- **S3 amélioré :** jeton de session optionnel (identifiants temporaires, stocké chiffré), envoi multipart au-delà de 64 Mo et adressage virtual-hosted (`bucket.hôte`).
+- **Azure Blob Storage :** nouveau type de serveur par clé de compte (SharedKey) ou jeton SAS ; les gros fichiers partent en blocs.
+
+#### Nouveautés de 1.7.0-beta.2
+
+- Modules d’équipe : espace personnel, équipes, serveurs et groupes/actions/chemins partagés, permissions et restauration des versions.
+- Dix connecteurs de coffres locaux, dont TeamPass, Keeper Secrets Manager, Password Manager Pro, Devolutions Server et RDM sous Windows. Voir les [prérequis et limites](docs/secret-vaults.md).
+- Paramètres avec navigation à gauche, fond adapté au thème, logos des coffres et icône Enregistrer.
+
+#### Nouveautés de la version 1.6.3
+
+Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’ancienne largeur minimale). Glissez sa bordure gauche pour le redimensionner ; la largeur choisie est mémorisée.
+
+#### Nouveautés de la version 1.6.2
+
+- **Restauration facultative de la session :** activez **Rouvrir les connexions au démarrage** dans Paramètres → Général pour rouvrir les onglets serveurs et terminaux laissés ouverts à la fermeture. L’option est décochée par défaut et aucune commande n’est rejouée. Seules les références aux serveurs configurés et la présence du terminal sont enregistrées. Les serveurs supprimés sont ignorés et désactiver l’option efface la session mémorisée.
+- **Chemins partagés :** la fenêtre d’enregistrement propose **Disponible sur tous les serveurs**, décochée par défaut depuis l’explorateur. Cochez-la pour partager le chemin ; sinon, il reste associé au serveur courant. Ce choix peut aussi être modifié sur un chemin existant.
+- **Nouveau site web :** présentation, captures et téléchargements macOS / Windows sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Le site est disponible en français et anglais, adapté au mobile, avec une galerie interactive et le respect des préférences de réduction des animations.
+
+</details>
+
 ## 📄 Licence
 
 [MIT](LICENSE) © pickywawa
-
-### Gestionnaire de transferts et navigation distante
-
-Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Survolez-le ou cliquez dessus pour voir les transferts simultanés, leur progression, le débit, le temps restant estimé, les boutons d’annulation et les résultats récents. Les dossiers incluent leurs fichiers imbriqués. Une annulation peut laisser un fichier partiel à destination ; les fichiers déjà transférés sont conservés. L’historique récent reste en mémoire et peut être effacé.
-
-Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
-
-Le gestionnaire de clés SSH liste aussi les clés publiques autorisées sur le serveur courant dans `~/.ssh/authorized_keys`, avec leurs empreintes SHA-256. Elles sont séparées des clés gérées localement. La lecture dépend des permissions du fichier distant ; aucune clé privée n’est lue sur le serveur.
-
-## Site web
-
-Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https://pickywawa.github.io/cyberdog/). Ses fichiers statiques sont dans [site/](site/), déployés par GitHub Actions lorsqu’ils changent sur main. Prévisualisation locale : `python3 -m http.server 8765 --directory site`.
-
-### Éléments partagés et historique
-
-Les formulaires des groupes, actions rapides et chemins enregistrés proposent **Local**, **Mon espace** et les **équipes** disposant du droit de modification. Les groupes restent propres à leur espace ; les chemins et actions personnels sont disponibles sur vos serveurs, ceux d’une équipe sur les serveurs de cette équipe. Un script partagé est affiché intégralement avant exécution et vérifié à nouveau côté serveur avant lancement. Évitez de placer des secrets dans ces scripts partagés.
-
-Les droits lecture seule/modification des membres couvrent les serveurs et ces éléments partagés. Le catalogue est chargé au démarrage et après vos modifications ; les changements des autres membres apparaissent au prochain lancement.
-
-Le menu contextuel d’un serveur partagé propose **Historique des serveurs**. Paramètres → Connexion donne également accès à l’historique de Mon espace et de chaque équipe, y compris aux serveurs supprimés. Chaque version indique la date, l’adresse email et l’identifiant du compte de l’auteur. Une restauration crée une nouvelle version et nécessite le droit de modification. Seuls le nom, l’hôte, le port, l’utilisateur SSH et le groupe sont historisés : aucun mot de passe ou clé SSH. Les anciennes configurations locales ne sont pas historisées. L’auteur est le compte qui a fait la modification.
-
-### Coffres de secrets
-
-L’onglet **Paramètres → Coffres de secrets** permet d’intégrer **1Password**, **Bitwarden/Vaultwarden**, **HashiCorp Vault KV v2**, **AWS Secrets Manager**, **Azure Key Vault**, **TeamPass 3.2**, **Keeper Secrets Manager/PAM**, **ManageEngine Password Manager Pro Enterprise**, **Devolutions Server** et **Remote Desktop Manager sous Windows** directement à la liste des serveurs. Les raccourcis et paramètres restent locaux, exclus des exports et de Supabase. Les mots de passe et clés SSH sont lus à la connexion ; un verrouillage ferme les connexions du coffre.
-
-Voir le [guide de configuration et les fournisseurs étudiés](./docs/secret-vaults.md) pour les prérequis CLI, sessions, droits Vault et champs personnalisés.
-
-Les paramètres utilisent une navigation latérale, avec un onglet **Connexion** pour le compte facultatif.

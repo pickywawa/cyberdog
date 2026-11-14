@@ -8,3 +8,5 @@ dist
 
 # Mac App Store provisioning profile (personal, regenerated from App Store Connect)
 build/*.provisionprofile
+
+__pycache__/

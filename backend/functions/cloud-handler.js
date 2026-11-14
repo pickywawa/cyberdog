@@ -3,6 +3,7 @@
 export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.randomUUID()}){
  const allowed=new Set(['status','list','create_team','accept_invite','details','leave_team','invite','revoke_invite','remove_member','set_role','set_server_permission','transfer_owner','rename_team','delete_team','route_get','server_get','server_save','server_delete','asset_get','asset_save','asset_delete','history_list','history_restore'])
  const mfaActions=new Set(['mfa_status','mfa_send','mfa_verify'])
+ const accountActions=new Set(['delete_account'])
  const linkActions=new Set(['invite_link_create','invite_link_list','invite_link_revoke','invite_link_accept'])
  const fail=(code,status=403)=>Object.assign(new Error(code),{status})
  return async req=>{
@@ -25,7 +26,7 @@ export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.rand
    const {action,payload:inputPayload={}}=body
    if(!inputPayload||typeof inputPayload!=='object'||Array.isArray(inputPayload)||Object.keys(inputPayload).some(k=>k.startsWith('_')||['credentialEnvelope','newServerId'].includes(k)))throw fail('invalid_request',400)
    let payload={...inputPayload}
-   if(!allowed.has(action)&&!linkActions.has(action)&&!mfaActions.has(action))throw fail('invalid_request',400)
+   if(!allowed.has(action)&&!linkActions.has(action)&&!mfaActions.has(action)&&!accountActions.has(action))throw fail('invalid_request',400)
    const user=await json(base+'/auth/v1/user',{headers:{apikey:service,Authorization:'Bearer '+token}})
    const authId=user.data?.id,email=user.data?.email
    if(!user.ok||typeof authId!=='string'||!/^[0-9a-f-]{36}$/i.test(authId)||typeof email!=='string'||!email)throw fail('auth_required',401)
@@ -61,6 +62,15 @@ export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.rand
     return reply(200,{value:{verified:true}})
    }
    if(!await trusted())throw fail('mfa_required')
+   if(action==='delete_account'){
+    // Explicit confirmation from the client, on a session that passed the second factor.
+    if(payload.confirm!==true)throw fail('invalid_request',400)
+    await rpc('cyberdog_delete_account',{uid:identityId})
+    // Removing the Auth user also revokes its sessions and refresh tokens.
+    const removed=await json(base+'/auth/v1/admin/users/'+authId,{method:'DELETE',headers:{apikey:service,Authorization:'Bearer '+service}})
+    if(!removed.ok)throw fail('network',503)
+    return reply(200,{value:{deleted:true}})
+   }
    if(linkActions.has(action)){
     const team=()=>{if(typeof payload.teamId!=='string'||!/^[0-9a-f-]{36}$/i.test(payload.teamId))throw fail('invalid_request',400);return payload.teamId}
     if(action==='invite_link_create'){

@@ -57,3 +57,4 @@
 .password-wrap{position:relative;display:flex}.password-wrap input{flex:1;padding-right:38px}.password-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
 .account-identity{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--side)}
 .account-identity span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.account-identity .chip.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}

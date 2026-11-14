@@ -147,6 +147,8 @@ function buildAccountSettings(){
  const verify=()=>run(async()=>{const result=await api.invoke('account:verify-code',{code:code.value});code.value='';updateAccount(result)})
  const resend=()=>run(async()=>{updateAccount(await api.invoke('account:resend-code'));notice=t('account.code_resent')})
  const cancel=()=>run(async()=>{code.value='';updateAccount(await api.invoke('account:cancel-pending'))})
+ async function deleteAccount(){if(busy||!confirm(t('account.delete_confirm',{email:accountState.email||''})))return;busy=true;message='';paint()
+  try{updateAccount(await api.invoke('account:delete'));notice=t('account.deleted')}catch(e){message=t(e.message==='transfer_ownership_first'?'account.err.delete_owner':accountErrorKey(e.message))}finally{busy=false;paint()}}
  async function signOut(){if(busy)return;busy=true;paint();try{updateAccount(await api.invoke('account:sign-out'))}catch{message=t('account.err.unknown')}finally{busy=false;paint()}}
  const enter=event=>{if(event.key==='Enter'){event.preventDefault();accountState.pending?verify():submit()}}
  email.onkeydown=enter;password.onkeydown=enter;confirm.onkeydown=enter;code.onkeydown=enter
@@ -155,7 +157,7 @@ function buildAccountSettings(){
  function paint(){
   const a=accountState;content.replaceChildren();error.textContent=message;error.hidden=!message;info.textContent=notice;info.hidden=!notice
   if(a.signedIn){
-   content.append(h('div',{className:'account-identity',role:'status'},h('strong',{textContent:t('account.signed_in')}),h('span',{textContent:a.email||''}),button('account.sign_out',signOut)))
+   content.append(h('div',{className:'account-identity',role:'status'},h('strong',{textContent:t('account.signed_in')}),h('span',{textContent:a.email||''}),button('account.sign_out',signOut),button('account.delete',deleteAccount,'chip danger')))
    teams||=buildTeamsPage(element);content.append(teams)
    return
   }

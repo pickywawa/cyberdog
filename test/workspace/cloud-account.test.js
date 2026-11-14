@@ -94,6 +94,14 @@ const fetch=async(url,opts)=>{
  valid.clear();refreshFails=true;await assert.rejects(()=>cloud.refresh(),/auth_required/)
  assert.equal(cloud.state().signedIn,false);assert.equal(cloud.state().servers.length,0);assert(!fs.existsSync(path.join(directory,'account-session.bin')));assert(!fs.existsSync(path.join(directory,'cloud-server-names.bin')))
  refreshFails=false;await cloud.signIn({email,password});const logouts=auths.length;await cloud.signOut();assert(auths.slice(logouts).some(a=>a.url.endsWith('/logout')));assert.equal(cloud.state().signedIn,false);assert(!fs.existsSync(path.join(directory,'account-session.bin')))
+ // Account deletion: one confirmed gateway call, then the session and synced credentials are forgotten locally.
+ await assert.rejects(()=>cloud.deleteAccount(),/auth_required/)
+ await cloud.signIn({email,password});await cloud.refresh().catch(()=>{});if(cloud.state().pending)await cloud.verifyCode({code:'654321'}).catch(()=>{})
+ if(cloud.state().signedIn){fs.writeFileSync(path.join(directory,'team-credentials.bin'),safeStorage.encryptString('{}'))
+  const before=requests.length;await cloud.deleteAccount()
+  assert.deepEqual(requests.slice(before).map(r=>[r.body.action,r.body.payload]),[['delete_account',{confirm:true}]])
+  assert.equal(cloud.state().signedIn,false);assert(!fs.existsSync(path.join(directory,'account-session.bin')));assert(!fs.existsSync(path.join(directory,'team-credentials.bin')))}
+ else assert.fail('could not sign in again for the deletion test')
  await assert.rejects(()=>cloud.action('list'),/unknown_action/)
  const insecure=createCloudAccount({config,fetch,safeStorage:{isEncryptionAvailable:()=>false},directory})
  await assert.rejects(()=>insecure.signIn({email,password}),/secure_storage_unavailable/)

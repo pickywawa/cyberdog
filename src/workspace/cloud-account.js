@@ -138,6 +138,12 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
    if(session){try{await auth('logout',{},session.accessToken)}catch{}}
    drop();lastError=null;return emit()
   })},
+  // Deletes the account and its data on the server, then forgets the session and synced credentials locally.
+  deleteAccount(){return exclusive(async()=>{
+   if(!session)throw Error('auth_required')
+   await request('delete_account',{confirm:true})
+   drop();write(credentialsFile,null);lastError=null;return emit()
+  })},
   refresh:()=>exclusive(refresh),
   async action(action,payload){return exclusive(async()=>{
    if(!ACTIONS.has(action))throw Error('unknown_action')

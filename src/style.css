@@ -618,3 +618,6 @@ body.resizing-y { cursor: row-resize; }
 .tab-pages { padding: 18px 23px; overflow-y: auto; }
 .tab-page { display: flex; flex-direction: column; gap: 12px; }
 .tab-page[hidden] { display: none; }
+
+/* Langues RTL (arabe) : l'interface se retourne, mais terminaux, journaux et scripts restent LTR. */
+[dir="rtl"] .term-body, [dir="rtl"] .xterm, [dir="rtl"] pre, [dir="rtl"] code, [dir="rtl"] textarea { direction: ltr; text-align: left; }

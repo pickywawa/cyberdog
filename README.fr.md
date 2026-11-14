@@ -8,7 +8,7 @@
 Une alternative moderne et rapide à Cyberduck : explorateur SFTP, terminal intégré, tableau de bord de santé des serveurs et scripts en un clic — pour macOS et Windows.
 
 ![Plateformes](https://img.shields.io/badge/plateforme-macOS%20%7C%20Windows-5b6cff)
-![Langues](https://img.shields.io/badge/langues-EN%20%C2%B7%20FR%20%C2%B7%20DE%20%C2%B7%20IT-19c3d6)
+![Langues](https://img.shields.io/badge/langues-14-19c3d6)
 ![Licence](https://img.shields.io/badge/licence-MIT-2fbf71)
 
 [English](README.md) · **Français**
@@ -72,7 +72,7 @@ Le panneau de droite peut être réduit jusqu’à 290 px (environ 60 % de l’a
 | ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. |
 | 🔁 **Partagez votre configuration** | Export ZIP sélectif des groupes, serveurs, actions et chemins. Import de configuration, **Cyberduck**, **FileZilla XML** et **WinSCP INI**. |
-| 🎨 **Pensé pour être beau** | 7 thèmes, 4 langues, barres de défilement discrètes, autant d'onglets de serveurs que vous voulez. |
+| 🎨 **Pensé pour être beau** | 7 thèmes, 14 langues, barres de défilement discrètes, autant d'onglets de serveurs que vous voulez. |
 
 ---
 
@@ -242,7 +242,7 @@ Enregistrez vos scripts bash du quotidien (redémarrer une stack, nettoyer les l
 
 ### Thèmes et langues
 
-Système, Clair, Sombre, Minuit, Dracula, Forêt et Coucher de soleil — le terminal suit. L'interface existe en **English, Français, Deutsch et Italiano**.
+Système, Clair, Sombre, Minuit, Dracula, Forêt et Coucher de soleil — le terminal suit. L'interface existe en **14 langues** : English, Français, Deutsch, Italiano, Español, Português, 中文, العربية (de droite à gauche), हिन्दी, Русский, 日本語, 한국어, Türkçe et Bahasa Indonesia.
 
 <table>
   <tr>

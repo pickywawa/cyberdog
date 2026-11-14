@@ -8,7 +8,7 @@
 A fast, modern alternative to Cyberduck: SFTP explorer, built-in terminal, server-health dashboard and one-click scripts — for macOS and Windows.
 
 ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-5b6cff)
-![Languages](https://img.shields.io/badge/languages-EN%20%C2%B7%20FR%20%C2%B7%20DE%20%C2%B7%20IT-19c3d6)
+![Languages](https://img.shields.io/badge/languages-14-19c3d6)
 ![License](https://img.shields.io/badge/license-MIT-2fbf71)
 
 **English** · [Français](README.fr.md)
@@ -72,7 +72,7 @@ The right panel can be narrowed to 290 px (about 60% of its previous minimum wid
 | ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. |
 | 🔁 **Share your setup** | Selectively export groups, servers, actions and paths to ZIP. Import configuration, **Cyberduck**, **FileZilla XML** and **WinSCP INI**. |
-| 🎨 **Made to look good** | 7 themes, 4 languages, discreet scrollbars, tabs for as many servers as you like. |
+| 🎨 **Made to look good** | 7 themes, 14 languages, discreet scrollbars, tabs for as many servers as you like. |
 
 ---
 
@@ -242,7 +242,7 @@ Save your everyday bash snippets (restart a stack, clean logs, disk report…) n
 
 ### Themes & languages
 
-System, Light, Dark, Midnight, Dracula, Forest and Sunset — the terminal follows. The interface is available in **English, Français, Deutsch and Italiano**.
+System, Light, Dark, Midnight, Dracula, Forest and Sunset — the terminal follows. The interface is available in **14 languages**: English, Français, Deutsch, Italiano, Español, Português, 中文, العربية (right-to-left), हिन्दी, Русский, 日本語, 한국어, Türkçe and Bahasa Indonesia.
 
 <table>
   <tr>

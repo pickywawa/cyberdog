@@ -71,6 +71,7 @@ function applyI18n(root) {
 }
 function refreshLanguage() {
   document.documentElement.lang = lang
+  document.documentElement.dir = i18n.RTL.has(lang) ? 'rtl' : 'ltr'
   applyI18n(document)
   paintUpdateBadge()
   $('#btn-theme').title = t('theme')

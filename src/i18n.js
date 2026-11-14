@@ -1,7 +1,18 @@
-// Traductions EN / FR / DE / IT, partagées par le process principal (require) et le renderer (<script>).
-// Pluriel : clé `x_one` si n === 1, sinon `x`.
+// Traductions partagées par le process principal (require) et le renderer (<script>).
+// EN / FR / DE / IT sont définies ici ; les autres langues sont des packs dans locales/<code>.js.
+// Pluriel : clé `x_one` si n === 1, sinon `x`. Les packs peuvent aussi fournir `x_two`, `x_few`,
+// `x_many` ou `x_zero` (catégories Intl.PluralRules).
 ;(function () {
-  const LANGS = { en: 'English', fr: 'Français', de: 'Deutsch', it: 'Italiano' }
+  const LANGS = {
+    en: 'English', fr: 'Français', de: 'Deutsch', it: 'Italiano',
+    es: 'Español', pt: 'Português', zh: '中文（简体）', ar: 'العربية', hi: 'हिन्दी',
+    ru: 'Русский', ja: '日本語', ko: '한국어', tr: 'Türkçe', id: 'Bahasa Indonesia',
+  }
+  const PACK_CODES = ['es', 'pt', 'zh', 'ar', 'hi', 'ru', 'ja', 'ko', 'tr', 'id']
+  const RTL = new Set(['ar'])
+  // Packs de langue : prioritaires sur D, pour que les traductions additionnelles (workspace, premium)
+  // qui écrivent un repli anglais dans D[lang] ne les écrasent pas.
+  const PACKS = {}
 
   const D = {
     en: {
@@ -2343,15 +2354,29 @@
 
   for(const [key,values] of Object.entries({"settings.vaults": ["Coffres de secrets", "Secret vaults"], "settings.vaults_desc": ["Connectez vos coffres et retrouvez vos serveurs dans Cyberdog.", "Connect vaults and access their servers in Cyberdog."]}))for(const language of Object.keys(D))D[language][key]=values[language==='fr'?0:1]
 
+  for (const code of PACK_CODES) D[code] = {}
+  if (typeof module !== 'undefined') for (const code of PACK_CODES) PACKS[code] = require('./locales/' + code)
+
+  const rules = {}
+  function pluralKey(lang, key, n, has) {
+    if (PACKS[lang] && typeof Intl !== 'undefined') {
+      const cat = (rules[lang] ||= new Intl.PluralRules(lang)).select(n)
+      if (cat !== 'other' && has(key + '_' + cat)) return key + '_' + cat
+      return key
+    }
+    return n === 1 && has(key + '_one') ? key + '_one' : key
+  }
+
   function t(lang, key, vars) {
+    const p = PACKS[lang] || {}
     const d = D[lang] || D.en
-    const k = vars && vars.n === 1 && (key + '_one') in d ? key + '_one' : key
-    let s = d[k] ?? D.en[k] ?? key
+    const k = vars && typeof vars.n === 'number' ? pluralKey(lang, key, vars.n, x => x in p || x in d) : key
+    let s = p[k] ?? d[k] ?? D.en[k] ?? key
     for (const [name, v] of Object.entries(vars || {})) s = s.split(`{${name}}`).join(v)
     return s
   }
 
-  const api = { LANGS, D, t }
+  const api = { LANGS, D, PACKS, PACK_CODES, RTL, t }
   if (typeof module !== 'undefined') module.exports = api
   else window.i18n = api
 })()

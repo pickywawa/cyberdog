@@ -825,6 +825,37 @@ const permsOf = e => (e.isLink ? 'l' : e.isDir ? 'd' : '-') + [6, 3, 0].map(s =>
 const sizeOf = n => { let i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++ } return (i ? n.toFixed(1) : n) + ' ' + ['B', 'KB', 'MB', 'GB', 'TB'][i] }
 const dateOf = ms => new Date(ms).toLocaleString(lang, { dateStyle: 'short', timeStyle: 'short' })
 const cmp = (a, b) => (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), lang, { numeric: true, sensitivity: 'base' }))
+// Largeurs de colonnes : partagées par tous les explorateurs, mémorisées localement.
+// La colonne « name » reste flexible tant qu'elle n'a pas été redimensionnée.
+const COL_DEFAULT = { name: 0, size: 80, mtime: 140, owner: 100, group: 100, mode: 100, type: 100, ext: 80 }
+const COL_MIN = 48, NAME_MIN = 120
+const NOFS_HIDDEN = new Set(['owner', 'group', 'mode'])
+let colW = (() => { try { return { ...COL_DEFAULT, ...JSON.parse(localStorage.getItem('cyberdog.colWidths') || '{}') } } catch { return { ...COL_DEFAULT } } })()
+function applyCols(el) {
+  const keys = COLS.map(([k]) => k).filter(k => !(el.classList.contains('nofs') && NOFS_HIDDEN.has(k)))
+  el.style.setProperty('--cols', keys.map(k => k === 'name' && !colW.name ? 'minmax(220px, 3fr)' : (colW[k] || COL_DEFAULT[k]) + 'px').join(' '))
+  el.style.setProperty('--cols-min', keys.reduce((n, k) => n + (k === 'name' && !colW.name ? 220 : colW[k] || COL_DEFAULT[k]), 24) + 'px')
+}
+const applyAllCols = () => document.querySelectorAll('.explorer').forEach(applyCols)
+function colResizer(k) {
+  const grip = h('span', { className: 'col-rz', title: '', onclick: e => e.stopPropagation(),
+    ondblclick: e => { e.stopPropagation(); colW[k] = COL_DEFAULT[k]; applyAllCols(); saveCols() } })
+  grip.onmousedown = e => {
+    if (e.button !== 0) return
+    e.preventDefault(); e.stopPropagation()
+    const cell = grip.parentElement, startX = e.clientX, startW = cell.getBoundingClientRect().width
+    const rtl = getComputedStyle(cell).direction === 'rtl'
+    grip.classList.add('active'); document.body.classList.add('resizing', 'resizing-x')
+    const move = ev => { colW[k] = Math.round(Math.max(k === 'name' ? NAME_MIN : COL_MIN, startW + (ev.clientX - startX) * (rtl ? -1 : 1))); applyAllCols() }
+    const up = () => {
+      removeEventListener('mousemove', move); removeEventListener('mouseup', up)
+      grip.classList.remove('active'); document.body.classList.remove('resizing', 'resizing-x'); saveCols()
+    }
+    addEventListener('mousemove', move); addEventListener('mouseup', up)
+  }
+  return grip
+}
+const saveCols = () => { try { localStorage.setItem('cyberdog.colWidths', JSON.stringify(colW)) } catch {} }
 const nameCell = (iconHtml, kind, text) => h('div', { className: 'nm' }, h('span', { className: 'fi ic-' + kind, innerHTML: iconHtml }), h('span', { className: 'nt', textContent: text }))
 
 // la connexion SFTP est partagée par tout l'onglet : on l'écrit toujours sur l'onglet racine, jamais sur un volet
@@ -889,8 +920,9 @@ function draw(tab) {
   const { key, dir } = tab.sort
   const val = e => (key === 'type' ? typeOf(e) : key === 'ext' ? extOf(e) : e[key])
   tab.view = [...tab.entries].sort((a, b) => b.isDir - a.isDir || cmp(val(a), val(b)) * dir)
+  applyCols(tab.explorer)
   tab.head.replaceChildren(...COLS.map(([k, label]) => h('div', { onclick: () => { tab.sort = { key: k, dir: k === key ? -dir : 1 }; draw(tab) } },
-    h('span', { textContent: t(label) }), h('span', { innerHTML: k === key ? icon(dir > 0 ? 'chevron-up' : 'chevron-down') : '', style: 'display:inline-flex' }))))
+    h('span', { className: 'hl', textContent: t(label) }), h('span', { innerHTML: k === key ? icon(dir > 0 ? 'chevron-up' : 'chevron-down') : '', style: 'display:inline-flex' }), colResizer(k))))
   tab.body.replaceChildren()
   if (tab.error) {
     tab.body.append(h('div', { className: 'msg err' }, tab.error, h('br'), h('br'), h('button', { textContent: t('btn.retry'), onclick: () => load(tab, null, false) })))

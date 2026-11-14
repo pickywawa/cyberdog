@@ -14,4 +14,14 @@ function listPrivateKeys(home=os.homedir(),extra=[]){
  }
  return items.sort((a,b)=>a.path.localeCompare(b.path))
 }
-module.exports={readPrivateKey,listPrivateKeys}
+// Sandboxed builds lose access to user-picked files after relaunch: keep a private copy inside the app container.
+function copyIntoContainer(file,dir){
+ const {text}=readPrivateKey(file)
+ fs.mkdirSync(dir,{recursive:true,mode:0o700})
+ const base=path.basename(file).replace(/[^\w.@-]/g,'_')||'key'
+ let target=path.join(dir,base)
+ for(let i=2;fs.existsSync(target)&&fs.readFileSync(target,'utf8')!==text;i++)target=path.join(dir,`${base}-${i}`)
+ fs.writeFileSync(target,text,{mode:0o600})
+ return readPrivateKey(target)
+}
+module.exports={readPrivateKey,listPrivateKeys,copyIntoContainer}

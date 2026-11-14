@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('api', {
   on: (ch, fn) => {const listener=(_, ...a)=>fn(...a);ipcRenderer.on(ch,listener);return()=>ipcRenderer.removeListener(ch,listener)},
   pathOf: f => webUtils.getPathForFile(f),
   platform: process.platform,
+  mas: process.argv.includes('--cyberdog-mas'),
 })

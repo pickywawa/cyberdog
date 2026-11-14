@@ -1,7 +1,7 @@
 {
   "name": "cyberdog",
   "productName": "Cyberdog",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "A modern SFTP explorer, terminal and server-health dashboard for your SSH servers (macOS, Windows & Linux).",
   "main": "src/main.js",
   "scripts": {
@@ -13,7 +13,8 @@
     "dist:win": "electron-builder --win --publish never",
     "dist:linux": "electron-builder --linux --publish never",
     "dev": "electron .",
-    "test:portable": "node test/run-portable.cjs"
+    "test:portable": "node test/run-portable.cjs",
+    "dist:mas": "electron-builder --mac mas --universal --publish never"
   },
   "build": {
     "appId": "com.pickywawa.cyberdog",
@@ -110,7 +111,23 @@
           "cyberdog"
         ]
       }
-    ]
+    ],
+    "mas": {
+      "type": "distribution",
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "hardenedRuntime": false,
+      "identity": "Alexis PICARD (C68LA5KQ8J)",
+      "extendInfo": {
+        "ElectronTeamID": "C68LA5KQ8J"
+      },
+      "files": [
+        "!**/node_modules/cpu-features/**",
+        "!**/node_modules/ssh2/lib/protocol/crypto/build/**"
+      ],
+      "artifactName": "Cyberdog-${version}-mas.${ext}"
+    }
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.8.15",

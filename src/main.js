@@ -38,6 +38,8 @@ const transfers = new Transfers((...args) => send(...args), path.join(app.getPat
 const posix = path.posix
 const isMac = process.platform === 'darwin'
 const isWin = process.platform === 'win32'
+// Mac App Store build: sandboxed, updated by the App Store, no access outside the container except user-picked files.
+const isMas = !!process.mas
 let win
 let servers = []
 let actions = []
@@ -66,7 +68,7 @@ const extension=require('./workspace/main').createExtension({
  get savedPaths(){return savedPaths},set savedPaths(value){savedPaths=value},writePaths:()=>writePaths(),
  serverOptions,readPrivateKey:localSshKeys.readPrivateKey,keyPassphrase:id=>keyPassphrases.get(id),
  ssh:{Client,utils:sshUtils},
- credentials:async s=>{const a=await extension.connectionAuth(s);return{password:s.authMode==='key'?undefined:a?.password??secret(s),privateKey:s.authMode==='password'?undefined:a?.privateKey||(s.key?fs.readFileSync(s.key):undefined),passphrase:a?.passphrase||(s.key?keyPassphrases.get(s.key):undefined),agent:a?undefined:process.env.SSH_AUTH_SOCK||(isWin?'\\\\.\\pipe\\openssh-ssh-agent':undefined)}},
+ credentials:async s=>{const a=await extension.connectionAuth(s);return{password:s.authMode==='key'?undefined:a?.password??secret(s),privateKey:s.authMode==='password'?undefined:a?.privateKey||(s.key?fs.readFileSync(s.key):undefined),passphrase:a?.passphrase||(s.key?keyPassphrases.get(s.key):undefined),agent:a||isMas?undefined:process.env.SSH_AUTH_SOCK||(isWin?'\\\\.\\pipe\\openssh-ssh-agent':undefined)}},
  allGroups:()=>allGroups(),allActions:()=>allActions(),allPaths:()=>allPaths(),
 })
 
@@ -109,6 +111,7 @@ function loadSettings() {
   const sys = app.getLocale().slice(0, 2)
   settings = { ...DEFAULT_SETTINGS, lang: sys in i18n.LANGS ? sys : 'en' }
   try { Object.assign(settings, JSON.parse(fs.readFileSync(settingsFile(), 'utf8'))) } catch {}
+  if (isMas) { settings.configPath = ''; settings.autoDownload = false }
   // Retain custom paths even when an external volume is temporarily unavailable.
   if (!settings.defaultEditor) settings.defaultEditor = 'system'
   autoUpdater.autoDownload = !!settings.autoDownload
@@ -130,6 +133,7 @@ ipcMain.handle('settings:set', (_, patch) => {
   }
   if (typeof patch.autoDownload === 'boolean') settings.autoDownload = patch.autoDownload
   if (typeof patch.showLocalPane === 'boolean') settings.showLocalPane = patch.showLocalPane
+  if (isMas) { delete patch.configPath; delete patch.autoDownload }
   if ('configPath' in patch) {
     const nextPath = typeof patch.configPath === 'string' ? patch.configPath.trim() : ''
     if (nextPath !== previousPath) {
@@ -284,6 +288,7 @@ async function downloadReleaseAsset(openFallback = true) {
 }
 
 async function performUpdateAction(install) {
+  if (isMas) return
   if (!releaseUrl || !updateVersion) throw new Error('No Cyberdog update is available.')
   installAfterDownload = install
   if (updateMode !== 'install') {
@@ -308,7 +313,7 @@ ipcMain.handle('app:update:action', () => performUpdateAction(true))
 ipcMain.handle('app:update:download', () => performUpdateAction(false))
 
 async function checkForAppUpdate() {
-  if (!app.isPackaged) return
+  if (!app.isPackaged || isMas) return
   try {
     const response = await net.fetch('https://api.github.com/repos/pickywawa/cyberdog/releases/latest', {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cyberdog' },
@@ -410,7 +415,7 @@ async function connect(s, options = {}) {
       password: s.authMode==='key'?undefined:auth?.password || secret(s),
       privateKey,
       passphrase: auth?.passphrase || (s.key ? keyPassphrases.get(s.key) : undefined),
-      agent: auth ? undefined : process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
+      agent: auth || isMas ? undefined : process.env.SSH_AUTH_SOCK || (isWin ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined),
       tryKeyboard: true,
       keepaliveInterval: 15000,
       readyTimeout: 15000,
@@ -939,7 +944,9 @@ ipcMain.handle('keys:remote', async (_, id) => {
   return { path: file, items: sshKeys.parseAuthorizedKeys(String(contents)) }
 })
 ipcMain.handle('keys:available',()=>localSshKeys.listPrivateKeys(os.homedir(),[path.join(app.getPath('userData'),'keys')]))
-ipcMain.handle('keys:choose',async()=>{const r=await dialog.showOpenDialog(win,{properties:['openFile'],defaultPath:path.join(os.homedir(),'.ssh')});return r.canceled?null:localSshKeys.readPrivateKey(r.filePaths[0]).info})
+ipcMain.handle('keys:choose',async()=>{const r=await dialog.showOpenDialog(win,{properties:['openFile','showHiddenFiles'],defaultPath:path.join(app.getPath('home'),'.ssh')});if(r.canceled)return null
+  const info=localSshKeys.readPrivateKey(r.filePaths[0]).info
+  return isMas?localSshKeys.copyIntoContainer(info.path,path.join(app.getPath('userData'),'keys')).info:info})
 ipcMain.handle('keys:list', () => localKeyStore().list())
 ipcMain.handle('keys:generate', async (_, options) => {
   const key = await localKeyStore().generate(options)
@@ -1323,7 +1330,7 @@ app.whenReady().then(() => {
     ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } } : app.isPackaged ? {} : { icon: path.join(__dirname, '../build/icon.png') }),
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16171d' : '#ffffff',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:true },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:true, additionalArguments: isMas ? ['--cyberdog-mas'] : [] },
   })
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}))
   win.webContents.on('will-navigate',event=>event.preventDefault())

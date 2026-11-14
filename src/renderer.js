@@ -553,8 +553,8 @@ async function openSettingsModal(initialPage = 'general') {
     h('div', { className: 'note', textContent: t('settings.local_pane_help') }),
     h('label', {}, t('settings.lang'), langSel),
     h('label', {}, t('settings.theme'), themeSel),
-    h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
-    h('div', { className: 'note', textContent: t('settings.config_help') }))
+    ...(api.mas ? [] : [h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
+    h('div', { className: 'note', textContent: t('settings.config_help') })]))
   const editorPage = settingsPage('editor', 'none',
     h('label', {}, t('settings.editor'), editorInput),
     h('div', { className: 'note', textContent: t('settings.editor_help') }))
@@ -596,7 +596,7 @@ async function openSettingsModal(initialPage = 'general') {
   const vaultsPage=settingsPage('vaults','none')
   let vaultsMounted=false
   const pages=[generalPage,accountPage,editorPage,updatesPage,vaultsPage]
-  const sections=[['general','cog','settings.tab.general'],['account','user','account.connect'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']]
+  const sections=[['general','cog','settings.tab.general'],['account','user','account.connect'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']].filter(([name])=>!(api.mas&&(name==='updates'||name==='vaults')))
   const buttons=new Map()
   const sidebar=h('nav',{className:'settings-nav',role:'tablist',ariaLabel:t('settings.title'),ariaOrientation:'vertical'})
   const switchTab=name=>{

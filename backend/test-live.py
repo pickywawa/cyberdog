@@ -2,7 +2,7 @@
 import json,urllib.request,urllib.error
 from pathlib import Path
 from management import api,PROJECT_REF
-for name in ['account','workspace','assets-history','bastion','server-preferences','server-credentials']:
+for name in ['account','workspace','assets-history','bastion','server-preferences','server-credentials','mfa']:
     api('POST','/database/query',{'query':(Path(__file__).parent/(name+'-security-test.sql')).read_text()})
 keys=api('GET','/api-keys');anon=next(x['api_key'] for x in keys if x['name']=='anon')
 base='https://'+PROJECT_REF+'.supabase.co'

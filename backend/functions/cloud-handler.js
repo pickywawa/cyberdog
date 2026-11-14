@@ -2,6 +2,7 @@
 // derives the acting identity from it and never trusts a client-supplied user id, email or role.
 export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.randomUUID()}){
  const allowed=new Set(['status','list','create_team','accept_invite','details','leave_team','invite','revoke_invite','remove_member','set_role','set_server_permission','transfer_owner','rename_team','delete_team','route_get','server_get','server_save','server_delete','asset_get','asset_save','asset_delete','history_list','history_restore'])
+ const mfaActions=new Set(['mfa_status','mfa_send','mfa_verify'])
  const linkActions=new Set(['invite_link_create','invite_link_list','invite_link_revoke','invite_link_accept'])
  const fail=(code,status=403)=>Object.assign(new Error(code),{status})
  return async req=>{
@@ -24,11 +25,42 @@ export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.rand
    const {action,payload:inputPayload={}}=body
    if(!inputPayload||typeof inputPayload!=='object'||Array.isArray(inputPayload)||Object.keys(inputPayload).some(k=>k.startsWith('_')||['credentialEnvelope','newServerId'].includes(k)))throw fail('invalid_request',400)
    let payload={...inputPayload}
-   if(!allowed.has(action)&&!linkActions.has(action))throw fail('invalid_request',400)
+   if(!allowed.has(action)&&!linkActions.has(action)&&!mfaActions.has(action))throw fail('invalid_request',400)
    const user=await json(base+'/auth/v1/user',{headers:{apikey:service,Authorization:'Bearer '+token}})
    const authId=user.data?.id,email=user.data?.email
    if(!user.ok||typeof authId!=='string'||!/^[0-9a-f-]{36}$/i.test(authId)||typeof email!=='string'||!email)throw fail('auth_required',401)
+   // A mailbox that never proved ownership has no cloud access, whatever the project's auth settings are.
+   const confirmedAt=Date.parse(user.data.email_confirmed_at||user.data.confirmed_at||'')
+   if(!Number.isFinite(confirmedAt))throw fail('auth_required',401)
+   // The token was just verified by Supabase Auth, so its claims can be read without checking the signature again.
+   const sessionId=jwtClaim(token,'session_id')
+   if(typeof sessionId!=='string'||!/^[0-9a-f-]{36}$/i.test(sessionId))throw fail('auth_required',401)
    const identityId=await rpc('cyberdog_bind_auth',{auth_id:authId,email})
+   const verified=()=>rpc('cyberdog_mfa_is_verified',{sid:sessionId,uid:authId})
+   // Right after the sign-up code the mailbox has just been proven: that counts as this session's second factor.
+   const trusted=async()=>{if(await verified())return true;if(Date.now()-confirmedAt<15*60000){await rpc('cyberdog_mfa_complete',{sid:sessionId,uid:authId});return true}return false}
+   if(mfaActions.has(action)){
+    if(action==='mfa_status'||action==='mfa_send'){
+     if(await trusted())return reply(200,{value:{verified:true}})
+     if(action==='mfa_status')return reply(200,{value:{verified:false}})
+     await rpc('cyberdog_mfa_begin',{sid:sessionId,uid:authId})
+     await rpc('cyberdog_mfa_prune',{}).catch(()=>{})
+     const sent=await json(base+'/auth/v1/otp',{method:'POST',headers:{apikey:env('SUPABASE_ANON_KEY')||service,'Content-Type':'application/json'},body:JSON.stringify({email,create_user:false})})
+     if(!sent.ok)throw fail('network',503)
+     return reply(200,{value:{verified:false,sent:true}})
+    }
+    const code=typeof payload.code==='string'?payload.code.trim():''
+    if(!/^\d{6}$/.test(code))throw fail('otp_invalid')
+    if(await verified())return reply(200,{value:{verified:true}})
+    await rpc('cyberdog_mfa_attempt',{sid:sessionId,uid:authId})
+    // Supabase checks the code against the account's own address; the session it creates here is discarded.
+    const checked=await json(base+'/auth/v1/verify',{method:'POST',headers:{apikey:env('SUPABASE_ANON_KEY')||service,'Content-Type':'application/json'},body:JSON.stringify({type:'email',email,token:code})})
+    if(!checked.ok||checked.data?.user?.id!==authId)throw fail('otp_invalid')
+    if(typeof checked.data.access_token==='string'&&/^[\w-]+\.[\w-]+\.[\w-]+$/.test(checked.data.access_token))await json(base+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:env('SUPABASE_ANON_KEY')||service,Authorization:'Bearer '+checked.data.access_token}}).catch(()=>{})
+    await rpc('cyberdog_mfa_complete',{sid:sessionId,uid:authId})
+    return reply(200,{value:{verified:true}})
+   }
+   if(!await trusted())throw fail('mfa_required')
    if(linkActions.has(action)){
     const team=()=>{if(typeof payload.teamId!=='string'||!/^[0-9a-f-]{36}$/i.test(payload.teamId))throw fail('invalid_request',400);return payload.teamId}
     if(action==='invite_link_create'){
@@ -62,7 +94,9 @@ export function createCloudHandler({env,fetcher=fetch,randomUUID=()=>crypto.rand
   }
  }
 }
-const SAFE_ERRORS=new Set(['access_denied', 'admin_required', 'already_member', 'auth_required', 'bastion.chain', 'bastion.in_use', 'bastion.invalid_route', 'bastion.missing', 'bastion.route_unsupported', 'bastion.scope', 'credential_sync_unavailable', 'group_in_use', 'invalid_asset', 'invalid_credential', 'invalid_group', 'invalid_invite_link', 'invalid_name', 'invalid_permission', 'invalid_recipient', 'invalid_request', 'invalid_role', 'invalid_server', 'invalid_server_options', 'invitation_unavailable', 'invite_limit', 'network', 'owner_required', 'rate_limited', 'secrets_forbidden', 'server_write_required', 'team_limit', 'transfer_ownership_first'])
+const SAFE_ERRORS=new Set(['access_denied', 'mfa_required', 'otp_invalid', 'otp_expired', 'admin_required', 'already_member', 'auth_required', 'bastion.chain', 'bastion.in_use', 'bastion.invalid_route', 'bastion.missing', 'bastion.route_unsupported', 'bastion.scope', 'credential_sync_unavailable', 'group_in_use', 'invalid_asset', 'invalid_credential', 'invalid_group', 'invalid_invite_link', 'invalid_name', 'invalid_permission', 'invalid_recipient', 'invalid_request', 'invalid_role', 'invalid_server', 'invalid_server_options', 'invitation_unavailable', 'invite_limit', 'network', 'owner_required', 'rate_limited', 'secrets_forbidden', 'server_write_required', 'team_limit', 'transfer_ownership_first'])
+
+function jwtClaim(token,name){try{const part=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(part.padEnd(Math.ceil(part.length/4)*4,'=')))[name]}catch{return undefined}}
 
 // AES-GCM key lives only in Edge Function secrets, never in the database or desktop.
 function credentialKey(env){const hex=env('CYBERDOG_CREDENTIALS_KEY');if(!/^[a-f0-9]{64}$/i.test(hex||''))throw Error('credential_sync_unavailable');return crypto.subtle.importKey('raw',Uint8Array.from(hex.match(/../g),s=>parseInt(s,16)),'AES-GCM',false,['encrypt','decrypt'])}

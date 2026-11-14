@@ -120,21 +120,37 @@ function buildAccountSettings(){
  let busy=false,message='',mode='signin',notice=''
  const email=h('input',{type:'email',autocomplete:'email',placeholder:t('account.email'),ariaLabel:t('account.email')})
  const password=h('input',{type:'password',autocomplete:'current-password',placeholder:t('account.password'),ariaLabel:t('account.password')})
+ const confirm=h('input',{type:'password',autocomplete:'new-password',placeholder:t('account.password_confirm'),ariaLabel:t('account.password_confirm')})
+ const code=h('input',{type:'text',inputMode:'numeric',autocomplete:'one-time-code',maxLength:6,pattern:'[0-9]{6}',placeholder:'000000',ariaLabel:t('account.code')})
  const content=h('div',{className:'account-content'}),error=h('p',{className:'err',role:'alert'}),info=h('p',{className:'dim',role:'status'})
  element.append(content,info,error)
  const button=(label,fn,cls='chip',disabled=false)=>h('button',{type:'button',className:cls,textContent:t(label),disabled:busy||disabled,onclick:fn})
- async function submit(){
-  if(busy)return;busy=true;message='';notice='';paint()
-  try{
-   const result=await api.invoke(mode==='signup'?'account:sign-up':'account:sign-in',{email:email.value,password:password.value})
-   password.value=''
-   if(result.confirmEmail){notice=t('account.confirm_email');mode='signin'}else updateAccount(result)
-  }catch(e){message=t(['invalid_credentials','email_taken','weak_password','invalid_email','email_not_confirmed','signup_disabled','network','rate_limited','secure_storage_unavailable','unconfigured'].includes(e.message)?'account.err.'+e.message:'account.err.unknown')}
-  finally{busy=false;paint()}
+ // Password field with a show/hide eye. Always starts hidden again after any repaint of the form.
+ const secret=(input,label)=>{
+  const eye=h('button',{type:'button',className:'ib password-eye',tabIndex:0,disabled:busy})
+  const show=visible=>{input.type=visible?'text':'password';eye.innerHTML=icon(visible?'eye-off':'eye');eye.ariaPressed=String(visible);eye.ariaLabel=t(visible?'account.hide_password':'account.show_password');eye.title=eye.ariaLabel}
+  eye.onclick=()=>show(input.type==='password');show(false)
+  return h('label',{className:'account-field'},label,h('span',{className:'password-wrap'},input,eye))
  }
+ const hide=()=>{for(const i of [password,confirm])i.type='password'}
+ const known=['invalid_credentials','email_taken','weak_password','invalid_email','email_not_confirmed','signup_disabled','network','rate_limited','secure_storage_unavailable','unconfigured','otp_invalid','otp_expired','mfa_required','password_mismatch']
+ const fail=e=>{message=t(known.includes(e.message)?'account.err.'+e.message:'account.err.unknown')}
+ async function run(work){
+  if(busy)return;busy=true;message='';notice='';paint()
+  try{await work()}catch(e){fail(e)}finally{busy=false;paint()}
+ }
+ const submit=()=>run(async()=>{
+  if(mode==='signup'&&password.value!==confirm.value)throw Error('password_mismatch')
+  const result=await api.invoke(mode==='signup'?'account:sign-up':'account:sign-in',{email:email.value,password:password.value})
+  password.value='';confirm.value='';hide();code.value='';updateAccount(result)
+ })
+ const verify=()=>run(async()=>{const result=await api.invoke('account:verify-code',{code:code.value});code.value='';updateAccount(result)})
+ const resend=()=>run(async()=>{updateAccount(await api.invoke('account:resend-code'));notice=t('account.code_resent')})
+ const cancel=()=>run(async()=>{code.value='';updateAccount(await api.invoke('account:cancel-pending'))})
  async function signOut(){if(busy)return;busy=true;paint();try{updateAccount(await api.invoke('account:sign-out'))}catch{message=t('account.err.unknown')}finally{busy=false;paint()}}
- const enter=event=>{if(event.key==='Enter'){event.preventDefault();submit()}}
- email.onkeydown=enter;password.onkeydown=enter
+ const enter=event=>{if(event.key==='Enter'){event.preventDefault();accountState.pending?verify():submit()}}
+ email.onkeydown=enter;password.onkeydown=enter;confirm.onkeydown=enter;code.onkeydown=enter
+ code.oninput=()=>{code.value=code.value.replace(/\D/g,'').slice(0,6)}
  let teams=null
  function paint(){
   const a=accountState;content.replaceChildren();error.textContent=message;error.hidden=!message;info.textContent=notice;info.hidden=!notice
@@ -143,9 +159,17 @@ function buildAccountSettings(){
    teams||=buildTeamsPage(element);content.append(teams)
    return
   }
-  email.disabled=busy;password.disabled=busy;password.autocomplete=mode==='signup'?'new-password':'current-password'
-  content.append(h('p',{className:'dim',textContent:t('account.intro')}),h('label',{className:'account-field'},t('account.email'),email),h('label',{className:'account-field'},t(mode==='signup'?'account.password_new':'account.password'),password))
-  content.append(h('div',{className:'chips'},button(mode==='signup'?'account.sign_up':'account.sign_in',submit,'primary',a.configured===false),button(mode==='signup'?'account.have_account':'account.no_account',()=>{mode=mode==='signup'?'signin':'signup';message='';notice='';paint()},'chip')))
+  if(a.pending){
+   // Second step: a 6-digit code e-mailed by Supabase. The server decides whether it is right.
+   const signup=a.pending.kind==='signup';code.disabled=busy
+   content.append(h('p',{className:'dim',textContent:t(signup?'account.code_signup':'account.code_login')}),h('strong',{textContent:a.pending.email||''}),h('label',{className:'account-field'},t('account.code'),code))
+   content.append(h('div',{className:'chips'},button('account.verify',verify,'primary'),button('account.resend',resend),button('btn.cancel',cancel)))
+   return
+  }
+  email.disabled=busy;password.disabled=busy;confirm.disabled=busy;hide();password.autocomplete=mode==='signup'?'new-password':'current-password'
+  content.append(h('p',{className:'dim',textContent:t('account.intro')}),h('label',{className:'account-field'},t('account.email'),email),secret(password,t(mode==='signup'?'account.password_new':'account.password')))
+  if(mode==='signup')content.append(secret(confirm,t('account.password_confirm')))
+  content.append(h('div',{className:'chips'},button(mode==='signup'?'account.sign_up':'account.sign_in',submit,'primary',a.configured===false),button(mode==='signup'?'account.have_account':'account.no_account',()=>{mode=mode==='signup'?'signin':'signup';message='';notice='';password.value='';confirm.value='';paint()},'chip')))
   content.append(h('small',{className:'dim',textContent:t('account.privacy')}))
  }
  accountViews.add({element,paint});paint()

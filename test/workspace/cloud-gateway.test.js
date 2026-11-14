@@ -1,12 +1,17 @@
 const{test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto')
 const load=()=>import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync(path.join(__dirname,'../../backend/functions/cloud-handler.js'),'utf8')).toString('base64'))
 const env=k=>({SUPABASE_URL:'https://test.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'service-only'})[k]
-const token='aaaa.bbbb.cccc',authId='11111111-1111-4111-8111-111111111111',email='member@example.test',identity='22222222-2222-4222-8222-222222222222'
+const sessionId='44444444-4444-4444-8444-444444444444',b64=o=>Buffer.from(JSON.stringify(o)).toString('base64url'),token=b64({alg:'HS256'})+'.'+b64({session_id:sessionId})+'.sig',authId='11111111-1111-4111-8111-111111111111',email='member@example.test',identity='22222222-2222-4222-8222-222222222222'
 function fixture(options={}){
  const calls=[]
  const fetcher=async(url,opts={})=>{
   const body=opts.body?JSON.parse(opts.body):undefined;calls.push({url,body,headers:opts.headers})
-  if(url.endsWith('/auth/v1/user'))return opts.headers.Authorization==='Bearer '+token?Response.json({id:authId,email}):Response.json({error:'bad_jwt'},{status:401})
+  if(url.endsWith('/auth/v1/user'))return opts.headers.Authorization==='Bearer '+token?Response.json({id:authId,email,email_confirmed_at:options.confirmedAt===undefined?'2020-01-01T00:00:00Z':options.confirmedAt}):Response.json({error:'bad_jwt'},{status:401})
+  if(url.endsWith('/rpc/cyberdog_mfa_is_verified'))return Response.json(options.unverified?false:true)
+  if(url.includes('/rpc/cyberdog_mfa_'))return options.mfaDeny?Response.json({message:options.mfaDeny},{status:400}):Response.json(null)
+  if(url.endsWith('/auth/v1/otp'))return Response.json({})
+  if(url.endsWith('/auth/v1/verify'))return body.token==='123456'?Response.json({access_token:'tmp.tmp.tmp',user:{id:authId}}):Response.json({error_code:'otp_expired'},{status:403})
+  if(url.includes('/auth/v1/logout'))return new Response(null,{status:204})
   if(url.endsWith('/rpc/cyberdog_bind_auth'))return Response.json(identity)
   if(url.endsWith('/rpc/cyberdog_member_action'))return options.deny?Response.json({message:'access_denied'},{status:400}):Response.json({teams:[],servers:[]})
   if(url.includes('/rpc/cyberdog_invite_link_'))return options.deny?Response.json({message:options.deny},{status:400}):Response.json(url.endsWith('_create')?{id:'link-1',expiresAt:'2030-01-01T00:00:00Z',usesLeft:body.uses}:url.endsWith('_list')?[]:null)
@@ -68,4 +73,34 @@ test('gateway stores only ciphertext, reveals only after authorization and rejec
  let r=await handle(request({action:'server_save',payload:{teamId:'team',name:'Server',authMode:'password',syncCredentials:true,credentials:{kind:'password',password:'shared-password'}}}));assert.equal(r.status,200);assert(saved.payload._credentialEnvelope);assert.equal(saved.payload._newServerId,id);assert(!JSON.stringify(saved).includes('shared-password'));assert(!('credentials'in saved.payload))
  r=await handle(request({action:'server_get',payload:{id,teamId:'team'}}));const result=await r.json();assert.equal(result.value.syncedCredential.password,'shared-password');assert(!('credentialEnvelope'in result.value))
  const denied=fixture({deny:true});r=await createCloudHandler({env:keyEnv,fetcher:denied.fetcher})(request({action:'server_get',payload:{id,teamId:'other'}}));assert.equal(r.status,403);assert(!JSON.stringify(await r.json()).includes('shared-password'))
+})
+
+test('an unconfirmed mailbox or a session without the e-mail code gets no cloud access',async()=>{
+ const{createCloudHandler}=await load(),handle=f=>createCloudHandler({env,fetcher:f.fetcher})
+ const unconfirmed=fixture({confirmedAt:null}),a=await handle(unconfirmed)(request({action:'list'}));assert.equal(a.status,401);assert.equal(unconfirmed.rpc('cyberdog_member_action').length,0)
+ for(const action of ['list','server_get','invite_link_list','invite_link_accept','details']){
+  const f=fixture({unverified:true}),r=await handle(f)(request({action,payload:{teamId:'33333333-3333-4333-8333-333333333333',token:'A'.repeat(43)}}));assert.equal(r.status,403,action);assert.deepEqual(await r.json(),{error:'mfa_required'})
+  assert.equal(f.calls.filter(c=>c.url.includes('/rpc/')&&!/cyberdog_(bind_auth|mfa_is_verified)/.test(c.url)).length,0,action)
+ }
+})
+test('e-mail code: sent to the token owner only, checked by Supabase, session bound server side',async()=>{
+ const{createCloudHandler}=await load(),handle=f=>createCloudHandler({env,fetcher:f.fetcher})
+ const send=fixture({unverified:true}),sent=await handle(send)(request({action:'mfa_send',payload:{email:'victim@example.test'}}));assert.equal(sent.status,200)
+ const otp=send.calls.find(c=>c.url.endsWith('/auth/v1/otp'));assert.deepEqual(otp.body,{email,create_user:false})
+ assert.deepEqual(send.rpc('cyberdog_mfa_begin')[0].body,{sid:sessionId,uid:authId})
+ const good=fixture({unverified:true}),ok=await handle(good)(request({action:'mfa_verify',payload:{code:'123456',email:'victim@example.test',sessionId:'other'}}));assert.equal(ok.status,200)
+ assert.equal(good.calls.find(c=>c.url.endsWith('/auth/v1/verify')).body.email,email)
+ assert(good.calls.some(c=>c.url.includes('/auth/v1/logout')&&c.headers.Authorization==='Bearer tmp.tmp.tmp'))
+ assert.deepEqual(good.rpc('cyberdog_mfa_complete')[0].body,{sid:sessionId,uid:authId});assert.equal(good.rpc('cyberdog_mfa_attempt').length,1)
+ const wrong=fixture({unverified:true}),bad=await handle(wrong)(request({action:'mfa_verify',payload:{code:'000000'}}));assert.equal(bad.status,403);assert.deepEqual(await bad.json(),{error:'otp_invalid'});assert.equal(wrong.rpc('cyberdog_mfa_complete').length,0);assert.equal(wrong.rpc('cyberdog_mfa_attempt').length,1)
+ for(const code of ['12345','1234567','abcdef',undefined,123456]){const f=fixture({unverified:true}),r=await handle(f)(request({action:'mfa_verify',payload:{code}}));assert.equal(r.status,403);assert.equal(f.rpc('cyberdog_mfa_attempt').length,0)}
+ const spent=fixture({unverified:true,mfaDeny:'otp_expired'}),gone=await handle(spent)(request({action:'mfa_verify',payload:{code:'123456'}}));assert.deepEqual(await gone.json(),{error:'otp_expired'});assert(!spent.calls.some(c=>c.url.endsWith('/auth/v1/verify')))
+ const throttled=fixture({unverified:true,mfaDeny:'rate_limited'}),slow=await handle(throttled)(request({action:'mfa_send'}));assert.deepEqual(await slow.json(),{error:'rate_limited'});assert(!throttled.calls.some(c=>c.url.endsWith('/auth/v1/otp')))
+})
+test('a fresh sign-up confirmation counts as the second factor; a missing session id is refused',async()=>{
+ const{createCloudHandler}=await load(),handle=f=>createCloudHandler({env,fetcher:f.fetcher})
+ const f=fixture({unverified:true,confirmedAt:new Date().toISOString()}),r=await handle(f)(request({action:'mfa_status'}));assert.deepEqual(await r.json(),{value:{verified:true}});assert.equal(f.rpc('cyberdog_mfa_complete').length,1)
+ const direct=fixture({unverified:true,confirmedAt:new Date().toISOString()}),listed=await handle(direct)(request({action:'list'}));assert.equal(listed.status,200);assert.equal(direct.rpc('cyberdog_mfa_complete').length,1)
+ const resent=fixture({unverified:true,confirmedAt:new Date().toISOString()}),again=await handle(resent)(request({action:'mfa_send'}));assert.deepEqual(await again.json(),{value:{verified:true}});assert(!resent.calls.some(c=>c.url.endsWith('/auth/v1/otp')))
+ const old=fixture({unverified:true}),s=await handle(old)(request({action:'mfa_status'}));assert.deepEqual(await s.json(),{value:{verified:false}});assert.equal(old.rpc('cyberdog_mfa_complete').length,0)
 })

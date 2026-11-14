@@ -9,7 +9,7 @@ function parseInvite(value){
 }
 function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}){
  const file=path.join(directory,'account-session.bin'),credentialsFile=path.join(directory,'team-credentials.bin'),previewFile=path.join(directory,'cloud-server-names.bin')
- let session=null,profile=null,initialized=null,queue=Promise.resolve(),lastError=null,preview=[]
+ let session=null,pending=null,persist=true,profile=null,initialized=null,queue=Promise.resolve(),lastError=null,preview=[]
  const previewOwner=()=>session?crypto.createHash('sha256').update(session.userId).digest('hex'):null
  const clearPreview=()=>{preview=[];write(previewFile,null)}
  let catalog={teams:[],servers:[],invitations:[]}
@@ -17,10 +17,10 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
  const secure=()=>{if(!safeStorage.isEncryptionAvailable()||safeStorage.getSelectedStorageBackend?.()==='basic_text')throw Error('secure_storage_unavailable')}
  const read=p=>{if(!fs.existsSync(p))return null;secure();return JSON.parse(safeStorage.decryptString(fs.readFileSync(p)))}
  const write=(p,value)=>{if(value===null){fs.rmSync(p,{force:true});return}secure();fs.mkdirSync(directory,{recursive:true});const temp=p+'.tmp';try{fs.writeFileSync(temp,safeStorage.encryptString(JSON.stringify(value)),{mode:0o600});fs.renameSync(temp,p)}finally{fs.rmSync(temp,{force:true})}}
- const state=()=>({configured,signedIn:!!session,email:session?.email||null,userId:session?.userId||null,error:lastError,...catalog})
+ const state=()=>({configured,signedIn:!!session&&!pending,pending:pending?{kind:pending.kind,email:pending.email,sent:!!pending.sent}:null,email:session?.email||null,userId:session?.userId||null,error:lastError,...catalog})
  const emit=()=>{onChange(state());return state()}
  const empty=()=>{profile=null;catalog={teams:[],servers:[],invitations:[]}}
- const drop=()=>{session=null;empty();clearPreview();write(file,null)}
+ const drop=()=>{session=null;pending=null;persist=true;empty();clearPreview();write(file,null)}
  async function auth(endpoint,body,token){
   let r;try{r=await fetch(config.supabaseUrl+'/auth/v1/'+endpoint,{method:'POST',headers:{apikey:config.supabaseAnonKey,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body||{}),signal:AbortSignal.timeout(30000)})}catch{throw Error('network')}
   const data=await r.json().catch(()=>({}))
@@ -30,7 +30,7 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
  const storeSession=data=>{
   if(typeof data.access_token!=='string'||typeof data.refresh_token!=='string'||typeof data.user?.id!=='string')throw Error('network')
   session={accessToken:data.access_token,refreshToken:data.refresh_token,expiresAt:Date.now()+(Number(data.expires_in)||3600)*1000,userId:data.user.id,email:String(data.user.email||'').toLowerCase()}
-  write(file,session)
+  if(persist)write(file,session)
  }
  async function token(force=false){
   if(!session)throw Error('auth_required')
@@ -46,7 +46,10 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
    let r;try{r=await fetch(config.supabaseUrl+'/functions/v1/cyberdog-cloud',{method:'POST',headers:{apikey:config.supabaseAnonKey,Authorization:'Bearer '+bearer,'Content-Type':'application/json'},body:JSON.stringify({action,payload}),signal:AbortSignal.timeout(30000)})}catch{lastError='network';throw Error('network')}
    const data=await r.json().catch(()=>({}))
    if(r.status===401&&attempt===0)continue
-   if(!r.ok){lastError=ERRORS.has(data.error)?data.error:'network';if(lastError==='auth_required'){drop();emit()}throw Error(lastError)}
+   if(!r.ok){lastError=ERRORS.has(data.error)?data.error:'network';if(lastError==='auth_required'){drop();emit()}
+    // The password was right but this session has not passed the e-mail code yet.
+    if(lastError==='mfa_required'&&session&&!pending){pending={kind:'login',email:session.email,sent:false}}
+    throw Error(lastError)}
    lastError=null;return data
   }
  }
@@ -58,6 +61,14 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
    write(previewFile,{owner:previewOwner(),servers:catalog.servers.map(({id,name,teamId})=>({id,name,teamId}))})
    return emit()
   }catch(e){emit();throw e}
+ }
+ const trusted=()=>{pending=null;persist=true;write(file,session);empty()}
+ async function secondFactor(){
+  pending=null
+  const status=(await request('mfa_status')).value
+  if(status?.verified){trusted();try{await refresh()}catch{};return}
+  pending={kind:'login',email:session.email,sent:false}
+  try{await request('mfa_send');pending.sent=true}catch(e){if(e.message!=='rate_limited')throw e;pending.sent=true}
  }
  const exclusive=work=>{const next=queue.then(work);queue=next.catch(()=>{});return next}
  const mergeSecrets=fresh=>{const local=(read(credentialsFile)||{})[credentialId(fresh)]||{},merged={...fresh,...local,authMode:local.authMode||(local.key?'key':fresh.authMode),syncedCredential:fresh.syncedCredential};if(fresh.syncedCredential){merged.authMode=fresh.authMode;delete merged.pass;delete merged.key;delete merged.keyData}return merged}
@@ -74,21 +85,54 @@ function createCloudAccount({config,fetch,safeStorage,directory,onChange=()=>{}}
   localAuth(s){try{const local=(read(credentialsFile)||{})[credentialId(s)]||{};return s.hasSyncedCredential?{}:{authMode:local.authMode||(local.key?'key':s.authMode),hasStoredKey:!!local.keyData}}catch{return {}}},
   localKey(s){try{return (read(credentialsFile)||{})[credentialId(s)]?.key||undefined}catch{return undefined}},
   hasPassword(s){try{return !!(read(credentialsFile)||{})[credentialId(s)]?.pass}catch{return false}},
-  async init(){if(!initialized)initialized=(async()=>{try{session=read(file);if(session&&(typeof session.userId!=='string'||typeof session.refreshToken!=='string'))session=null;try{const cached=read(previewFile);if(session&&cached?.owner===previewOwner()&&Array.isArray(cached.servers))preview=cached.servers.filter(s=>typeof s.id==='string'&&typeof s.name==='string'&&typeof s.teamId==='string').map(({id,name,teamId})=>({id,name,teamId}))}catch{}await refresh()}catch{emit()}})();await initialized;return state()},
+  async init(){if(!initialized)initialized=(async()=>{try{session=read(file);if(session&&(typeof session.userId!=='string'||typeof session.refreshToken!=='string'))session=null;try{const cached=read(previewFile);if(session&&cached?.owner===previewOwner()&&Array.isArray(cached.servers))preview=cached.servers.filter(s=>typeof s.id==='string'&&typeof s.name==='string'&&typeof s.teamId==='string').map(({id,name,teamId})=>({id,name,teamId}))}catch{}await refresh().catch(()=>{});if(pending&&!pending.sent){try{await secondFactor()}catch{}}emit()}catch{emit()}})();await initialized;return state()},
   signIn(value){return exclusive(async()=>{
-   if(!configured)throw Error('unconfigured');secure();const input=credentials(value);lastError=null
-   storeSession(await auth('token?grant_type=password',input));empty()
-   try{await refresh()}catch{}
-   return state()
+   if(!configured)throw Error('unconfigured');secure();const input=credentials(value);lastError=null;pending=null
+   let data;try{data=await auth('token?grant_type=password',input)}
+   catch(e){
+    // The mailbox was never verified: continue the sign-up verification instead of failing.
+    if(e.message==='email_not_confirmed'){pending={kind:'signup',email:input.email,sent:false};try{await auth('resend',{type:'signup',email:input.email});pending.sent=true}catch{}return emit()}
+    throw e
+   }
+   // Until the e-mail code is accepted the session lives in memory only and the gateway refuses it.
+   persist=false;storeSession(data);empty()
+   await secondFactor()
+   return emit()
   })},
   signUp(value){return exclusive(async()=>{
-   if(!configured)throw Error('unconfigured');secure();const input=credentials(value);lastError=null
+   if(!configured)throw Error('unconfigured');secure();const input=credentials(value);lastError=null;pending=null
    const data=await auth('signup',input)
-   // With e-mail confirmation enabled Supabase returns no session yet.
-   if(!data.access_token)return{...state(),confirmEmail:true}
-   storeSession(data);empty()
+   // The project must require e-mail confirmation. A session here means it does not: refuse it (fail closed).
+   if(data.access_token||data.session)throw Error('unknown')
+   pending={kind:'signup',email:input.email,sent:true}
+   return emit()
+  })},
+  verifyCode(value){return exclusive(async()=>{
+   if(!configured)throw Error('unconfigured');if(!pending)throw Error('unknown')
+   const code=String(value?.code||'').trim();if(!/^\d{6}$/.test(code))throw Error('otp_invalid')
+   lastError=null
+   if(pending.kind==='signup'){
+    persist=true;const email=pending.email
+    const data=await auth('verify',{type:'signup',email,token:code})
+    pending=null;storeSession(data);empty()
+    // The sign-up code proves the mailbox: the gateway accepts it as this session's second factor.
+    await secondFactor();return emit()
+   }
+   await request('mfa_verify',{code});trusted()
    try{await refresh()}catch{}
-   return state()
+   return emit()
+  })},
+  resendCode(){return exclusive(async()=>{
+   if(!configured)throw Error('unconfigured');if(!pending)throw Error('unknown')
+   lastError=null
+   if(pending.kind==='signup'){await auth('resend',{type:'signup',email:pending.email});pending.sent=true;return emit()}
+   const status=(await request('mfa_send')).value
+   if(status?.verified){trusted();try{await refresh()}catch{}}else pending.sent=true
+   return emit()
+  })},
+  cancelPending(){return exclusive(async()=>{
+   if(session&&pending?.kind==='login'){try{await auth('logout',{},session.accessToken)}catch{}}
+   if(pending?.kind==='login'||!session)drop();pending=null;lastError=null;return emit()
   })},
   signOut(){return exclusive(async()=>{
    if(session){try{await auth('logout',{},session.accessToken)}catch{}}
@@ -119,6 +163,7 @@ function authError(status,data){
  if(code==='user_already_exists'||code==='email_exists')return 'email_taken'
  if(code==='weak_password')return 'weak_password'
  if(code==='email_not_confirmed')return 'email_not_confirmed'
+ if(/otp_expired|otp_invalid/.test(code))return 'otp_invalid'
  if(code==='signup_disabled'||code==='email_provider_disabled')return 'signup_disabled'
  if(/email_address_invalid|validation_failed/.test(code))return 'invalid_email'
  if(['refresh_token_not_found','refresh_token_already_used','session_not_found','session_expired','bad_jwt'].includes(code)||status===401)return 'auth_required'
@@ -126,5 +171,5 @@ function authError(status,data){
 }
 const ACTIONS=new Set(['create_team','accept_invite','details','leave_team','invite','revoke_invite','remove_member','set_role','set_server_permission','transfer_owner','rename_team','delete_team','server_delete','asset_get','asset_delete','history_list','history_restore','invite_link_create','invite_link_list','invite_link_revoke','invite_link_accept'])
 const VALUE_ACTIONS=new Set(['details','asset_get','history_list','invite_link_create','invite_link_list'])
-const ERRORS=new Set(['bastion.invalid_route','bastion.missing','bastion.scope','bastion.chain','bastion.in_use','bastion.route_unsupported','unconfigured','access_denied','auth_required','admin_required','owner_required','server_write_required','invalid_permission','invalid_name','invalid_recipient','already_member','invalid_role','invalid_server','invalid_server_options','invalid_credential','credential_sync_unavailable','invalid_asset','invalid_group','group_in_use','secrets_forbidden','invitation_unavailable','invalid_invite_link','transfer_ownership_first','team_limit','invite_limit','network','rate_limited'])
+const ERRORS=new Set(['bastion.invalid_route','bastion.missing','bastion.scope','bastion.chain','bastion.in_use','bastion.route_unsupported','unconfigured','access_denied','auth_required','admin_required','owner_required','server_write_required','invalid_permission','invalid_name','invalid_recipient','already_member','invalid_role','invalid_server','invalid_server_options','invalid_credential','credential_sync_unavailable','invalid_asset','invalid_group','group_in_use','secrets_forbidden','invitation_unavailable','invalid_invite_link','transfer_ownership_first','team_limit','invite_limit','network','rate_limited','mfa_required','otp_invalid','otp_expired'])
 module.exports={createCloudAccount,parseInvite}

@@ -7,7 +7,7 @@ const email='member@example.test',password='correct horse battery',link='cyberdo
 const server={id:'server-1',teamId:'team-1',name:'VM',host:'host-1',port:22,user:'root'}
 const jump={...server,id:'jump-1',host:'jump.test',user:'jump'}
 const asset={id:'action-1',teamId:'team-1',kind:'actions',name:'Health',script:'uptime'}
-let requests=[],auths=[],valid=new Set(),refreshes=0,expiresIn=3600,refreshFails=false,offline=false,denied=false,confirm=false
+let requests=[],auths=[],valid=new Set(),refreshes=0,expiresIn=3600,refreshFails=false,offline=false,denied=false,confirm=false,mfaDone=false,sends=0,fresh=false
 const reply=(data,status=200)=>({ok:status>=200&&status<300,status,json:async()=>data})
 const session=(n,id='user-1')=>{valid.add('access-'+n);return{access_token:'access-'+n,refresh_token:'refresh-'+n,expires_in:expiresIn,user:{id,email}}}
 const fetch=async(url,opts)=>{
@@ -15,6 +15,9 @@ const fetch=async(url,opts)=>{
  const body=JSON.parse(opts.body||'{}'),headers=opts.headers
  if(url.includes('/auth/v1/')){
   auths.push({url,body});assert.equal(headers.apikey,'public-only')
+  if(url.endsWith('grant_type=password')&&body.email==='unconfirmed@example.test')return reply({error_code:'email_not_confirmed'},400)
+  if(url.endsWith('/verify'))return body.token==='654321'?reply(session(++refreshes)):reply({error_code:'otp_expired'},403)
+  if(url.endsWith('/resend'))return reply({})
   if(url.endsWith('grant_type=password'))return body.password==='wrong-password'?reply({error_code:'invalid_credentials'},400):reply(session(++refreshes))
   if(url.endsWith('/signup'))return body.email==='taken@example.test'?reply({error_code:'user_already_exists'},422):confirm?reply({id:'user-2',email:body.email}):reply(session(++refreshes))
   if(url.endsWith('grant_type=refresh_token'))return refreshFails?reply({error_code:'refresh_token_not_found'},400):reply(session(++refreshes))
@@ -23,6 +26,11 @@ const fetch=async(url,opts)=>{
  assert(url.endsWith('/functions/v1/cyberdog-cloud'),'only the gateway is called: '+url)
  requests.push({body,authorization:headers.Authorization});assert(!('email'in body)&&!('userId'in body),'identity is never client supplied')
  if(!valid.has(headers.Authorization.replace('Bearer ',''))){return reply({error:'auth_required'},401)}
+ if(fresh&&body.action.startsWith('mfa_'))mfaDone=true
+ if(body.action==='mfa_status')return reply({value:{verified:mfaDone}})
+ if(body.action==='mfa_send'){if(mfaDone)return reply({value:{verified:true}});sends++;return reply({value:{verified:false,sent:true}})}
+ if(body.action==='mfa_verify'){if(body.payload.code!=='123456')return reply({error:'otp_invalid'},403);mfaDone=true;return reply({value:{verified:true}})}
+ if(!mfaDone)return reply({error:'mfa_required'},403)
  if(denied)return reply({error:'access_denied'},403)
  const value=body.action==='list'?{teams:[{id:'team-1',name:'Team',role:'owner'}],servers:[server,jump],assets:[asset],invitations:[]}:body.action==='route_get'?{target:{...server},bastion:{...jump}}:body.action==='server_get'?{...(body.payload.id===jump.id?jump:server)}:body.action==='asset_get'?asset:body.action==='history_list'?[{id:'revision-1',snapshot:{name:'VM'}}]:body.action==='invite_link_create'?{id:'link-1',link,token:'A'.repeat(43)}:body.action==='invite_link_list'?[{id:'link-1',usesLeft:1}]:{email,userId:'user-1'}
  return reply({value})
@@ -33,8 +41,25 @@ const fetch=async(url,opts)=>{
  for(const bad of [{email:'invalid',password},{email,password:'short'}])await assert.rejects(()=>cloud.signIn(bad),/invalid_email|weak_password/)
  await assert.rejects(()=>cloud.signIn({email,password:'wrong-password'}),/invalid_credentials/);assert.equal(cloud.state().signedIn,false)
  await assert.rejects(()=>cloud.signUp({email:'taken@example.test',password}),/email_taken/)
- confirm=true;assert.equal((await cloud.signUp({email:'new@example.test',password})).confirmEmail,true);assert.equal(cloud.state().signedIn,false);confirm=false
- refreshes=0;await cloud.signIn({email,password})
+ const sessionFile=path.join(directory,'account-session.bin')
+ // A project that still auto-confirms must never hand out a session at sign-up.
+ await assert.rejects(()=>cloud.signUp({email:'new@example.test',password}),/unknown/);assert.equal(cloud.state().signedIn,false);assert(!fs.existsSync(sessionFile))
+ confirm=true;const signedUp=await cloud.signUp({email:'new@example.test',password});assert.equal(signedUp.pending.kind,'signup');assert.equal(signedUp.signedIn,false);assert(!fs.existsSync(sessionFile))
+ await assert.rejects(()=>cloud.verifyCode({code:'abc'}),/otp_invalid/);await assert.rejects(()=>cloud.verifyCode({code:'000000'}),/otp_invalid/);assert.equal(cloud.state().signedIn,false);assert(!fs.existsSync(sessionFile))
+ await cloud.resendCode();assert(auths.some(a=>a.url.endsWith('/resend')&&a.body.type==='signup'&&a.body.email==='new@example.test'))
+ // Regression: right after the sign-up code the app is signed in, never sent to a second (login) code screen.
+ fresh=true;await cloud.verifyCode({code:'654321'});assert(cloud.state().signedIn);assert.equal(cloud.state().pending,null);assert(fs.existsSync(sessionFile));assert.equal(sends,0);assert.equal(cloud.state().teams.length,1)
+ assert(auths.some(a=>a.url.endsWith('/verify')&&a.body.type==='signup'));await cloud.signOut();mfaDone=false;fresh=false;confirm=false
+ // An account whose mailbox was never verified continues the sign-up verification.
+ const unconfirmed=await cloud.signIn({email:'unconfirmed@example.test',password});assert.equal(unconfirmed.pending.kind,'signup');assert.equal(unconfirmed.signedIn,false)
+ await cloud.cancelPending();assert.equal(cloud.state().pending,null)
+ // Password sign-in alone gives nothing: the session stays in memory until the e-mail code is accepted by the server.
+ requests.length=0;refreshes=0;const waiting=await cloud.signIn({email,password});assert.equal(waiting.pending.kind,'login');assert.equal(waiting.signedIn,false);assert.equal(sends,1);assert(!fs.existsSync(sessionFile));assert.equal(waiting.teams.length,0)
+ await assert.rejects(()=>cloud.action('list'),/unknown_action/)
+ await assert.rejects(()=>cloud.refresh(),/mfa_required/);assert.equal(cloud.state().signedIn,false)
+ await assert.rejects(()=>cloud.verifyCode({code:'000000'}),/otp_invalid/);assert.equal(cloud.state().signedIn,false);assert(!fs.existsSync(sessionFile))
+ await cloud.resendCode();assert.equal(sends,2)
+ await cloud.verifyCode({code:'123456'})
  assert(cloud.state().signedIn);assert.equal(cloud.state().email,email);assert.equal(cloud.state().teams.length,1)
  assert(!JSON.stringify(cloud.state()).includes('access-'));assert(!JSON.stringify(requests).includes(password))
  assert(requests.every(r=>r.authorization==='Bearer access-1'),'gateway receives the access token')

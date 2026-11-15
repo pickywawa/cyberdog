@@ -14,7 +14,8 @@
     "dist:linux": "electron-builder --linux --publish never",
     "dev": "electron .",
     "test:portable": "node test/run-portable.cjs",
-    "dist:mas": "electron-builder --mac mas --universal --publish never"
+    "dist:mas": "electron-builder --mac mas --universal --publish never",
+    "dist:mac:signed": "electron-builder --mac --publish never -c.mac.identity=\"Alexis PICARD (C68LA5KQ8J)\" -c.mac.hardenedRuntime=true -c.mac.gatekeeperAssess=false -c.mac.notarize=true -c.mac.entitlements=build/entitlements.mac.plist -c.mac.entitlementsInherit=build/entitlements.mac.plist"
   },
   "build": {
     "appId": "com.pickywawa.cyberdog",

@@ -6,6 +6,8 @@ const path = require('path')
 
 exports.default = async ctx => {
   if (ctx.electronPlatformName !== 'darwin') return
+  // Release builds pass a real Developer ID identity (dist:mac:signed): electron-builder signs and notarizes them.
+  if (ctx.packager.platformSpecificBuildOptions?.identity) return
   const app = path.join(ctx.appOutDir, `${ctx.packager.appInfo.productFilename}.app`)
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', app], { stdio: 'inherit' })
 }

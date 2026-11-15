@@ -46,3 +46,7 @@
 .team-shots{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:26px}
 @media(max-width:1000px){.split-feature,.split-feature.flip{grid-template-columns:1fr;gap:30px}.split-feature.flip .split-text{order:0}.download-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.choose-grid,.team-shots{grid-template-columns:1fr}.compare-hero{padding-top:40px}.compare-hero .intro{font-size:16px}.section.tight{padding-block:36px 26px}.download-grid{grid-template-columns:1fr}}
+
+/* Hero demo video */
+video.hero-screen{display:block;width:100%;height:auto;background:#0b1020}
+.frame-caption button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:3px 10px;font:inherit;font-size:10px;white-space:nowrap}.frame-caption button:hover{color:var(--mint);border-color:var(--mint)}

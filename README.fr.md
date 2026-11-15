@@ -18,7 +18,7 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 
 [English](README.md) · **Français**
 
-<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/screenshots/hero.png" alt="Cyberdog : explorateur, terminal et santé du serveur côte à côte" width="100%"></a>
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Cyberdog en 10 secondes : ouvrir un serveur, utiliser le terminal, voir la santé du serveur et lancer une action rapide" width="100%"></a>
 
 </div>
 

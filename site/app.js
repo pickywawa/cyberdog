@@ -31,6 +31,7 @@ function translate() {
   document.querySelector('#demo-toggle').textContent = demoPaused ? (language === 'fr' ? 'Relancer' : 'Resume') : 'Pause'
   document.querySelector('#demo-toggle').setAttribute('aria-pressed', String(demoPaused))
   updateView(selectedView)
+  if (typeof paintHeroToggle === 'function') paintHeroToggle()
 }
 document.querySelector('#language').addEventListener('click', () => { language = language === 'fr' ? 'en' : 'fr'; try { localStorage.setItem('cyberdog.site.language', language) } catch {} translate() })
 document.querySelectorAll('[data-view]').forEach(button => {
@@ -66,6 +67,18 @@ if ('IntersectionObserver' in window) {
   document.documentElement.classList.add('js')
   const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target) } }), { threshold:.08 })
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el))
+}
+// Hero demo video: plays on its own, never when the visitor prefers reduced motion, and can always be paused.
+const heroVideo = document.querySelector('#hero-video'), heroToggle = document.querySelector('#hero-toggle')
+function paintHeroToggle() {
+  if (!heroVideo || !heroToggle) return
+  heroToggle.textContent = heroVideo.paused ? (language === 'fr' ? 'Lecture' : 'Play') : 'Pause'
+  heroToggle.setAttribute('aria-pressed', String(heroVideo.paused))
+}
+if (heroVideo && heroToggle) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { heroVideo.removeAttribute('autoplay'); heroVideo.pause() }
+  heroToggle.addEventListener('click', () => { heroVideo.paused ? heroVideo.play().catch(() => {}) : heroVideo.pause() })
+  heroVideo.addEventListener('play', paintHeroToggle); heroVideo.addEventListener('pause', paintHeroToggle)
 }
 translate()
 // Keep the site usable when GitHub's API is blocked or rate limited: links already point to Releases.

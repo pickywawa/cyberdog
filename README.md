@@ -18,7 +18,7 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 
 **English** · [Français](README.fr.md)
 
-<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/screenshots/hero.png" alt="Cyberdog: explorer, terminal and server health side by side" width="100%"></a>
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Cyberdog in 10 seconds: open a server, use the terminal, check server health and run a quick action" width="100%"></a>
 
 </div>
 

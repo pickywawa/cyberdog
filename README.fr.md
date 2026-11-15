@@ -139,9 +139,13 @@ Les recherches et téléchargements de mises à jour utilisent le réseau natif 
 
 ### macOS (Apple Silicon et Intel)
 
+Avec [Homebrew](https://github.com/pickywawa/homebrew-cyberdog) : `brew install --cask pickywawa/cyberdog/cyberdog`
+
+Ou à la main :
+
 1. Téléchargez `Cyberdog-<version>-mac-arm64.dmg` (Apple Silicon : M1/M2/M3/M4) ou `Cyberdog-<version>-mac-x64.dmg` (Intel).
 2. Ouvrez le `.dmg` et glissez **Cyberdog** dans **Applications**.
-3. Premier lancement : l'app n'est pas encore notarisée, macOS peut donc la bloquer. Faites **clic droit → Ouvrir → Ouvrir**, ou exécutez une fois :
+3. Depuis la 1.10.1, l'app est signée avec un certificat Apple Developer ID et **notarisée** : elle s'ouvre comme n'importe quelle app Mac. Les versions antérieures à la 1.10.1 ne sont pas notarisées et macOS peut les bloquer : faites **clic droit → Ouvrir → Ouvrir**, ou exécutez une fois :
    ```sh
    xattr -dr com.apple.quarantine /Applications/Cyberdog.app
    ```
@@ -350,16 +354,16 @@ Les installeurs sont produits dans `dist/`. Les icônes se régénèrent depuis 
 | Workflow | Déclencheur | Rôle |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | chaque push / pull request | lance les tests sous Linux et macOS |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | compile les artefacts Community macOS et Windows ; les versions officielles sont publiées depuis le dépôt privé |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*` (ou lancement manuel) | lance les tests, compile les installeurs macOS, Windows et Linux et publie la release GitHub avec `SHA256SUMS.txt`. Les builds macOS sont signés avec un certificat Developer ID et notarisés quand les secrets Apple sont définis ; les forks sans secrets obtiennent des builds non signés |
 
 Pour publier une nouvelle version :
 
 ```sh
 npm version patch        # ou minor / major : met à jour package.json et crée le tag v*
-git push --follow-tags   # compile uniquement les artefacts Community
+git push --follow-tags   # tests, compilation, signature (macOS) et publication de la release GitHub
 ```
 
-La publication officielle s’effectue ensuite dans le workflow du dépôt privé, avec ce tag, la configuration Live et le secret `CYBERDOG_RELEASE_TOKEN`.
+Le certificat de signature, la clé de notarisation et les secrets GitHub sont décrits dans [docs/release-signing.md](docs/release-signing.md).
 
 ---
 
@@ -383,7 +387,24 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 
 ## 📰 Notes de version
 
-Retrouvez chaque version dans les [releases GitHub](https://github.com/pickywawa/cyberdog/releases). Notes précédentes :
+Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
+
+### 1.10.1
+
+- **Versions macOS signées :** les apps macOS sont signées avec un certificat Apple Developer ID et notarisées : elles s'ouvrent sans avertissement Gatekeeper. Elles sont aussi disponibles avec Homebrew : `brew install --cask pickywawa/cyberdog/cyberdog`.
+- **Bastions :** le test du trajet fonctionne de nouveau. Depuis la 1.8.0, il restait bloqué à la première étape.
+
+### 1.10.0
+
+- **14 langues d'interface :** dix de plus (espagnol, portugais, chinois, arabe avec affichage de droite à gauche, hindi, russe, japonais, coréen, turc et indonésien), avec leurs règles de pluriel.
+- **Colonnes de l'explorateur redimensionnables.**
+- **Comptes :** vérification de l'adresse e-mail à l'inscription et code à chaque connexion. Vous pouvez désormais **supprimer votre compte** dans *Paramètres → Connexion*.
+
+### 1.9.0
+
+- **Linux :** versions AppImage et `.deb`.
+
+Notes précédentes :
 
 <details>
 <summary>Versions 1.6 à 1.8</summary>

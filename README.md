@@ -139,9 +139,13 @@ Update checks and downloads use Electron’s native networking to honor the syst
 
 ### macOS (Apple Silicon & Intel)
 
+With [Homebrew](https://github.com/pickywawa/homebrew-cyberdog): `brew install --cask pickywawa/cyberdog/cyberdog`
+
+Or by hand:
+
 1. Download `Cyberdog-<version>-mac-arm64.dmg` (Apple Silicon: M1/M2/M3/M4) or `Cyberdog-<version>-mac-x64.dmg` (Intel).
 2. Open the `.dmg` and drag **Cyberdog** to **Applications**.
-3. First launch: the app is not notarized yet, so macOS may block it. Either **right-click → Open → Open**, or run once:
+3. Since 1.10.1 the app is signed with an Apple Developer ID certificate and **notarized**: it opens like any other Mac app. Versions before 1.10.1 are not notarized, so macOS may block them: **right-click → Open → Open**, or run once:
    ```sh
    xattr -dr com.apple.quarantine /Applications/Cyberdog.app
    ```
@@ -350,16 +354,16 @@ Installers are written to `dist/`. Icons are generated from `src/assets/icon.svg
 | Workflow | Trigger | What it does |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | every push / pull request | runs the tests on Linux and macOS |
-| [`release.yml`](.github/workflows/release.yml) | tag `v*` (or manual run) | builds Community macOS and Windows artifacts; official releases run from the private repository |
+| [`release.yml`](.github/workflows/release.yml) | tag `v*` (or manual run) | runs the tests, builds the macOS, Windows and Linux installers and publishes the GitHub release with `SHA256SUMS.txt`. macOS builds are signed with a Developer ID certificate and notarized when the Apple secrets are set; forks without them get unsigned builds |
 
 To publish a new version:
 
 ```sh
 npm version patch        # or minor / major: bumps package.json and creates the v* tag
-git push --follow-tags   # builds Community artifacts only
+git push --follow-tags   # tests, builds, signs (macOS) and publishes the GitHub release
 ```
 
-Publish official builds through the private repository workflow with that tag, Live configuration and the `CYBERDOG_RELEASE_TOKEN` secret.
+The signing certificate, the notarization key and the GitHub secrets are described in [docs/release-signing.md](docs/release-signing.md).
 
 ---
 
@@ -383,7 +387,24 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 
 ## 📰 Release notes
 
-See the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) for every version. Earlier notes:
+Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
+
+### 1.10.1
+
+- **Signed macOS releases:** the macOS apps are signed with an Apple Developer ID certificate and notarized, so they open without a Gatekeeper warning. They are also available with Homebrew: `brew install --cask pickywawa/cyberdog/cyberdog`.
+- **Bastions:** the route test works again. Since 1.8.0 it stopped at the first step.
+
+### 1.10.0
+
+- **14 interface languages:** ten more (Spanish, Portuguese, Chinese, Arabic with right-to-left layout, Hindi, Russian, Japanese, Korean, Turkish and Indonesian), with their plural rules.
+- **Resizable explorer columns.**
+- **Accounts:** e-mail verification at sign-up and a code at each sign-in. You can now **delete your account** from *Settings → Sign in*.
+
+### 1.9.0
+
+- **Linux:** AppImage and `.deb` releases.
+
+Earlier notes:
 
 <details>
 <summary>Versions 1.6 to 1.8</summary>

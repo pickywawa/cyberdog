@@ -9,8 +9,6 @@
   <array><string>C68LA5KQ8J.com.pickywawa.cyberdog</string></array>
   <!-- SSH, SFTP, FTP, WebDAV, S3, Azure and cloud drive connections -->
   <key>com.apple.security.network.client</key><true/>
-  <!-- Loopback redirect listener for OAuth sign-in (Dropbox, OneDrive, Google Drive) -->
-  <key>com.apple.security.network.server</key><true/>
   <!-- Files and folders chosen by the user (uploads, downloads, keys, imports, exports) -->
   <key>com.apple.security.files.user-selected.read-write</key><true/>
   <key>com.apple.security.files.downloads.read-write</key><true/>

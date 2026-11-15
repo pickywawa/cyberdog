@@ -3,8 +3,10 @@
 const SERVER_TYPES = [['ssh', 'type.ssh'], ['ftp', 'type.ftp'], ['smb', 'type.smb'], ['s3', 'type.s3'], ['azure', 'type.azure'], ['azurefiles', 'type.azurefiles'], ['webdav', 'type.webdav'], ['dropbox', 'type.dropbox'], ['onedrive', 'type.onedrive'], ['gdrive', 'type.gdrive']]
 const PROXIED = ['ftp', 's3', 'azure', 'azurefiles', 'webdav', 'dropbox', 'onedrive', 'gdrive']
 const DRIVES = ['dropbox', 'onedrive', 'gdrive']
-// SMB mounts the share with mount_smbfs, which the Mac App Store sandbox forbids.
-const serverTypeOptions = () => SERVER_TYPES.filter(([value]) => !(window.api?.mas && value === 'smb')).map(([value, key]) => [value, t(key)])
+// Mac App Store sandbox: SMB needs mount_smbfs (forbidden) and the cloud drives need a loopback listener for the OAuth
+// redirect (com.apple.security.network.server, which the App Store review rejects). The other editions keep all of them.
+const MAS_HIDDEN = ['smb', 'dropbox', 'onedrive', 'gdrive']
+const serverTypeOptions = () => SERVER_TYPES.filter(([value]) => !(window.api?.mas && MAS_HIDDEN.includes(value))).map(([value, key]) => [value, t(key)])
 
 // s: server being edited (or the template of a duplicate); keepPass: placeholder of the secret fields.
 // name is unique across types; map is the key sent to servers:save (default: name); when: [controlling field, value].

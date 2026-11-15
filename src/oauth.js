@@ -43,6 +43,7 @@ function waitForCode(port, state, onListening) {
     }
     let actualPort = port
     const timer = setTimeout(() => finish(new Error('Authentication failure: sign-in timed out')), 5 * 60 * 1000)
+    if (process.mas) return finish(new Error('Cloud drive sign-in is not available in the Mac App Store edition.'))
     const first = http.createServer(handler)
     first.on('error', e => finish(e))
     first.listen(port, '127.0.0.1', () => {

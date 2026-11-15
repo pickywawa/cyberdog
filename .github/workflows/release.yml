@@ -60,6 +60,26 @@ jobs:
         run: npm run ${{ matrix.script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false' # pas de certificat : build non signé (signature ad hoc sur macOS)
+      - name: Import the Developer ID certificate (macOS)
+        if: ${{ matrix.name == 'macOS' && env.HAS_APPLE_SIGNING == 'true' }}
+        # A dedicated keychain, set up here rather than by electron-builder: its own import step runs
+        # `security set-key-partition-list` with the .p12 password as the keychain password, which fails on recent runners.
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/cyberdog-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          printf '%s' "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
       - name: Build (macOS, Developer ID signed and notarized)
         if: ${{ matrix.name == 'macOS' && env.HAS_APPLE_SIGNING == 'true' }}
         run: |
@@ -68,8 +88,6 @@ jobs:
           npm run dist:mac:signed
           rm -f "$RUNNER_TEMP/AuthKey.p8"
         env:
-          CSC_LINK: ${{ secrets.MACOS_CERT_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -82,6 +100,9 @@ jobs:
             xcrun stapler validate "$app"
             spctl --assess --type execute --verbose=4 "$app"
           done
+      - name: Remove the signing keychain
+        if: ${{ always() && matrix.name == 'macOS' && env.HAS_APPLE_SIGNING == 'true' }}
+        run: security delete-keychain "$RUNNER_TEMP/cyberdog-signing.keychain-db" || true
       - uses: actions/upload-artifact@v7
         with:
           name: cyberdog-${{ matrix.name }}

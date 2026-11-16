@@ -1315,6 +1315,7 @@ app.whenReady().then(() => {
       },
       { role: 'editMenu' },
       { role: 'windowMenu' },
+      { role: 'help', submenu: [{ label: t('kb.title'), accelerator: 'Cmd+/', click: () => win && win.webContents.send('app:shortcuts') }] },
     ]))
   } else Menu.setApplicationMenu(null)
   const windowStateFile = path.join(app.getPath('userData'), 'window-state.json')

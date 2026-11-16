@@ -626,3 +626,12 @@ body.resizing-y { cursor: row-resize; }
 
 /* Langues RTL (arabe) : l'interface se retourne, mais terminaux, journaux et scripts restent LTR. */
 [dir="rtl"] .term-body, [dir="rtl"] .xterm, [dir="rtl"] pre, [dir="rtl"] code, [dir="rtl"] textarea { direction: ltr; text-align: left; }
+
+/* Raccourcis clavier (shortcuts.js) */
+.explorer .table:focus { outline: none; }
+.kb-card { max-height: 86vh; }
+.kb-list { display: flex; flex-direction: column; overflow: auto; margin: 0 -4px; }
+.kb-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.kb-row:last-child { border-bottom: 0; }
+.kb-keys { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.kb-keys kbd { font: 12px/1 Menlo, Consolas, monospace; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--line); border-bottom-width: 2px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--fg, inherit); white-space: nowrap; }

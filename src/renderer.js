@@ -166,10 +166,7 @@ addEventListener('mousedown', e => {
   if (!e.target.closest('.searchbox, .js-search-btn')) tabs.forEach(tb => tb.panes.forEach(p => (p.searchBox.hidden = true)))
   if (!e.target.closest('.pathsbox, .js-paths-btn')) hidePathsBoxes()
 })
-addEventListener('keydown', e => {
-  const tab = tabs.find(tb => tb.id === activeId)
-  if (tab && isShell(tab.server) && (e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); toggleSearch(tab.active, true) }
-})
+// raccourcis clavier : voir shortcuts.js
 addEventListener('blur', hideMenu)
 addEventListener('keydown', e => e.key === 'Escape' && hideMenu())
 // évite que Electron navigue vers un fichier déposé hors zone

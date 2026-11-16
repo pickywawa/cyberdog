@@ -389,6 +389,10 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
 
+### 1.11.0
+
+- **Keyboard shortcuts** ([#1](https://github.com/pickywawa/cyberdog/issues/1)): ⌘R / Ctrl+R or F5 refreshes the list; arrows and Shift+arrows move and extend the selection, Enter opens, ⌘↑ goes to the parent folder, ⌘[ goes back, ⌘A selects all, F2 renames, ⌘⌫ / Delete deletes, ⇧⌘N and ⌥⌘N create a folder or a file, ⌘L edits the path, ⇧⌘C copies the path. Tabs: ⌘1…9, Ctrl+Tab, ⌘W; Ctrl+` toggles the terminal. ⌘/ (or the keyboard button in the sidebar) lists them all. On Windows and Linux, ⌘ is Ctrl; inside the terminal, Ctrl keys stay with the shell.
+
 ### 1.10.1
 
 - **Signed macOS releases:** the macOS apps are signed with an Apple Developer ID certificate and notarized, so they open without a Gatekeeper warning. They are also available with Homebrew: `brew install --cask pickywawa/cyberdog/cyberdog`.

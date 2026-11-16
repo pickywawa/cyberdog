@@ -389,6 +389,10 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
 
+### 1.11.0
+
+- **Raccourcis clavier** ([#1](https://github.com/pickywawa/cyberdog/issues/1)) : ⌘R / Ctrl+R ou F5 actualise la liste ; flèches et Maj+flèches déplacent et étendent la sélection, Entrée ouvre, ⌘↑ remonte au dossier parent, ⌘[ revient en arrière, ⌘A sélectionne tout, F2 renomme, ⌘⌫ / Suppr supprime, ⇧⌘N et ⌥⌘N créent un dossier ou un fichier, ⌘L modifie le chemin, ⇧⌘C copie le chemin. Onglets : ⌘1…9, Ctrl+Tab, ⌘W ; Ctrl+` ouvre ou ferme le terminal. ⌘/ (ou le bouton clavier de la barre latérale) les liste tous. Sous Windows et Linux, ⌘ devient Ctrl ; dans le terminal, les touches Ctrl restent au shell.
+
 ### 1.10.1
 
 - **Versions macOS signées :** les apps macOS sont signées avec un certificat Apple Developer ID et notarisées : elles s'ouvrent sans avertissement Gatekeeper. Elles sont aussi disponibles avec Homebrew : `brew install --cask pickywawa/cyberdog/cyberdog`.

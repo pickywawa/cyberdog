@@ -730,9 +730,9 @@ ipcMain.handle('files:openLocal', () => openLocal())
 
 ipcMain.handle('conn:close', (_, id) => { const c = conns.get(id); if (c?.client) c.client.end(); else if (c) { c.sftp?.end?.(); drop(id) } })
 
-ipcMain.handle('sftp:list', async (_, id, dir) => {
+ipcMain.handle('sftp:list', async (_, id, dir, known) => {
   const s = S(id)
-  const resolved = await require('./sftp-navigation').resolveDirectory(s, dir)
+  const resolved = await require('./sftp-navigation').resolveDirectory(s, dir, !!known)
   dir = resolved.path
   const selected = resolved.selected
   const items = (await P(s, 'readdir', dir)).filter(f => f.filename !== '.' && f.filename !== '..')
@@ -849,7 +849,7 @@ ipcMain.handle('sftp:edit', async (_, id, remote, appPath) => {
   await P(c.sftp, 'fastGet', remote, local)
   fs.watchFile(local, { interval: 700 }, async (cur, prev) => {
     if (cur.mtimeMs === prev.mtimeMs) return
-    try { await P(c.sftp, 'fastPut', local, remote); send('toast', t('t.file_sent', { name })) } catch (e) { send('toast', t('t.send_failed', { name, error: e.message }), true) }
+    try { await P(c.sftp, 'fastPut', local, remote); send('toast', t('t.file_sent', { name })); send('sftp:changed', id, posix.dirname(remote), name) } catch (e) { send('toast', t('t.send_failed', { name, error: e.message }), true) }
   })
   if (!appPath) shell.openPath(local)
   else execFile(isMac ? 'open' : appPath, isMac ? ['-a', appPath, local] : [local], () => {})
@@ -1129,6 +1129,18 @@ ipcMain.handle('sftp:extract', async (_, id, file, toFolder) => {
   const r = await exec(c.client, 'sh -s', { input: archive.command(name, file, target, q), timeout: 600000 })
   const missing = r.out.match(/MISSING:(\S+)/)
   if (missing) throw new Error(t('err.tool_missing', { tool: missing[1] }))
+  if (r.code !== 0) throw new Error(r.out.trim().split('\n').slice(-3).join(' ') || `exit ${r.code}`)
+})
+
+// ---------- Création d'archive sur le serveur ----------
+const plainName = n => typeof n === 'string' && n && n !== '.' && n !== '..' && !n.includes('/') && !n.includes('\0')
+ipcMain.handle('sftp:compress', async (_, id, dir, names, format, out) => {
+  const c = getConn(id)
+  if (typeof dir !== 'string' || !Array.isArray(names) || !names.length || !names.every(plainName) || !plainName(out) || !archive.formats.includes(format)) throw new Error(t('err.archive_unknown'))
+  const r = await exec(c.client, 'sh -s', { input: archive.createCommand(format, dir, names, out, q), timeout: 600000 })
+  const missing = r.out.match(/MISSING:(\S+)/)
+  if (missing) throw new Error(t('err.tool_missing', { tool: missing[1] }))
+  if (r.code === 17 && /EXISTS/.test(r.out)) throw new Error(t('err.archive_exists', { name: out }))
   if (r.code !== 0) throw new Error(r.out.trim().split('\n').slice(-3).join(' ') || `exit ${r.code}`)
 })
 

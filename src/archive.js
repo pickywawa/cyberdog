@@ -34,7 +34,22 @@
     return `command -v ${k.tool} >/dev/null 2>&1 || { echo "MISSING:${k.tool}"; exit 127; }\nmkdir -p ${q(target)} && ${k.cmd(q(file), q(target), out)}`
   }
 
-  const api = { kind, folderName, command }
+  // Création d'archive : `names` sont des noms d'éléments de `dir`, `out` le nom du fichier créé dans `dir`.
+  const FORMATS = {
+    'tar.gz': { tool: 'tar', cmd: (out, items) => `tar -czf ${out} ${items}` },
+    zip: { tool: 'zip', cmd: (out, items) => `zip -r -q -y ${out} ${items}` },
+  }
+  const formats = Object.keys(FORMATS)
+  const archiveName = (names, format) => `${names.length === 1 ? names[0] : 'archive'}.${format}`
+  function createCommand(format, dir, names, out, q) {
+    const f = FORMATS[format]
+    if (!f || !names.length) return null
+    // préfixe ./ : un nom commençant par « - » n'est jamais lu comme une option
+    const items = names.map(n => q('./' + n)).join(' ')
+    return `command -v ${f.tool} >/dev/null 2>&1 || { echo "MISSING:${f.tool}"; exit 127; }\ncd ${q(dir)} || exit 1\n[ -e ${q(out)} ] && { echo "EXISTS"; exit 17; }\n${f.cmd(q(out), items)} || { rc=$?; rm -f ${q(out)}; exit $rc; }`
+  }
+
+  const api = { kind, folderName, command, formats, archiveName, createCommand }
   if (typeof module !== 'undefined') module.exports = api
   else window.archive = api
 })()

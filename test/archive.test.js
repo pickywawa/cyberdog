@@ -28,5 +28,27 @@ fs.writeFileSync(path.join(tmp, 'src', 'a.txt'), 'hello')
 execSync(`tar -czf ${q(tmp + '/src.tar.gz')} -C ${q(tmp + '/src')} .`)
 execSync(archive.command('src.tar.gz', `${tmp}/src.tar.gz`, `${tmp}/out`, q), { shell: '/bin/sh' })
 assert.strictEqual(fs.readFileSync(path.join(tmp, 'out', 'a.txt'), 'utf8'), 'hello')
+
+// création : tar.gz et zip d'une sélection (noms avec espace, apostrophe et tiret initial), puis aller-retour
+assert.deepStrictEqual(archive.formats, ['tar.gz', 'zip'])
+assert.strictEqual(archive.archiveName(['site'], 'zip'), 'site.zip')
+assert.strictEqual(archive.archiveName(['a', 'b'], 'tar.gz'), 'archive.tar.gz')
+assert.strictEqual(archive.createCommand('rar', '/d', ['a'], 'a.rar', q), null)
+fs.mkdirSync(path.join(tmp, "my dir"))
+fs.writeFileSync(path.join(tmp, "my dir", "it's.txt"), 'x')
+fs.writeFileSync(path.join(tmp, '-n.txt'), 'dash')
+for (const format of archive.formats) {
+  const out = `pack.${format}`
+  execSync(archive.createCommand(format, tmp, ['my dir', '-n.txt'], out, q), { shell: '/bin/sh' })
+  assert(fs.existsSync(path.join(tmp, out)), out)
+  // ne jamais écraser une archive existante
+  let code = 0
+  try { execSync(archive.createCommand(format, tmp, ['my dir'], out, q), { shell: '/bin/sh', stdio: 'pipe' }) } catch (e) { code = e.status; assert(String(e.stdout).includes('EXISTS')) }
+  assert.strictEqual(code, 17)
+  const dest = path.join(tmp, 'x-' + format)
+  execSync(archive.command(out, `${tmp}/${out}`, dest, q), { shell: '/bin/sh' })
+  assert.strictEqual(fs.readFileSync(path.join(dest, 'my dir', "it's.txt"), 'utf8'), 'x')
+  assert.strictEqual(fs.readFileSync(path.join(dest, '-n.txt'), 'utf8'), 'dash')
+}
 fs.rmSync(tmp, { recursive: true, force: true })
 console.log('ok')

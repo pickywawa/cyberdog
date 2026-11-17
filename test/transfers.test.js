@@ -38,6 +38,10 @@ const { parseAuthorizedKeys } = require('../src/ssh-keys')
     assert.deepEqual(await resolveDirectory(nav, '~/.ssh/'), { path:'/home/test/.ssh/', selected:null })
     assert.deepEqual(await resolveDirectory(nav, '~/.ssh/authorized_keys'), { path:'/home/test/.ssh', selected:'authorized_keys' })
     assert.equal((await resolveDirectory(nav, '~')).path, '/home/test')
+    // known folder (row, '..', back, refresh): no round trip at all; plain absolute path: no home lookup
+    const calls = []; const counted = { realpath: (p, cb) => { calls.push('realpath ' + p); nav.realpath(p, cb) }, stat: (p, cb) => { calls.push('stat'); nav.stat(p, cb) } }
+    assert.deepEqual(await resolveDirectory(counted, '/var/www/site/..', true), { path:'/var/www', selected:null }); assert.deepEqual(calls, [])
+    await resolveDirectory(counted, '/var/www'); assert.deepEqual(calls, ['realpath /var/www', 'stat'])
     const pair = { public: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINOQPaeUgba8wP7tRpDrmqf0Kpe4mVxlg5naDmaiZn5p laptop' }
     const keys = parseAuthorizedKeys(`# ignore\n${pair.public}\ncommand="echo hello world",no-pty ${pair.public}\ninvalid\n`)
     assert.equal(keys.length, 2); assert.equal(keys[0].fingerprint, keys[1].fingerprint); assert.equal(keys[1].name, 'laptop')

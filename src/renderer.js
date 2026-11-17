@@ -708,6 +708,12 @@ api.on('conn:closed', id => {
   if (tb.connId === id) tb.connId = null
   else tb.term?.write(`\r\n\x1b[31m${t('term.closed')}\x1b[0m\r\n`)
 })
+// a file edited from Cyberdog was sent back: refresh the panes showing its folder so size and date are current
+api.on('sftp:changed', (id, dir, name) => tabs.forEach(tb => tb.panes.forEach(p => {
+  if (p.connId !== id || p.path !== dir || p.explorer.classList.contains('loading')) return
+  if (p.sel.size === 1 && p.sel.has(name)) p.pendingSelect = name
+  load(p, dir, false, true)
+})))
 api.on('term:data', (id, d) => tabs.find(tb => tb.termId === id)?.term?.write(d))
 
 // ---------- Terminal (panneau du bas) ----------
@@ -880,17 +886,18 @@ async function ensure(tab) {
   try { await T.connecting } finally { T.connecting = null }
 }
 
-async function load(tab, p, push = true) {
+// known : `p` is a folder Cyberdog already listed (row, '..', back, refresh), so the server skips realpath + stat
+async function load(tab, p, push = true, known = false) {
   tab.explorer.classList.add('loading')
   try {
     await ensure(tab)
-    const r = await api.invoke('sftp:list', tab.connId, p ?? tab.home)
+    const r = await api.invoke('sftp:list', tab.connId, p ?? tab.home, known && p != null)
     if (push && tab.path && tab.path !== r.path) tab.hist.push(tab.path)
     if (r.selected) tab.pendingSelect = r.selected
     Object.assign(tab, { path: r.path, entries: r.entries, sel: new Set(), last: null, error: null })
   } catch (e) {
     tab.pendingSelect = null
-    if (AUTH_FAIL.test(e.message) && !tab.connId && (await askPassword(tab.server))) return load(tab, p, push)
+    if (AUTH_FAIL.test(e.message) && !tab.connId && (await askPassword(tab.server))) return load(tab, p, push, known)
     if (tab.path) toast(errText(e), true)
     else tab.error = errText(e)
   } finally {
@@ -901,7 +908,7 @@ async function load(tab, p, push = true) {
 
 // exécute une action distante puis rafraîchit
 async function act(tab, fn, refresh = true) {
-  try { await ensure(tab); await fn(); if (refresh) await load(tab, tab.path, false) } catch (e) { toast(errText(e), true) }
+  try { await ensure(tab); await fn(); if (refresh) await load(tab, tab.path, false, true) } catch (e) { toast(errText(e), true) }
 }
 
 function updateStatus(tab) {
@@ -926,7 +933,7 @@ function draw(tab) {
     return updateStatus(tab)
   }
   if (tab.path && tab.path !== '/') {
-    tab.body.append(h('div', { className: 'row', ondblclick: () => load(tab, join(tab.path, '..')) }, nameCell(icon('up'), 'up', '..')))
+    tab.body.append(h('div', { className: 'row', ondblclick: () => load(tab, join(tab.path, '..'), true, true) }, nameCell(icon('up'), 'up', '..')))
   }
   tab.rowEls = tab.view.map((e, i) => {
     const fi = fileIcon(e, extOf(e))
@@ -954,7 +961,7 @@ function draw(tab) {
       paintSel(tab)
     }
     row.ondblclick = () => {
-      if (e.isDir) return load(tab, join(tab.path, e.name))
+      if (e.isDir) return load(tab, join(tab.path, e.name), true, true)
       const editor = settings.defaultEditor && settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
       act(tab, () => api.invoke('sftp:edit', tab.connId, join(tab.path, e.name), editor), false)
     }
@@ -1029,6 +1036,15 @@ async function extractArchive(tab, file, toFolder) {
   if ($('#toast').textContent.startsWith(t('t.extracting', { name: file.name }))) $('#toast').hidden = true
 }
 
+async function compressItems(tab, items, format) {
+  const v = await modal(t('ctx.compress'), [{ name: 'name', label: t('dlg.archive_name'), value: archive.archiveName(items.map(x => x.name), format) }], t('btn.create'))
+  const out = v?.name.trim()
+  if (!out) return
+  toast(t('t.compressing', { name: out }), false, 600000)
+  await act(tab, async () => { await api.invoke('sftp:compress', tab.connId, tab.path, items.map(x => x.name), format, out); toast(t('t.compressed', { name: out })) })
+  if ($('#toast').textContent.startsWith(t('t.compressing', { name: out }))) $('#toast').hidden = true
+}
+
 // Copy files straight to another saved server, connection to connection
 async function copyToServer(tab, files) {
   const choices = servers.filter(x => !x.loading && !x.vaultId)
@@ -1051,7 +1067,7 @@ function ctxMenu(tab, e) {
   const base = [
     { label: t('tb.new_folder'), icon: 'folder-plus', fn: () => newItem(tab, 'dir') },
     { label: t('tb.new_file'), icon: 'file-plus', fn: () => newItem(tab, 'file') },
-    { label: t('tb.refresh'), icon: 'refresh', fn: () => load(tab, tab.path, false) },
+    { label: t('tb.refresh'), icon: 'refresh', fn: () => load(tab, tab.path, false, true) },
   ]
   const row = e.target.closest('[data-name]')
   if (!row) { tab.sel.clear(); paintSel(tab); return menu(e.clientX, e.clientY, base) }
@@ -1071,6 +1087,7 @@ function ctxMenu(tab, e) {
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
          ...(archive.kind(one.name).single ? [] : [{ label: t('ctx.extract_to', { name: archive.folderName(one.name) }), icon: 'folder-plus', fn: () => extractArchive(tab, one, true) }])]
       : []),
+    ...(isShell(tab.server) ? [{ label: t('ctx.compress'), icon: 'archive', children: () => archive.formats.map(f => ({ label: '.' + f, fn: () => compressItems(tab, sel, f) })) }] : []),
     ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', fn: async () => {
       const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
       const n = v?.name.trim()
@@ -1170,7 +1187,7 @@ const ib = (name, titleKey, onclick, cls = '') => { const b = h('button', { clas
 function makeExplorer(tab) {
   const ex = Object.create(tab)
   Object.assign(ex, { root: tab, path: '', hist: [], entries: [], view: [], sel: new Set(), sort: { key: 'name', dir: 1 } })
-  ex.back = ib('arrow-left', 'ex.back', () => load(ex, ex.hist.pop(), false))
+  ex.back = ib('arrow-left', 'ex.back', () => load(ex, ex.hist.pop(), false, true))
   ex.pathInput = h('input', { className: 'path', spellcheck: false, onkeydown: e => { if (e.key === 'Enter') load(ex, e.target.value.trim()) } })
   ex.head = h('div', { className: 'row head' })
   ex.body = h('div')
@@ -1191,7 +1208,7 @@ function makeExplorer(tab) {
       ex.splitBtn, ex.localBtn,
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
-      ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false))),
+      ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false, true))),
     ex.searchBox,
     ex.pathsBox,
     table,

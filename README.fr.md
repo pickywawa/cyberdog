@@ -389,6 +389,12 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
 
+### 1.12.0
+
+- **Créer une archive** ([#2](https://github.com/pickywawa/cyberdog/issues/2)) : clic droit > Compresser > `.tar.gz` ou `.zip` sur un ou plusieurs éléments (serveurs SSH). L'archive est créée sur le serveur, à côté de la sélection ; un fichier existant n'est jamais écrasé.
+- **Actualisation après édition** ([#3](https://github.com/pickywawa/cyberdog/issues/3)) : quand un fichier ouvert depuis Cyberdog est enregistré et renvoyé, la liste de son dossier s'actualise : taille et date sont à jour tout de suite.
+- **Changement de dossier plus rapide** ([#4](https://github.com/pickywawa/cyberdog/issues/4)) : ouvrir un dossier déjà listé (double-clic, `..`, retour, actualiser) ne demande plus qu'un aller-retour au serveur au lieu de quatre.
+
 ### 1.11.0
 
 - **Raccourcis clavier** ([#1](https://github.com/pickywawa/cyberdog/issues/1)) : ⌘R / Ctrl+R ou F5 actualise la liste ; flèches et Maj+flèches déplacent et étendent la sélection, Entrée ouvre, ⌘↑ remonte au dossier parent, ⌘[ revient en arrière, ⌘A sélectionne tout, F2 renomme, ⌘⌫ / Suppr supprime, ⇧⌘N et ⌥⌘N créent un dossier ou un fichier, ⌘L modifie le chemin, ⇧⌘C copie le chemin. Onglets : ⌘1…9, Ctrl+Tab, ⌘W ; Ctrl+` ouvre ou ferme le terminal. ⌘/ (ou le bouton clavier de la barre latérale) les liste tous. Sous Windows et Linux, ⌘ devient Ctrl ; dans le terminal, les touches Ctrl restent au shell.

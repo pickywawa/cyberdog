@@ -389,6 +389,12 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
 
+### 1.12.0
+
+- **Create archives** ([#2](https://github.com/pickywawa/cyberdog/issues/2)): right-click > Compress > `.tar.gz` or `.zip` on one or more items (SSH servers). The archive is created on the server, next to the selection; an existing file is never overwritten.
+- **Refresh after editing** ([#3](https://github.com/pickywawa/cyberdog/issues/3)): when a file opened from Cyberdog is saved and sent back, the list showing its folder refreshes, so size and date are current right away.
+- **Faster folder changes** ([#4](https://github.com/pickywawa/cyberdog/issues/4)): opening a folder already listed (double-click, `..`, back, refresh) takes one round trip to the server instead of four.
+
 ### 1.11.0
 
 - **Keyboard shortcuts** ([#1](https://github.com/pickywawa/cyberdog/issues/1)): ⌘R / Ctrl+R or F5 refreshes the list; arrows and Shift+arrows move and extend the selection, Enter opens, ⌘↑ goes to the parent folder, ⌘[ goes back, ⌘A selects all, F2 renames, ⌘⌫ / Delete deletes, ⇧⌘N and ⌥⌘N create a folder or a file, ⌘L edits the path, ⇧⌘C copies the path. Tabs: ⌘1…9, Ctrl+Tab, ⌘W; Ctrl+` toggles the terminal. ⌘/ (or the keyboard button in the sidebar) lists them all. On Windows and Linux, ⌘ is Ctrl; inside the terminal, Ctrl keys stay with the shell.

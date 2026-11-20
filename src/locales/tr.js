@@ -1,5 +1,7 @@
 // Türkçe — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.tr = L })({
+"crumbs.hint":"Açmak için bir klasöre tıklayın; yol yazmak için geçerli klasöre veya boş bir alana tıklayın.",
+"crumbs.more":"Üst klasörler",
 "t.clip_copied_one":"{n} öğe kopyalandı",
 "t.clip_cut_one":"{n} öğe kesildi: taşımak için yapıştırın",
 "filter.count_one":"{n} öğe filtreyle gizlendi",

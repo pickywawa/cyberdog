@@ -1,5 +1,7 @@
 // Español — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.es = L })({
+"crumbs.hint":"Haz clic en una carpeta para abrirla; haz clic en la carpeta actual o en un espacio vacío para escribir una ruta.",
+"crumbs.more":"Carpetas superiores",
 "t.clip_copied_one":"{n} elemento copiado",
 "t.clip_cut_one":"{n} elemento cortado: pégalo para moverlo",
 "filter.count_one":"{n} oculto por el filtro",

@@ -927,7 +927,8 @@ function updateStatus(tab) {
 }
 
 function draw(tab) {
-  tab.pathInput.value = tab.path || ''
+  if (document.activeElement !== tab.pathInput) tab.pathInput.value = tab.path || ''
+  if (tab.crumbsFor !== tab.path) paintCrumbs(tab)
   tab.back.disabled = !tab.hist.length
   tab.statusR.textContent = serverTarget(tab.server)
   const { key, dir } = tab.sort
@@ -1408,7 +1409,16 @@ function makeExplorer(tab) {
   const ex = Object.create(tab)
   Object.assign(ex, { root: tab, path: '', hist: [], entries: [], view: [], sel: new Set(), sort: { key: 'name', dir: 1 } })
   ex.back = ib('arrow-left', 'ex.back', () => load(ex, ex.hist.pop(), false, true))
-  ex.pathInput = h('input', { className: 'path', spellcheck: false, onkeydown: e => { if (e.key === 'Enter') load(ex, e.target.value.trim()) } })
+  ex.pathInput = h('input', { className: 'path', spellcheck: false,
+    onkeydown: e => {
+      const done = () => { ex.pathBox.classList.remove('editing'); e.target.blur(); ex.table?.focus({ preventScroll: true }) }
+      if (e.key === 'Enter') { load(ex, e.target.value.trim()); done() }
+      else if (e.key === 'Escape') { e.target.value = ex.path || ''; done() }
+    },
+    onblur: () => ex.pathBox.classList.remove('editing') })
+  ex.crumbs = h('div', { className: 'crumbs', onclick: e => { if (!e.target.closest('.crumb')) editPath(ex) } })
+  ex.crumbs.dataset.i18nTitle = 'crumbs.hint'
+  new ResizeObserver(() => fitCrumbs(ex)).observe(ex.crumbs)
   ex.head = h('div', { className: 'row head' })
   ex.body = h('div')
   ex.statusL = h('span')
@@ -1424,7 +1434,7 @@ function makeExplorer(tab) {
   const table = ex.table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
   ex.explorer = h('div', { className: 'explorer' + (hasPerms(tab.server) ? '' : ' nofs') },
     h('div', { className: 'toolbar' },
-      ex.back, h('div', { className: 'pathbox' }, ex.pathInput, ex.pathsBtn),
+      ex.back, (ex.pathBox = h('div', { className: 'pathbox' }, ex.crumbs, ex.pathInput, ex.pathsBtn)),
       ex.filterBtn,
       ...(isShell(tab.server) ? [ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn')] : []),
       ex.splitBtn, ex.localBtn,
@@ -1450,6 +1460,64 @@ function makeExplorer(tab) {
   ex.explorer.ondrop = e => dropFiles(ex, e, ex.path)
   applyI18n(ex.explorer)
   return ex
+}
+
+// ---------- Chemin : fil d'Ariane cliquable, qui devient un champ pour taper un chemin ----------
+// Each folder of the path is a button (click: go there, drop files on it, right-click: copy, new tab, paste).
+// A click on an empty area, or Cmd/Ctrl+L, turns it into the text field; Enter goes there, Escape or leaving it
+// comes back. When the path is too long, the first folders fold into "…" (a menu lists them).
+function paintCrumbs(ex) {
+  ex.crumbsFor = ex.path
+  const parts = (ex.path || '').split('/').filter(Boolean)
+  const paths = ['/', ...parts.map((_, i) => '/' + parts.slice(0, i + 1).join('/'))]
+  const crumb = i => {
+    const last = i === paths.length - 1
+    const b = h('button', { type: 'button', className: 'crumb' + (last ? ' current' : ''), textContent: i ? parts[i - 1] : '/', title: paths[i],
+      onclick: e => { e.stopPropagation(); if (last) editPath(ex); else load(ex, paths[i], true, true) },
+      oncontextmenu: e => crumbMenu(ex, e, paths[i]) })
+    dropTarget(ex, b, paths[i])
+    return b
+  }
+  ex.crumbPaths = paths
+  ex.crumbMore = h('button', { type: 'button', className: 'crumb more', textContent: '…', hidden: true,
+    onclick: e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); menu(r.left, r.bottom + 4, ex.crumbHidden.map(i => ({ label: paths[i], icon: 'folder', fn: () => load(ex, paths[i], true, true) }))) } })
+  ex.crumbMore.dataset.i18nTitle = 'crumbs.more'
+  ex.crumbMore.title = t('crumbs.more')
+  ex.crumbGroups = parts.map((_, i) => h('span', { className: 'crumb-group' }, h('span', { className: 'crumb-sep', textContent: '›' }), crumb(i + 1)))
+  ex.crumbs.replaceChildren(...(ex.path ? [crumb(0), ex.crumbMore, ...ex.crumbGroups] : []))
+  fitCrumbs(ex)
+}
+function fitCrumbs(ex) {
+  const groups = ex.crumbGroups || []
+  if (!ex.crumbs.isConnected || !ex.crumbMore) return
+  groups.forEach(g => (g.hidden = false))
+  ex.crumbs.classList.remove('tight')
+  ex.crumbMore.hidden = true
+  ex.crumbHidden = []
+  for (let i = 0; i < groups.length - 1 && ex.crumbs.scrollWidth > ex.crumbs.clientWidth; i++) {
+    groups[i].hidden = true
+    ex.crumbHidden.push(i + 1)
+    ex.crumbMore.hidden = false
+  }
+  ex.crumbs.classList.toggle('tight', ex.crumbs.scrollWidth > ex.crumbs.clientWidth)
+}
+function editPath(ex) {
+  ex.pathBox.classList.add('editing')
+  ex.pathInput.value = ex.path || ''
+  ex.pathInput.focus()
+  ex.pathInput.select()
+}
+function crumbMenu(ex, e, dir) {
+  e.preventDefault(); e.stopPropagation()
+  const name = dir === '/' ? '/' : dir.slice(dir.lastIndexOf('/') + 1)
+  menu(e.clientX, e.clientY, [
+    { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(dir) },
+    ...(canUrl(ex.server) ? [{ label: t('ctx.copy_url'), icon: 'link', fn: () => { navigator.clipboard.writeText(fileTools.fileUrl(ex.server, dir)); toast(t('t.url_copied')) } }] : []),
+    ...(fileClipboard ? [{ label: t('ctx.paste_into', { name }), icon: 'clipboard', fn: () => pasteFiles(ex, dir) }] : []),
+    ...(!ex.localPane ? [{ label: t('ctx.open_tab'), icon: 'plus', fn: () => openFiles(ex.server, { path: dir }) }] : []),
+    '-',
+    { label: t('kb.path'), icon: 'pencil', hint: modKey('Mod+L'), fn: () => editPath(ex) },
+  ])
 }
 
 // Fenêtre scindée en deux explorateurs indépendants (comparer, copier d'un dossier à l'autre par glisser-déposer)

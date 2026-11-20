@@ -1,5 +1,7 @@
 // العربية — pack de langue (voir i18n.js). Langue RTL : voir i18n.RTL.
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ar = L })({
+"crumbs.hint":"انقر على مجلد لفتحه؛ انقر على المجلد الحالي أو على مساحة فارغة لكتابة مسار.",
+"crumbs.more":"المجلدات الأعلى",
 "t.clip_copied_one":"تم نسخ {n} عنصر",
 "t.clip_cut_one":"تم قص {n} عنصر: الصقها لنقلها",
 "filter.count_one":"{n} مخفي بواسطة عامل التصفية",

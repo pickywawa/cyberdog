@@ -186,7 +186,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
     switch (action) {
       case 'refresh': return load(ex, ex.path || null, false)
       case 'search': return isShell(ex.server) && toggleSearch(ex, true)
-      case 'path': ex.pathInput.focus(); return ex.pathInput.select()
+      case 'path': return editPath(ex)
       case 'selectAll': ex.sel = new Set(ex.view.map(x => x.name)); return paintSel(ex)
       case 'back': return ex.hist.length && load(ex, ex.hist.pop(), false)
       case 'parent': return ex.path && ex.path !== '/' && load(ex, join(ex.path, '..'))

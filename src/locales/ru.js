@@ -1,5 +1,7 @@
 // Русский — pack de langue (voir i18n.js). Pluriel : _one (1, 21…), _few (2–4, 22–24…), clé de base (5–20…).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ru = L })({
+"crumbs.hint":"Щёлкните папку, чтобы открыть её; щёлкните текущую папку или пустое место, чтобы ввести путь.",
+"crumbs.more":"Родительские папки",
 "t.clip_copied_one":"Скопировано элементов: {n}",
 "t.clip_cut_one":"Вырезано элементов: {n}. Вставьте их, чтобы переместить",
 "filter.count_one":"Скрыто фильтром: {n}",

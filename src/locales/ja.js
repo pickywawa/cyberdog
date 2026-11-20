@@ -1,5 +1,7 @@
 // 日本語 — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ja = L })({
+"crumbs.hint":"フォルダをクリックすると開きます。現在のフォルダか空白部分をクリックするとパスを入力できます。",
+"crumbs.more":"上位フォルダ",
 "t.clip_copied_one":"{n} 項目をコピーしました",
 "t.clip_cut_one":"{n} 項目を切り取りました：貼り付けると移動します",
 "filter.count_one":"フィルタで {n} 項目を非表示",

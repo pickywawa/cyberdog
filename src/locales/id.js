@@ -1,5 +1,7 @@
 // Bahasa Indonesia — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.id = L })({
+"crumbs.hint":"Klik folder untuk membukanya; klik folder saat ini atau area kosong untuk mengetik path.",
+"crumbs.more":"Folder induk",
 "t.clip_copied_one":"{n} item disalin",
 "t.clip_cut_one":"{n} item dipotong: tempel untuk memindahkannya",
 "filter.count_one":"{n} disembunyikan oleh filter",

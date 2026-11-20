@@ -1,5 +1,7 @@
 // 中文（简体）— pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.zh = L })({
+"crumbs.hint":"点击文件夹即可打开；点击当前文件夹或空白处可输入路径。",
+"crumbs.more":"上级文件夹",
 "t.clip_copied_one":"已复制 {n} 项",
 "t.clip_cut_one":"已剪切 {n} 项：粘贴即可移动",
 "filter.count_one":"{n} 项被筛选隐藏",

@@ -1,5 +1,7 @@
 // 한국어 — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ko = L })({
+"crumbs.hint":"폴더를 클릭하면 열립니다. 현재 폴더나 빈 곳을 클릭하면 경로를 입력할 수 있습니다.",
+"crumbs.more":"상위 폴더",
 "t.clip_copied_one":"{n}개 항목 복사됨",
 "t.clip_cut_one":"{n}개 항목 잘라냄: 붙여넣으면 이동합니다",
 "filter.count_one":"필터로 {n}개 숨김",

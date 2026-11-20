@@ -1,5 +1,7 @@
 // हिन्दी — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.hi = L })({
+"crumbs.hint":"फ़ोल्डर खोलने के लिए उस पर क्लिक करें; पथ टाइप करने के लिए वर्तमान फ़ोल्डर या खाली जगह पर क्लिक करें।",
+"crumbs.more":"ऊपरी फ़ोल्डर",
 "t.clip_copied_one":"{n} आइटम कॉपी किया गया",
 "t.clip_cut_one":"{n} आइटम कट किया गया: ले जाने के लिए पेस्ट करें",
 "filter.count_one":"{n} फ़िल्टर द्वारा छिपाया गया",

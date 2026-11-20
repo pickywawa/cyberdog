@@ -1,5 +1,7 @@
 // Português (Brasil) — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.pt = L })({
+"crumbs.hint":"Clique em uma pasta para abri-la; clique na pasta atual ou em uma área vazia para digitar um caminho.",
+"crumbs.more":"Pastas superiores",
 "t.clip_copied_one":"{n} item copiado",
 "t.clip_cut_one":"{n} item recortado: cole-o para movê-lo",
 "filter.count_one":"{n} oculto pelo filtro",

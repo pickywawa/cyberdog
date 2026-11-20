@@ -106,6 +106,30 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await js(`setFilter({ enabled: false }); __t.pane().filterBox.hidden = true`)
     await wait(`__t.names().includes('sub')`, 'filter off')
 
+    // breadcrumb: a folder per button, click to go up, Cmd/Ctrl+L or a click on the current folder to type a path
+    await go(W + '/sub')
+    const crumbs = await js(`[...__t.pane().crumbs.querySelectorAll('.crumb:not(.more)')].map(b => b.textContent)`)
+    assert.deepEqual(crumbs.slice(-2), ['work', 'sub'])
+    await js(`[...__t.pane().crumbs.querySelectorAll('.crumb')].find(b => b.textContent === 'work').click()`)
+    await wait(`__t.pane().path === ${JSON.stringify(W)}`, 'crumb click')
+    await js(`__t.mod('l')`)
+    assert.equal(await js(`__t.pane().pathBox.classList.contains('editing') && document.activeElement === __t.pane().pathInput`), true)
+    await js(`(() => { const i = __t.pane().pathInput; i.value = ${JSON.stringify(W + '/config')}; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })()`)
+    await wait(`__t.pane().path === ${JSON.stringify(W + '/config')} && !__t.pane().pathBox.classList.contains('editing')`, 'typed path')
+    await js(`__t.pane().crumbs.querySelector('.crumb.current').click()`)
+    assert.equal(await js(`__t.pane().pathBox.classList.contains('editing')`), true)
+    await js(`__t.pane().pathInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+    assert.equal(await js(`__t.pane().pathBox.classList.contains('editing')`), false)
+    // drop a file on a crumb: moved to that folder
+    await wait(`__t.names().includes('inner.txt')`, 'inner listed')
+    await js(`(() => { const dt = new DataTransfer(); __t.row('inner.txt').dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true, cancelable: true }))
+      const b = [...__t.pane().crumbs.querySelectorAll('.crumb')].find(b => b.textContent === 'work')
+      b.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true })); b.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })) })()`)
+    await wait(() => fs.existsSync(at('inner.txt')) && !fs.existsSync(at('config', 'inner.txt')), 'dropped on a crumb')
+    fs.renameSync(at('inner.txt'), at('config', 'inner.txt'))
+    await go(W)
+    await shot('breadcrumb')
+
     // recursive permissions (Unix)
     if (process.platform !== 'win32') {
       await js(`(() => { const ex = __t.pane(); permissionDialog(ex, ex.view.find(x => x.name === 'config'), ${JSON.stringify(W + '/config')}) })()`)
@@ -122,6 +146,10 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await wait(`tabs.find(t => t.id === activeId).panes.length === 2 && tabs.find(t => t.id === activeId).panes[1].path`, 'split')
     await js(`(() => { const tb = tabs.find(t => t.id === activeId); tb.active = tb.panes[0]; tb.panes[0].table.tabIndex = -1; tb.panes[0].table.focus(); tb.panes[0].table.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })) })()`)
     assert.equal(await js(`document.activeElement === tabs.find(t => t.id === activeId).panes[1].table`), true)
+    // narrow panes: the first folders fold into "…"
+    await go(W + '/config')
+    await wait(`!__t.pane().crumbMore.hidden`, 'folded crumbs')
+    await shot('breadcrumb-split')
     // transfer queue popover
     await js(`document.querySelectorAll('.transfer-widget').forEach(w => w.classList.add('expanded'))`)
     await pause(200)
@@ -139,7 +167,7 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await wait(`!!document.querySelector('.inline-setting select')`, 'settings')
     await js(`document.querySelector('.inline-setting select').value = '4'; document.querySelector('.settings-save').click()`)
     await wait(() => JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')).maxTransfers === 4, 'max transfers saved')
-    console.log('Explorer UI passed: copy/paste, conflict, cut/move, duplicate, drag into folder, move to, context menu, type to select, properties, filter, recursive permissions, Tab, queue, new tab, settings.')
+    console.log('Explorer UI passed: copy/paste, conflict, cut/move, duplicate, drag into folder, move to, context menu, type to select, properties, filter, breadcrumb, recursive permissions, Tab, queue, new tab, settings.')
     app.exit(0)
   } catch (e) { console.error(e); await win.webContents.capturePage().then(i => fs.writeFileSync(path.join(shots, 'explorer-failure.png'), i.toPNG())).catch(() => {}); app.exit(1) }
 }))

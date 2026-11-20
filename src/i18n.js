@@ -16,6 +16,8 @@
 
   const D = {
     en: {
+      "crumbs.hint": "Click a folder to open it; click the current folder or an empty area to type a path.",
+      "crumbs.more": "Parent folders",
       "up.files": "Files…",
       "up.folder": "Folder…",
       "up.pick_title": "Choose what to upload",
@@ -708,6 +710,8 @@
     },
 
     fr: {
+      "crumbs.hint": "Cliquez sur un dossier pour l’ouvrir ; cliquez sur le dossier courant ou dans le vide pour taper un chemin.",
+      "crumbs.more": "Dossiers parents",
       "up.files": "Fichiers…",
       "up.folder": "Dossier…",
       "up.pick_title": "Choisir ce qu’il faut envoyer",
@@ -1400,6 +1404,8 @@
     },
 
     de: {
+      "crumbs.hint": "Klicken Sie auf einen Ordner, um ihn zu öffnen; klicken Sie auf den aktuellen Ordner oder eine freie Stelle, um einen Pfad einzugeben.",
+      "crumbs.more": "Übergeordnete Ordner",
       "up.files": "Dateien…",
       "up.folder": "Ordner…",
       "up.pick_title": "Auswählen, was hochgeladen wird",
@@ -2092,6 +2098,8 @@
     },
 
     it: {
+      "crumbs.hint": "Fai clic su una cartella per aprirla; fai clic sulla cartella corrente o in uno spazio vuoto per digitare un percorso.",
+      "crumbs.more": "Cartelle superiori",
       "up.files": "File…",
       "up.folder": "Cartella…",
       "up.pick_title": "Scegli cosa caricare",

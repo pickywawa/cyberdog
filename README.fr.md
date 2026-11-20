@@ -389,6 +389,11 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
 
+### 1.13.1
+
+- **Un seul onglet au double-clic** : un double-clic sur un serveur de la liste l'ouvre une fois, et non deux.
+- **Retour là où vous étiez** : un serveur rouvert revient dans le dernier dossier consulté (le dossier personnel si ce dossier n'existe plus).
+
 ### 1.13.0
 
 - **Éditeur intégré** : un double-clic (ou Entrée) ouvre le fichier dans un éditeur intégré à Cyberdog, celui de VS Code (Monaco) : coloration syntaxique d'environ 80 langages, rechercher et remplacer, multi-curseur, raccourcis de VS Code. Plusieurs fichiers à la fois en onglets (quand ils ne tiennent plus, une liste en bout de barre les donne tous), division en deux, boutons minimap et retour à la ligne, ⌘S / Ctrl+S pour enregistrer, ⌘W / Ctrl+W pour fermer. Les fichiers gardent leur encodage (UTF-8 avec ou sans BOM, UTF-16, Windows-1252) et leurs fins de ligne ; un fichier modifié sur le serveur entre-temps n'est jamais écrasé sans demander. Les fichiers binaires et ceux de plus de 10 Mo s'ouvrent dans votre application habituelle, toujours modifiable dans Paramètres > Éditeur.

@@ -389,6 +389,11 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
 
+### 1.13.1
+
+- **One tab per double-click**: double-clicking a server in the list opens it once, not twice.
+- **Back where you were**: a server you open again comes back at the last folder you were in (home if that folder is gone).
+
 ### 1.13.0
 
 - **Built-in editor**: double-click (or Enter) opens a file in an editor inside Cyberdog, the one of VS Code (Monaco): syntax colours for about 80 languages, search and replace, multiple cursors, VS Code shortcuts. Several files at once in tabs (when they do not fit, a list at the end of the bar gives them all), split in two, minimap and line-wrap buttons, ⌘S / Ctrl+S to save, ⌘W / Ctrl+W to close. Files keep their encoding (UTF-8 with or without BOM, UTF-16, Windows-1252) and their line endings; a file changed on the server meanwhile is never overwritten without asking. Binary files and files over 10 MB open in your usual application, which you can still choose in Settings > Editor.

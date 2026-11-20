@@ -389,6 +389,15 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
 
+### 1.13.0
+
+- **Built-in editor**: double-click (or Enter) opens a file in an editor inside Cyberdog, the one of VS Code (Monaco): syntax colours for about 80 languages, search and replace, multiple cursors, VS Code shortcuts. Several files at once in tabs (when they do not fit, a list at the end of the bar gives them all), split in two, minimap and line-wrap buttons, ⌘S / Ctrl+S to save, ⌘W / Ctrl+W to close. Files keep their encoding (UTF-8 with or without BOM, UTF-16, Windows-1252) and their line endings; a file changed on the server meanwhile is never overwritten without asking. Binary files and files over 10 MB open in your usual application, which you can still choose in Settings > Editor.
+- **Transfer queue**: up to 10 transfers at the same time (Settings > General), pause and resume, priorities, reorder, retry failed transfers, Queue / Failed / Done tabs. Downloads can be added to the queue without starting.
+- **File already there**: overwrite, overwrite if newer, if the size differs, resume, keep both or skip, with "do the same for the next files".
+- **Copy, cut and paste files** (⌘C / ⌘X / ⌘V, Ctrl on Windows and Linux) between folders, panes and servers; duplicate (⌘D); Move to…; drag onto a folder to move, from one pane to another to copy directly between servers.
+- **Explorer**: clickable path (click a folder to go there, click the current one or ⌘L to type a path), Upload button, discreet name filter (`*.log, node_modules`, hidden files), Properties (⌘I) with the size of a folder, Copy URL, symbolic links (SSH), permissions applied to a whole folder (files only or folders only), open a folder in a new tab, Tab to go from pane to pane, type the start of a name to select it.
+- **Reopen connections at startup** now brings each tab back at its folders, split view included.
+
 ### 1.12.0
 
 - **Create archives** ([#2](https://github.com/pickywawa/cyberdog/issues/2)): right-click > Compress > `.tar.gz` or `.zip` on one or more items (SSH servers). The archive is created on the server, next to the selection; an existing file is never overwritten.

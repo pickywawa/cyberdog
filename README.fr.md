@@ -389,6 +389,15 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
 
+### 1.13.0
+
+- **Éditeur intégré** : un double-clic (ou Entrée) ouvre le fichier dans un éditeur intégré à Cyberdog, celui de VS Code (Monaco) : coloration syntaxique d'environ 80 langages, rechercher et remplacer, multi-curseur, raccourcis de VS Code. Plusieurs fichiers à la fois en onglets (quand ils ne tiennent plus, une liste en bout de barre les donne tous), division en deux, boutons minimap et retour à la ligne, ⌘S / Ctrl+S pour enregistrer, ⌘W / Ctrl+W pour fermer. Les fichiers gardent leur encodage (UTF-8 avec ou sans BOM, UTF-16, Windows-1252) et leurs fins de ligne ; un fichier modifié sur le serveur entre-temps n'est jamais écrasé sans demander. Les fichiers binaires et ceux de plus de 10 Mo s'ouvrent dans votre application habituelle, toujours modifiable dans Paramètres > Éditeur.
+- **File de transferts** : jusqu'à 10 transferts simultanés (Paramètres > Général), pause et reprise, priorités, réordonnancement, relance des échecs, onglets File / Échoués / Terminés. Un téléchargement peut être ajouté à la file sans démarrer.
+- **Fichier déjà présent** : écraser, écraser si plus récent, si la taille diffère, reprendre, garder les deux ou ignorer, avec « faire de même pour les fichiers suivants ».
+- **Copier, couper, coller des fichiers** (⌘C / ⌘X / ⌘V, Ctrl sous Windows et Linux) entre dossiers, volets et serveurs ; dupliquer (⌘D) ; Déplacer vers… ; glisser sur un dossier pour déplacer, d'un volet à l'autre pour copier directement entre serveurs.
+- **Explorateur** : chemin cliquable (un clic sur un dossier y va, un clic sur le dossier courant ou ⌘L pour taper un chemin), bouton Envoyer, filtre discret par nom (`*.log, node_modules`, fichiers cachés), Propriétés (⌘I) avec la taille d'un dossier, Copier l'URL, liens symboliques (SSH), permissions appliquées à tout un dossier (fichiers ou dossiers seulement), ouvrir un dossier dans un nouvel onglet, Tab pour passer d'un volet à l'autre, taper le début d'un nom pour le sélectionner.
+- **Rouvrir les connexions au démarrage** rouvre maintenant chaque onglet dans ses dossiers, vue scindée comprise.
+
 ### 1.12.0
 
 - **Créer une archive** ([#2](https://github.com/pickywawa/cyberdog/issues/2)) : clic droit > Compresser > `.tar.gz` ou `.zip` sur un ou plusieurs éléments (serveurs SSH). L'archive est créée sur le serveur, à côté de la sélection ; un fichier existant n'est jamais écrasé.

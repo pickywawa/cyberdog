@@ -333,7 +333,8 @@ function serverRow(s, activeServer) {
     ...(!s.teamId&&!s.vaultId ? [starBtn(s.favorite, () => setFavorite(s, !s.favorite))] : []),
     h('button', { className: 'ib edit', innerHTML: icon('pencil'), disabled:!canManage&&!s.vaultId, title: t(s.vaultId?'vault.edit_server':canManage?'srv.edit_tip':'team.permissions'), onclick: e => { e.stopPropagation(); s.vaultId?editVaultServer(s):serverForm(s) } }))
   if(typeof connectionExtraLabel==='function'){const label=connectionExtraLabel(s);if(label)li.querySelector('.txt').append(h('small',{className:'srv-connection-label',textContent:label,title:label}))}
-  li.onclick = e => { if (!e.target.closest('button')) openFiles(s) }
+  // a double-click is one click: the second click of it (detail 2) opens nothing more
+  li.onclick = e => { if (e.detail <= 1 && !e.target.closest('button')) openFiles(s) }
   li.tabIndex = 0
   li.onkeydown = e => { if (e.key === 'Enter' && e.target === li) openFiles(s) }
   li.oncontextmenu = e => {
@@ -927,6 +928,7 @@ async function load(tab, p, push = true, known = false) {
     if (r.selected) tab.pendingSelect = r.selected
     Object.assign(tab, { path: r.path, entries: r.entries, sel: new Set(), last: null, error: null })
     rememberConnections()
+    if (!tab.localPane && (tab.root || tab).panes?.[0] === tab) rememberFolder(tab.server, r.path) // the main explorer of the tab
   } catch (e) {
     tab.pendingSelect = null
     if (AUTH_FAIL.test(e.message) && !tab.connId && (await askPassword(tab.server))) return load(tab, p, push, known)
@@ -1594,8 +1596,24 @@ function toggleLocal(ex) {
 }
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
-// path: the folder to open (home otherwise); split: a second explorer at that folder (reopened sessions)
+// The last folder seen on each server, on this computer: a server opened again comes back there
+const LAST_FOLDERS = 'cyberdog.lastFolders'
+function lastFolder(server) { try { return JSON.parse(localStorage.getItem(LAST_FOLDERS) || '{}')[server.id] || null } catch { return null } }
+function rememberFolder(server, path) {
+  if (!server?.id || !path) return
+  try {
+    const all = JSON.parse(localStorage.getItem(LAST_FOLDERS) || '{}')
+    delete all[server.id]
+    all[server.id] = path
+    const ids = Object.keys(all)
+    for (const id of ids.slice(0, Math.max(0, ids.length - 300))) delete all[id] // the 300 most recent servers
+    localStorage.setItem(LAST_FOLDERS, JSON.stringify(all))
+  } catch {}
+}
+
+// path: the folder to open (otherwise the last one seen on this server, or home); split: a second explorer at that folder
 function openFiles(server, { terminal = false, path = null, split = null } = {}) {
+  path ||= lastFolder(server)
   if(server.loading)return
   const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))

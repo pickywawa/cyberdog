@@ -43,7 +43,20 @@ app.on('browser-window-created', (_, win) => {
       await wait(`typeof tabs !== 'undefined' && tabs.length === 2 && tabs.every(tb => !tb.opening)`, 'tabs reopened')
       await wait(`tabs[0].panes.length === 2 && tabs[0].panes[0].path === ${JSON.stringify(W + '/www/site')} && tabs[0].panes[1].path === ${JSON.stringify(W + '/etc/nginx')}`, 'tab 1 at its folders')
       await wait(`tabs[1].active.path === ${JSON.stringify(W)} && !tabs[1].active.error`, 'missing folder: home folder instead')
-      console.log('Session UI passed: folders saved, tabs and split reopened at their folders, missing folder falls back to home.')
+      // opening a server by hand: back at its last folder; a double-click opens one tab, not two
+      await js(`closeTab(tabs[0].id)`)
+      await wait(`tabs.length === 1`, 'tab closed')
+      await js(`(() => { const li = [...document.querySelectorAll('#servers li.srv')].find(li => li.textContent.includes('Restore s1'))
+        li.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })); li.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 2 })); li.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 })) })()`)
+      await wait(`tabs.length === 2 && tabs[1].active.path === ${JSON.stringify(W + '/www/site')}`, 'reopened at the last folder')
+      await pause(600)
+      assert.equal(await js(`tabs.length`), 2, 'a double-click opens a single tab')
+      // the folder is gone: home instead
+      await js(`closeTab(tabs[1].id)`)
+      fs.rmSync(at('www/site'), { recursive: true })
+      await js(`openFiles(servers.find(s => s.id === 's1'))`)
+      await wait(`tabs.length === 2 && tabs[1].active.path === ${JSON.stringify(W)} && !tabs[1].active.error`, 'missing last folder: home')
+      console.log('Session UI passed: folders saved, tabs and split reopened at their folders, missing folder falls back to home, last folder per server, double-click opens once.')
       app.exit(0)
     } catch (e) { console.error(e); app.exit(1) }
   })

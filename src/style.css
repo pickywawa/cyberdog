@@ -635,3 +635,52 @@ body.resizing-y { cursor: row-resize; }
 .kb-row:last-child { border-bottom: 0; }
 .kb-keys { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .kb-keys kbd { font: 12px/1 Menlo, Consolas, monospace; padding: 4px 7px; border-radius: 6px; border: 1px solid var(--line); border-bottom-width: 2px; background: color-mix(in srgb, var(--bg) 70%, transparent); color: var(--fg, inherit); white-space: nowrap; }
+
+/* ---------- Presse-papiers, glisser-déposer, filtre, propriétés ---------- */
+.mi .mi-k { margin-inline-start: 18px; font: inherit; font-size: 11px; opacity: .6; background: none; border: 0; padding: 0; }
+.mi:hover .mi-k { opacity: .85; }
+.row.cut { opacity: .45; }
+.row.drop-into { background: color-mix(in srgb, var(--accent) 22%, transparent) !important; box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 6px; }
+.filter-btn:not(.on) { opacity: .55; }
+.filter-btn:not(.on):hover { opacity: 1; }
+.filter-btn svg { width: 15px; height: 15px; }
+.filterbox { position: absolute; top: 46px; right: 10px; width: 320px; max-width: calc(100% - 20px); z-index: 20; background: var(--menu); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 44px var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.filterbox[hidden] { display: none; }
+.filterbox input:not([type]) { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.filterbox label.check { display: flex; align-items: center; gap: 8px; }
+.filterbox input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); }
+.info-card { width: 460px; }
+.info-card h3 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.info-card h3 span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-list { display: grid; gap: 7px; font-size: 12.5px; }
+.info-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline; }
+.info-row > span:last-child { overflow-wrap: anywhere; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.permission-recursive { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.inline-setting { display: flex; flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; }
+.inline-setting .lsel { width: 80px; }
+
+/* ---------- File de transferts ---------- */
+.transfer-popover { width: min(460px, 80vw); max-height: 420px; }
+.transfer-tabs { display: flex; gap: 4px; margin: 8px 0 2px; }
+.transfer-actions { display: flex; gap: 4px; }
+.transfer-tools { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.transfer-tools .ib { width: 22px; height: 22px; }
+.transfer-tools .ib svg { width: 13px; height: 13px; }
+.transfer-priority { font: inherit; font-size: 11px; padding: 1px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.transfer-empty { display: block; padding: 14px 0 6px; text-align: center; }
+.transfer-summary.asking { color: var(--accent); font-weight: 600; }
+
+/* ---------- Fichier déjà présent ---------- */
+.conflict-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .4); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; }
+.conflict-card { width: 470px; }
+.conflict-file { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.conflict-file b, .conflict-file small { overflow-wrap: anywhere; }
+.conflict-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.conflict-side { display: flex; flex-direction: column; gap: 3px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; }
+.conflict-newer { color: var(--accent); font-weight: 600; }
+.conflict-choices { display: grid; gap: 6px; }
+.conflict-card label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 12.5px; }
+.conflict-card label.check.disabled { opacity: .45; }
+.conflict-card input[type=radio], .conflict-card input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); }
+.danger-btn { color: var(--danger); margin-inline-end: auto; }

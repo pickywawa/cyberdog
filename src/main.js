@@ -46,7 +46,7 @@ let actions = []
 const pendingVaultClients = new Set()
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
-const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false, showLocalPane: false }
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false, showLocalPane: false, maxTransfers: 2 }
 const checkConfigRoot = () => {
   if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
 }
@@ -115,6 +115,7 @@ function loadSettings() {
   // Retain custom paths even when an external volume is temporarily unavailable.
   if (!settings.defaultEditor) settings.defaultEditor = 'system'
   autoUpdater.autoDownload = !!settings.autoDownload
+  transfers.setLimit(settings.maxTransfers)
   applyNativeTheme()
 }
 // thèmes clairs : seul 'light' ; les autres sont sombres (dialogues natifs, barres, champs)
@@ -133,6 +134,7 @@ ipcMain.handle('settings:set', (_, patch) => {
   }
   if (typeof patch.autoDownload === 'boolean') settings.autoDownload = patch.autoDownload
   if (typeof patch.showLocalPane === 'boolean') settings.showLocalPane = patch.showLocalPane
+  if (Number.isInteger(patch.maxTransfers) && patch.maxTransfers >= 1 && patch.maxTransfers <= 10) { settings.maxTransfers = patch.maxTransfers; transfers.setLimit(patch.maxTransfers) }
   if (isMas) { delete patch.configPath; delete patch.autoDownload }
   if ('configPath' in patch) {
     const nextPath = typeof patch.configPath === 'string' ? patch.configPath.trim() : ''
@@ -778,10 +780,7 @@ async function rmr(s, p) {
   } else await P(s, 'unlink', p)
 }
 // The local pane sends files to the Trash / Recycle Bin instead of deleting them for good
-ipcMain.handle('sftp:rm', async (_, id, paths) => {
-  const local = conns.get(id)?.local
-  for (const p of paths) local ? await shell.trashItem(local.nativePath(p)) : await rmr(S(id), p)
-})
+ipcMain.handle('sftp:rm', (_, id, paths) => removePaths(id, paths))
 
 // budget { left } optionnel : plafonne le volume téléchargé (glisser vers le Finder)
 async function dl(s, remote, local, budget) {
@@ -804,33 +803,171 @@ async function resolveRef(ref) {
   return conns.get(id).sftp
 }
 transferEngine = require('./transfer-files')(transfers, resolveRef)
+const { sftpSide, uniqueTarget } = require('./transfer-files')
+// A file already exists at the target: the window asks what to do (the answer can apply to the rest of the job)
+const CONFLICT_ACTIONS = ['overwrite', 'newer', 'size', 'resume', 'rename', 'skip', 'cancel']
+const conflictAsks = new Map() // question id -> resolve
+transfers.ask = (job, info) => new Promise(resolve => {
+  if (!win || win.isDestroyed()) return resolve({ action: 'skip' })
+  const id = crypto.randomUUID()
+  conflictAsks.set(id, resolve)
+  send('transfer:conflict', { id, job: job.id, direction: job.direction, ...info })
+})
+ipcMain.handle('transfer:conflict-answer', (_, id, answer) => {
+  const resolve = conflictAsks.get(id)
+  conflictAsks.delete(id)
+  resolve?.({ action: CONFLICT_ACTIONS.includes(answer?.action) ? answer.action : 'skip', all: !!answer?.all })
+})
 ipcMain.handle('transfers:list', () => transfers.list())
 ipcMain.handle('transfers:cancel', (_, id) => transfers.cancel(id))
-ipcMain.handle('sftp:download', async (_, id, paths) => {
-  const s = S(id), preferred=conns.get(id)?.server?.downloadDir, downloads = preferred&&path.isAbsolute(preferred)&&fs.existsSync(preferred)&&fs.statSync(preferred).isDirectory()?preferred:app.getPath('downloads')
+ipcMain.handle('transfers:pause', (_, id) => transfers.pause(id))
+ipcMain.handle('transfers:resume', (_, id) => transfers.resume(id).then(ok => ok, e => { throw e }))
+ipcMain.handle('transfers:retry-failed', () => transfers.retryFailed())
+ipcMain.handle('transfers:start-all', () => { for (const x of transfers.list()) if (x.state === 'paused') transfers.resume(x.id).catch(() => {}) })
+ipcMain.handle('transfers:priority', (_, id, priority) => transfers.setPriority(id, priority))
+ipcMain.handle('transfers:move', (_, id, delta) => transfers.move(id, Number(delta)))
+ipcMain.handle('transfers:clear', (_, id) => { transfers.clear(id || undefined); return transfers.list() })
+const downloadsDir = id => { const preferred = conns.get(id)?.server?.downloadDir; return preferred && path.isAbsolute(preferred) && fs.existsSync(preferred) && fs.statSync(preferred).isDirectory() ? preferred : app.getPath('downloads') }
+// opts.hold: add to the queue without starting (the queue's Start button starts it)
+ipcMain.handle('sftp:download', async (_, id, paths, opts = {}) => {
+  const s = S(id), downloads = downloadsDir(id)
   let target, single = paths.length === 1 && !(await P(s, 'stat', paths[0])).isDirectory()
   if (single) { const r = await dialog.showSaveDialog(win, { defaultPath: path.join(downloads, posix.basename(paths[0])) }); if (r.canceled) return null; target = r.filePath }
   else { const r = await dialog.showOpenDialog(win, { title: t('dlg.download_into'), defaultPath:downloads, properties: ['openDirectory', 'createDirectory'] }); if (r.canceled) return null; target = r.filePaths[0] }
   const sid = conns.get(id).server.id
-  const ok = await transfers.run(id, 'download', posix.basename(paths[0]), { refs: { src: { connId: id, serverId: sid }, dst: { disk: true } }, serverIds: [sid], top: paths.map(p => ({ source: p, target: single ? target : path.join(target, posix.basename(p)) })) })
+  // the save dialog already asked about replacing the file
+  const ok = await transfers.run(id, 'download', posix.basename(paths[0]), { hold: !!opts.hold, policy: single ? 'overwrite' : undefined, refs: { src: { connId: id, serverId: sid }, dst: { disk: true } }, serverIds: [sid], top: paths.map(p => ({ source: p, target: single ? target : path.join(target, posix.basename(p)) })) })
   return ok ? target : null
 })
-ipcMain.handle('sftp:upload', async (_, id, locals, dir) => {
-  const s = S(id), clash = []
-  for (const l of locals) if (await P(s, 'stat', posix.join(dir, path.basename(l))).then(() => true, () => false)) clash.push(path.basename(l))
-  if (clash.length) {
-    const r = await dialog.showMessageBox(win, { type: 'warning', buttons: [t('dlg.replace'), t('btn.cancel')], defaultId: 1, cancelId: 1, message: t('dlg.exists'), detail: clash.join('\n') })
-    if (r.response) return false
-  }
+// Files already at the target are handled one by one through the conflict question
+ipcMain.handle('sftp:upload', async (_, id, locals, dir, opts = {}) => {
+  S(id)
   const sid = conns.get(id).server.id
-  return transfers.run(id, 'upload', path.basename(locals[0]), { refs: { src: { disk: true }, dst: { connId: id, serverId: sid } }, serverIds: [sid], top: locals.map(p => ({ source: p, target: posix.join(dir, path.basename(p)) })) })
+  return transfers.run(id, 'upload', path.basename(locals[0]), { hold: !!opts.hold, refs: { src: { disk: true }, dst: { connId: id, serverId: sid } }, serverIds: [sid], top: locals.map(p => ({ source: p, target: posix.join(dir, path.basename(p)) })) })
 })
-ipcMain.handle('transfers:resume', (_, id) => transfers.resume(id).then(ok => ok, e => { throw e }))
+// Upload button: pick files (or folders) on this computer
+ipcMain.handle('files:pick', async (_, kind) => {
+  const properties = [...(kind === 'dir' ? ['openDirectory'] : isMac && kind !== 'file' ? ['openFile', 'openDirectory'] : ['openFile']), 'multiSelections']
+  const r = await dialog.showOpenDialog(win, { title: t('up.pick_title'), properties })
+  return r.canceled ? [] : r.filePaths
+})
 // Copy between two servers, straight from one connection to the other
 ipcMain.handle('transfer:copyToServer', async (_, id, paths, serverId, dir) => {
   const from = conns.get(id)?.server, to = (await resolveRef({ serverId })) && [...conns.values()].find(c => c.server?.id === serverId)?.server
   if (!from || !to) throw new Error(t('err.lost'))
   return transfers.run(id, 'copy', posix.basename(paths[0]), { refs: { src: { connId: id, serverId: from.id }, dst: { serverId } }, serverIds: [from.id, to.id], top: paths.map(p => ({ source: p, target: posix.join(dir, posix.basename(p)) })) })
+})
+
+// Paste, drag and drop, "Move to…" and "Duplicate": copy or move files from one connection (a server, the local pane)
+// to a folder of another one, or of the same one. On the same server a move is a rename; everything else goes
+// through the transfer queue. A copy into the folder the files come from makes numbered copies ("name (1).ext").
+// A move between two servers deletes the sources once copied, except those the user chose to skip.
+const sameServer = (a, b) => a === b || (!!a?.server?.id && a.server.id === b?.server?.id)
+const insideOf = (dir, p) => dir === p || dir.startsWith(p.replace(/\/+$/, '') + '/')
+ipcMain.handle('files:paste', async (_, from, paths, to, dir, mode) => {
+  const a = conns.get(from), b = conns.get(to)
+  if (!a?.sftp || !b?.sftp) throw new Error(t('err.lost'))
+  if (!Array.isArray(paths) || !paths.length || typeof dir !== 'string') return { ok: false }
+  const same = sameServer(a, b)
+  if (same && paths.some(p => insideOf(dir, p))) throw new Error(t('err.into_itself'))
+  if (same && mode === 'move') {
+    if (!(await P(b.sftp, 'stat', dir).then(st => st.isDirectory(), () => false))) throw new Error(t('err.no_folder', { path: dir }))
+    const taken = []
+    for (const p of paths) {
+      const target = posix.join(dir, posix.basename(p))
+      if (target === p) continue
+      if (await P(b.sftp, 'stat', target).then(() => true, () => false)) { taken.push(posix.basename(p)); continue }
+      await P(b.sftp, 'rename', p, target)
+    }
+    if (taken.length) throw new Error(t('err.exists', { names: taken.join(', ') }))
+    return { ok: true, renamed: true }
+  }
+  const side = sftpSide(b.sftp), top = []
+  for (const p of paths) {
+    let target = posix.join(dir, posix.basename(p))
+    if (same && target === p) target = await uniqueTarget(side, target, (await P(a.sftp, 'stat', p)).isDirectory())
+    top.push({ source: p, target })
+  }
+  const sid = a.server.id, did = b.server.id, meta = { refs: { src: { connId: from, serverId: sid }, dst: { connId: to, serverId: did } }, serverIds: [...new Set([sid, did])], top }
+  const running = transfers.run(from, 'copy', posix.basename(paths[0]), meta)
+  const job = transfers.list().at(-1)
+  const ok = await running
+  if (ok && mode === 'move') {
+    const plan = transfers.items.get(job.id)?.plan || []
+    const kept = top.filter(x => plan.some(i => i.skipped && insideOf(i.source, x.source)))
+    await removePaths(from, top.filter(x => !kept.includes(x)).map(x => x.source))
+  }
+  return { ok }
+})
+async function removePaths(id, paths) {
+  const local = conns.get(id)?.local
+  for (const p of paths) local ? await shell.trashItem(local.nativePath(p)) : await rmr(S(id), p)
+}
+
+// Properties: link targets, and the total size of the selection (folders are walked, a level at a time)
+ipcMain.handle('files:info', async (_, id, paths) => {
+  const s = S(id), started = Date.now()
+  let size = 0, files = 0, dirs = 0, partial = false, level = []
+  const links = {}
+  for (const p of paths) {
+    const st = await P(s, 'lstat', p)
+    const type = st.mode & 0o170000
+    if (type === 0o120000 || st.isSymbolicLink?.()) { links[p] = s.readlink ? await P(s, 'readlink', p).catch(() => '') : ''; files++; continue }
+    if (st.isDirectory()) level.push(p)
+    else { files++; size += st.size || 0 }
+  }
+  while (level.length) {
+    const next = []
+    for (let i = 0; i < level.length; i += 8) {
+      if (files + dirs > 200000 || Date.now() - started > 30000) { partial = true; break }
+      await Promise.all(level.slice(i, i + 8).map(async d => {
+        let list
+        try { list = await P(s, 'readdir', d) } catch { partial = true; return }
+        for (const e of list) {
+          if (e.filename === '.' || e.filename === '..') continue
+          if ((e.attrs.mode & 0o170000) === 0o040000) { dirs++; next.push(posix.join(d, e.filename)) } else { files++; size += e.attrs.size || 0 }
+        }
+      }))
+    }
+    if (partial) break
+    level = next
+  }
+  return { size, files, dirs, partial, links }
+})
+ipcMain.handle('files:symlink', (_, id, target, link) => {
+  const s = S(id)
+  if (!s.symlink) throw new Error('unsupported')
+  if (typeof target !== 'string' || !target || typeof link !== 'string' || !link) throw new Error('invalid')
+  return P(s, 'symlink', target, link)
+})
+// Permissions on a whole folder: everything below it, only the files or only the folders (symbolic links are left alone).
+// owner: a uid to apply too, or null. Over SSH it is one `find`; elsewhere the tree is walked.
+ipcMain.handle('files:chmod-recursive', async (_, id, root, mode, scope, owner) => {
+  if (!permissions.validMode(mode) || !['all', 'files', 'dirs'].includes(scope)) throw new Error(t('err.permissions'))
+  if (owner != null && !permissions.validUid(owner)) throw new Error('invalid')
+  const c = conns.get(id), s = S(id)
+  if (c?.client) {
+    const type = scope === 'files' ? '-type f' : scope === 'dirs' ? '-type d' : '! -type l'
+    const steps = [...(owner != null ? [`find ${q(root)} ${type} -exec chown ${owner} {} +`] : []), `find ${q(root)} ${type} -exec chmod ${mode} {} +`]
+    const r = await exec(c.client, steps.join(' && '), { timeout: 300000 })
+    if (r.code !== 0) throw new Error(r.out.trim().split('\n').slice(-2).join(' ') || `exit ${r.code}`)
+    return
+  }
+  const apply = async (p, isDir) => {
+    if (scope === 'files' ? isDir : scope === 'dirs' ? !isDir : false) return
+    if (owner != null) { const st = await P(s, 'stat', p); await P(s, 'chown', p, owner, st.gid) }
+    await P(s, 'chmod', p, parseInt(mode, 8))
+  }
+  const walk = async dir => {
+    await apply(dir, true)
+    for (const e of await P(s, 'readdir', dir)) {
+      if (e.filename === '.' || e.filename === '..') continue
+      const type = e.attrs.mode & 0o170000, p = posix.join(dir, e.filename)
+      if (type === 0o040000) await walk(p)
+      else if (type !== 0o120000) await apply(p, false)
+    }
+  }
+  await walk(root)
 })
 
 // Édition : téléchargement en tmp, ouverture dans l'appli, renvoi à chaque sauvegarde

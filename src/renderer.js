@@ -142,10 +142,13 @@ function menu(x, y, items, { up = false } = {}) {
   const m = $('#menu')
   m.replaceChildren()
   const build = (items, parent) => {
+    // no separator at the ends nor two in a row (items come and go with the selection)
+    items = items.reduce((out, it) => it === '-' && (!out.length || out.at(-1) === '-') ? out : [...out, it], [])
+    while (items.at(-1) === '-') items.pop()
     for (const it of items) {
       if (it === '-') { parent.append(h('hr')); continue }
       const lead = it.swatch ? h('span', { className: 'sw', style: `background: linear-gradient(135deg, ${it.swatch[0]} 50%, ${it.swatch[1]} 50%)` }) : h('span', { className: 'mi-ic', innerHTML: it.icon ? icon(it.icon) : '' })
-      const li = h('div', { className: 'mi' + (it.danger ? ' danger' : '') }, lead, h('span', { className: 'mi-t', textContent: it.label }), h('span', { className: 'mi-chk', innerHTML: it.checked ? icon('check') : '' }))
+      const li = h('div', { className: 'mi' + (it.danger ? ' danger' : '') }, lead, h('span', { className: 'mi-t', textContent: it.label }), ...(it.hint ? [h('kbd', { className: 'mi-k', textContent: it.hint })] : []), h('span', { className: 'mi-chk', innerHTML: it.checked ? icon('check') : '' }))
       if (it.children) {
         li.classList.add('sub')
         const sub = h('div', { className: 'submenu' })
@@ -165,6 +168,7 @@ addEventListener('mousedown', e => {
   if (!e.target.closest('#menu')) hideMenu()
   if (!e.target.closest('.searchbox, .js-search-btn')) tabs.forEach(tb => tb.panes.forEach(p => (p.searchBox.hidden = true)))
   if (!e.target.closest('.pathsbox, .js-paths-btn')) hidePathsBoxes()
+  if (!e.target.closest('.filterbox, .js-filter-btn')) tabs.forEach(tb => tb.panes.forEach(p => (p.filterBox.hidden = true)))
 })
 // raccourcis clavier : voir shortcuts.js
 addEventListener('blur', hideMenu)
@@ -538,6 +542,8 @@ async function openSettingsModal(initialPage = 'general') {
   const restoreInput = h('input', { type: 'checkbox', checked: !!current.restoreConnections })
   const autoDownloadInput = h('input', { type: 'checkbox', checked: !!current.autoDownload })
   const localPaneInput = h('input', { type: 'checkbox', checked: !!current.showLocalPane })
+  const transfersInput = h('select', { className: 'lsel' }, ...Array.from({ length: 10 }, (_, i) => h('option', { value: String(i + 1), textContent: String(i + 1) })))
+  transfersInput.value = String(current.maxTransfers || 2)
   const settingsPage = (name, display, ...children) => {
     const page = h('div', { className: 'settings-page', style: `display: ${display}; flex-direction: column; gap: 12px;` }, ...children)
     page.dataset.page = name
@@ -549,6 +555,8 @@ async function openSettingsModal(initialPage = 'general') {
     h('div', { className: 'note', textContent: t('settings.restore_help') }),
     h('label', { className: 'check' }, localPaneInput, h('span', { textContent: t('settings.local_pane') })),
     h('div', { className: 'note', textContent: t('settings.local_pane_help') }),
+    h('label', { className: 'inline-setting' }, h('span', { textContent: t('settings.max_transfers') }), transfersInput),
+    h('div', { className: 'note', textContent: t('settings.max_transfers_help') }),
     h('label', {}, t('settings.lang'), langSel),
     h('label', {}, t('settings.theme'), themeSel),
     ...(api.mas ? [] : [h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
@@ -621,6 +629,7 @@ async function openSettingsModal(initialPage = 'general') {
         autoDownload: autoDownloadInput.checked,
         restoreConnections: restoreInput.checked,
         showLocalPane: localPaneInput.checked,
+        maxTransfers: +transfersInput.value,
       }
       const configChanged = patch.configPath !== current.configPath
       if (patch.configPath && configChanged) {
@@ -913,8 +922,8 @@ async function act(tab, fn, refresh = true) {
 
 function updateStatus(tab) {
   paintTransfers()
-  const n = tab.sel.size
-  tab.statusL.textContent = t('ex.items', { n: tab.entries.length }) + (n ? ' · ' + t('ex.selected', { n }) : '')
+  const n = tab.sel.size, hidden = tab.entries.length - (tab.view?.length ?? tab.entries.length)
+  tab.statusL.textContent = t('ex.items', { n: tab.entries.length - hidden }) + (hidden > 0 ? ' · ' + t('filter.count', { n: hidden }) : '') + (n ? ' · ' + t('ex.selected', { n }) : '')
 }
 
 function draw(tab) {
@@ -923,7 +932,9 @@ function draw(tab) {
   tab.statusR.textContent = serverTarget(tab.server)
   const { key, dir } = tab.sort
   const val = e => (key === 'type' ? typeOf(e) : key === 'ext' ? extOf(e) : e[key])
-  tab.view = [...tab.entries].sort((a, b) => b.isDir - a.isDir || cmp(val(a), val(b)) * dir)
+  tab.view = fileTools.apply(tab.entries, fileFilter).sort((a, b) => b.isDir - a.isDir || cmp(val(a), val(b)) * dir)
+  // the selection never keeps rows the filter hides
+  if (tab.sel.size) { const shown = new Set(tab.view.map(x => x.name)); for (const name of tab.sel) if (!shown.has(name)) tab.sel.delete(name) }
   applyCols(tab.explorer)
   tab.head.replaceChildren(...COLS.map(([k, label]) => h('div', { onclick: () => { tab.sort = { key: k, dir: k === key ? -dir : 1 }; draw(tab) } },
     h('span', { className: 'hl', textContent: t(label) }), h('span', { innerHTML: k === key ? icon(dir > 0 ? 'chevron-up' : 'chevron-down') : '', style: 'display:inline-flex' }), colResizer(k))))
@@ -933,7 +944,9 @@ function draw(tab) {
     return updateStatus(tab)
   }
   if (tab.path && tab.path !== '/') {
-    tab.body.append(h('div', { className: 'row', ondblclick: () => load(tab, join(tab.path, '..'), true, true) }, nameCell(icon('up'), 'up', '..')))
+    const up = h('div', { className: 'row', ondblclick: () => load(tab, join(tab.path, '..'), true, true) }, nameCell(icon('up'), 'up', '..'))
+    dropTarget(tab, up, parentOf(tab.path))
+    tab.body.append(up)
   }
   tab.rowEls = tab.view.map((e, i) => {
     const fi = fileIcon(e, extOf(e))
@@ -965,26 +978,20 @@ function draw(tab) {
       const editor = settings.defaultEditor && settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
       act(tab, () => api.invoke('sftp:edit', tab.connId, join(tab.path, e.name), editor), false)
     }
-    // glisser vers le Finder : préparation locale après 120 ms d'appui, drag natif au dragstart
+    // glisser : copies locales préparées après 120 ms d'appui (Finder), déplacement / copie directs dans Cyberdog
     row.draggable = true
     row.onmousedown = ev => { if (ev.button === 0) { clearTimeout(tab.dragTimer); tab.dragTimer = setTimeout(() => prepareDrag(tab, e), 120) } }
     row.onmouseup = () => clearTimeout(tab.dragTimer)
-    row.ondragstart = async ev => {
-      ev.preventDefault()
-      clearTimeout(tab.dragTimer)
-      const prep = prepareDrag(tab, e)
-      if (!prep.files) {
-        toast(t('t.drag_preparing', { name: e.name }), false, 60000)
-        await prep.promise
-        $('#toast').hidden = true
-      }
-      if (prep.files) { tab.lastDragAt = Date.now(); api.send('drag:start', prep.files) }
-    }
+    row.ondragstart = ev => startRowDrag(tab, e, ev)
+    if (e.isDir) dropTarget(tab, row, join(tab.path, e.name))
     return row
   })
   tab.body.append(...tab.rowEls)
   if (!tab.entries.length) tab.body.append(h('div', { className: 'msg', textContent: t('ex.empty') }))
+  else if (!tab.view.length) tab.body.append(h('div', { className: 'msg', textContent: t('filter.all_hidden') }))
   paintSel(tab)
+  paintCut()
+  if (tab.filterBox && !tab.filterBox.hidden) paintFilterBox(tab)
   if (tab.pendingSelect) {
     const i = tab.view.findIndex(x => x.name === tab.pendingSelect)
     tab.pendingSelect = null
@@ -999,7 +1006,7 @@ function prepareDrag(tab, e) {
   const prep = { key, files: null }
   prep.promise = api.invoke('drag:prepare', tab.connId, names.map(n => join(tab.path, n)))
     .then(f => (prep.files = f))
-    .catch(err => { tab.dragPrep = null; toast(errText(err), true) })
+    .catch(() => { tab.dragPrep = null }) // too big for the Finder: the drag stays inside Cyberdog
   tab.dragPrep = prep
   return prep
 }
@@ -1016,10 +1023,17 @@ async function newItem(tab, kind) {
   if (name) act(tab, () => api.invoke(kind === 'dir' ? 'sftp:mkdir' : 'sftp:touch', tab.connId, join(tab.path, name)))
 }
 
-async function upload(tab, paths) {
+async function upload(tab, paths, dir = tab.path) {
   await act(tab, async () => {
-    if (await api.invoke('sftp:upload', tab.connId, paths, tab.path)) toast(t('t.uploaded'))
-  })
+    if (await api.invoke('sftp:upload', tab.connId, paths, dir)) { toast(t('t.uploaded')); refreshFolders([dir]) }
+  }, false)
+}
+// Upload button: on macOS one dialog picks files and folders; elsewhere the dialog does one or the other
+async function uploadPicker(ex, e) {
+  const pick = async kind => { const paths = await api.invoke('files:pick', kind); if (paths.length && ex.path) upload(ex, paths) }
+  if (api.platform === 'darwin') return pick('any')
+  const r = e.currentTarget.getBoundingClientRect()
+  menu(r.left, r.bottom + 4, [{ label: t('up.files'), icon: 'file', fn: () => pick('file') }, { label: t('up.folder'), icon: 'folder', fn: () => pick('dir') }])
 }
 
 const appsMenu = (tab, remote) => async () => [
@@ -1062,41 +1076,247 @@ async function shareLink(tab, file) {
   try { await navigator.clipboard.writeText(await api.invoke('storage:link', tab.connId, file, +v.ttl)); toast(t('t.link_copied')) } catch (e) { toast(errText(e), true) }
 }
 
+// ---------- Copier / couper / coller, glisser-déposer, déplacer ----------
+// Cyberdog's own file clipboard: what was copied or cut, on which connection. Paste copies (or moves) it into the
+// folder of the active pane, on any server or the local pane; files are copied through the transfer queue.
+let fileClipboard = null // { mode: 'copy' | 'move', connId, serverId, dir, names }
+const modKey = combo => shortcuts.label(combo, api.platform === 'darwin')
+const selection = ex => ex.view.filter(x => ex.sel.has(x.name))
+function copyFiles(ex, cut = false) {
+  const sel = selection(ex)
+  if (!sel.length || !ex.connId || !ex.path) return
+  fileClipboard = { mode: cut ? 'move' : 'copy', connId: ex.connId, serverId: ex.server.id, dir: ex.path, names: sel.map(x => x.name) }
+  paintCut()
+  toast(t(cut ? 't.clip_cut' : 't.clip_copied', { n: sel.length }))
+}
+// rows waiting to be moved are dimmed
+function paintCut() {
+  const c = fileClipboard?.mode === 'move' ? fileClipboard : null
+  tabs.forEach(tb => tb.panes?.forEach(p => p.rowEls?.forEach(r => r.classList.toggle('cut', !!c && p.connId === c.connId && p.path === c.dir && c.names.includes(r.dataset.name)))))
+}
+// refresh the panes showing these folders (any server: a needless refresh is harmless)
+function refreshFolders(dirs) {
+  tabs.forEach(tb => tb.panes?.forEach(p => { if (p.path && dirs.includes(p.path) && !p.explorer.classList.contains('loading')) load(p, p.path, false, true) }))
+}
+const parentOf = p => p.slice(0, p.lastIndexOf('/')) || '/'
+// Copy or move paths of connection `fromConn` into `dir` of the pane `ex`
+async function transferFiles(ex, fromConn, paths, dir, mode) {
+  try {
+    await ensure(ex)
+    const r = await api.invoke('files:paste', fromConn, paths, ex.connId, dir, mode)
+    if (r?.ok) refreshFolders([dir, ...new Set(paths.map(parentOf))])
+    return r?.ok
+  } catch (e) { toast(errText(e), true); refreshFolders([dir, ...new Set(paths.map(parentOf))]) }
+}
+async function pasteFiles(ex, dir = ex.path) {
+  const c = fileClipboard
+  if (!c || !dir) return
+  if (c.mode === 'move') { fileClipboard = null; paintCut() }
+  await transferFiles(ex, c.connId, c.names.map(n => join(c.dir, n)), dir, c.mode)
+}
+function duplicateFiles(ex, sel = selection(ex)) {
+  if (sel.length && ex.path) transferFiles(ex, ex.connId, sel.map(x => join(ex.path, x.name)), ex.path, 'copy')
+}
+async function moveTo(ex, sel = selection(ex)) {
+  if (!sel.length) return
+  const v = await modal(t('ctx.move_to'), [{ name: 'dir', label: t('move.dir'), value: ex.path }], t('btn.move'))
+  let dir = v?.dir.trim().replace(/(.)\/+$/, '$1')
+  if (!dir) return
+  if (!dir.startsWith('/')) dir = join(ex.path, dir)
+  if (dir !== ex.path) transferFiles(ex, ex.connId, sel.map(x => join(ex.path, x.name)), dir, 'move')
+}
+
+// Drag and drop. Inside Cyberdog a drag moves files on the same server (copies them with Alt) and copies them
+// between servers, connection to connection. Dragging to the Finder / Explorer needs local copies: they are prepared
+// when the button is pressed, and the drag starts as a native one once they are ready; otherwise it stays inside
+// the window and Cyberdog says to drag again.
+let dragSource = null // { ex, connId, paths, files, at }
+const DRAG_TYPE = 'application/x-cyberdog'
+const acceptsDrop = e => e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes(DRAG_TYPE)
+function startRowDrag(ex, e, ev) {
+  clearTimeout(ex.dragTimer)
+  const names = ex.sel.has(e.name) ? [...ex.sel] : [e.name]
+  const prep = prepareDrag(ex, e)
+  dragSource = { ex, connId: ex.connId, paths: names.map(n => join(ex.path, n)), files: prep.files, at: Date.now() }
+  if (prep.files) { ev.preventDefault(); api.send('drag:start', prep.files); return }
+  ev.dataTransfer.setData(DRAG_TYPE, '1')
+  ev.dataTransfer.effectAllowed = 'copyMove'
+  const source = dragSource
+  ev.target.addEventListener('dragend', end => {
+    const outside = end.clientX <= 0 || end.clientY <= 0 || end.clientX >= innerWidth || end.clientY >= innerHeight
+    if (end.dataTransfer.dropEffect === 'none' && outside) prep.promise?.then(() => { source.files = prep.files; toast(prep.files ? t('t.drag_again') : t('err.drag_too_big', { size: '300 MB' }), !prep.files) })
+  }, { once: true })
+}
+async function dropFiles(ex, e, dir) {
+  e.preventDefault()
+  e.stopPropagation()
+  document.querySelectorAll('.drop, .drop-into').forEach(el => el.classList.remove('drop', 'drop-into'))
+  if (!dir) return
+  const paths = [...e.dataTransfer.files].map(api.pathOf)
+  const src = dragSource
+  const internal = src && Date.now() - src.at < 120000 && (e.dataTransfer.types.includes(DRAG_TYPE) || (paths.length > 0 && !!src.files && paths.every(p => src.files.includes(p))))
+  if (internal) {
+    dragSource = null
+    const same = src.ex.server.id === ex.server.id
+    const mode = same && !e.altKey ? 'move' : 'copy'
+    if (same && mode === 'move' && src.paths.every(p => parentOf(p) === dir || p === dir)) return
+    return transferFiles(ex, src.connId, src.paths, dir, mode)
+  }
+  if (paths.length) upload(ex, paths, dir)
+}
+// a folder row (or "..") receives files dropped on it
+function dropTarget(ex, row, dir) {
+  row.ondragover = ev => {
+    if (!acceptsDrop(ev) || dragSource?.paths.includes(dir)) return
+    ev.preventDefault(); ev.stopPropagation()
+    ex.explorer.classList.remove('drop'); row.classList.add('drop-into')
+  }
+  row.ondragleave = () => row.classList.remove('drop-into')
+  row.ondrop = ev => dropFiles(ex, ev, dir)
+}
+
+// ---------- Propriétés, lien symbolique, URL, nouvel onglet ----------
+async function showInfo(ex, sel = selection(ex)) {
+  if (!sel.length) return
+  const one = sel.length === 1 ? sel[0] : null
+  const paths = sel.map(x => join(ex.path, x.name))
+  const size = h('span', { textContent: t('info.computing') }), content = h('span', { textContent: t('info.computing') }), link = h('span', { className: 'mono' })
+  const row = (label, value) => h('div', { className: 'info-row' }, h('span', { className: 'dim', textContent: label }), typeof value === 'string' ? h('span', { textContent: value }) : value)
+  const rows = [
+    row(t('info.where'), h('span', { className: 'mono', textContent: one ? paths[0] : ex.path })),
+    ...(one ? [row(t('col.type'), typeOf(one) + (extOf(one) ? ` (.${extOf(one)})` : ''))] : [row(t('info.items'), t('ex.items', { n: sel.length }))]),
+    row(t('col.size'), size),
+    ...(sel.some(x => x.isDir) ? [row(t('info.content'), content)] : []),
+    ...(one?.isLink ? [row(t('info.link'), link)] : []),
+    ...(one && one.mtime ? [row(t('col.modified'), new Date(one.mtime).toLocaleString(lang, { dateStyle: 'full', timeStyle: 'medium' }))] : []),
+    ...(one && hasPerms(ex.server) ? [row(t('col.owner'), `${one.owner} · ${one.group}`), row(t('col.perms'), `${permsOf(one)} (${(one.mode & 0o7777).toString(8).padStart(4, '0')})`)] : []),
+  ]
+  const m = $('#modal')
+  const close = () => { m.hidden = true; m.replaceChildren(); m.onmousedown = null }
+  const card = h('section', { className: 'card info-card', role: 'dialog', ariaModal: 'true', ariaLabel: t('ctx.info'), tabIndex: -1, onkeydown: ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close() } } },
+    h('h3', {}, h('span', { className: 'fi ic-' + (one ? fileIcon(one, extOf(one)).kind : 'file'), innerHTML: icon(one ? fileIcon(one, extOf(one)).name : 'copy') }), h('span', { textContent: one ? one.name : t('ex.selected', { n: sel.length }) })),
+    h('div', { className: 'info-list' }, ...rows),
+    h('div', { className: 'btns' },
+      ...(one && hasPerms(ex.server) ? [h('button', { type: 'button', textContent: t('ctx.permissions'), onclick: () => { close(); permissionDialog(ex, one, paths[0]) } })] : []),
+      h('button', { type: 'button', className: 'primary', textContent: 'OK', onclick: close })))
+  m.onmousedown = ev => { if (ev.target === m) close() }
+  m.replaceChildren(card); m.hidden = false
+  card.querySelector('button.primary').focus()
+  try {
+    await ensure(ex)
+    const r = await api.invoke('files:info', ex.connId, paths)
+    size.textContent = (r.partial ? '≥ ' : '') + sizeOf(r.size) + (r.size >= 1024 ? ` (${r.size.toLocaleString(lang)} ${t('info.bytes')})` : '')
+    content.textContent = (r.partial ? '≥ ' : '') + t('info.counts', { files: r.files.toLocaleString(lang), dirs: r.dirs.toLocaleString(lang) })
+    if (one?.isLink) link.textContent = r.links[paths[0]] || '—'
+  } catch (e) { size.textContent = errText(e); content.textContent = '—' }
+}
+async function newSymlink(ex, target = '') {
+  const name = target ? target.slice(target.lastIndexOf('/') + 1) + ' (link)' : ''
+  const v = await modal(t('ctx.symlink'), [{ name: 'name', label: t('link.name'), value: name }, { name: 'target', label: t('link.target'), value: target }], t('btn.create'))
+  const n = v?.name.trim(), to = v?.target.trim()
+  if (n && to) act(ex, () => api.invoke('files:symlink', ex.connId, to, n.startsWith('/') ? n : join(ex.path, n)))
+}
+function copyUrl(ex, sel) {
+  const urls = sel.map(x => fileTools.fileUrl(ex.server, join(ex.path, x.name))).filter(Boolean)
+  if (urls.length) { navigator.clipboard.writeText(urls.join('\n')); toast(t('t.url_copied')) }
+}
+const canUrl = server => !!fileTools.fileUrl(server, '/')
+const canSymlink = server => isShell(server)
+
 function ctxMenu(tab, e) {
   e.preventDefault()
+  const paste = fileClipboard && tab.path ? [{ label: t('ctx.paste'), icon: 'clipboard', hint: modKey('Mod+V'), fn: () => pasteFiles(tab) }] : []
+  const newTab = !tab.localPane ? [{ label: t('ctx.new_tab'), icon: 'plus', fn: () => openFiles(tab.server, { path: tab.path }) }] : []
   const base = [
     { label: t('tb.new_folder'), icon: 'folder-plus', fn: () => newItem(tab, 'dir') },
     { label: t('tb.new_file'), icon: 'file-plus', fn: () => newItem(tab, 'file') },
+    ...(canSymlink(tab.server) ? [{ label: t('ctx.symlink'), icon: 'link', fn: () => newSymlink(tab) }] : []),
+    ...paste,
+    { label: t('tb.upload'), icon: 'upload', fn: () => uploadPicker(tab, { currentTarget: { getBoundingClientRect: () => ({ left: e.clientX, bottom: e.clientY }) } }) },
+    ...newTab,
     { label: t('tb.refresh'), icon: 'refresh', fn: () => load(tab, tab.path, false, true) },
   ]
   const row = e.target.closest('[data-name]')
   if (!row) { tab.sel.clear(); paintSel(tab); return menu(e.clientX, e.clientY, base) }
   if (!tab.sel.has(row.dataset.name)) { tab.sel = new Set([row.dataset.name]); paintSel(tab) }
-  const sel = tab.view.filter(x => tab.sel.has(x.name))
+  const sel = selection(tab)
   const one = sel.length === 1 ? sel[0] : null
   const full = x => join(tab.path, x.name)
+  const remote = tab.server.type !== 'local'
   menu(e.clientX, e.clientY, [
-    ...(tab.server.type !== 'local' ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) }] : []),
-    ...(tab.server.type !== 'local' && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
-    { label: t('ctx.copy_name'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
-    { label: t('ctx.copy_path'), icon: 'copy', fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
-    ...(one && hasPerms(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
-    ...(one && !one.isDir && canLink(tab.server) ? [{ label: t('ctx.share_link'), icon: 'link', fn: () => shareLink(tab, full(one)) }] : []),
+    ...(remote ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
+      { label: t('ctx.queue'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full), { hold: true }); if (r) toast(t('t.downloaded', { path: r })) }, false) }] : []),
+    ...(remote && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
+    '-',
+    { label: t('ctx.copy'), icon: 'copy', hint: modKey('Mod+C'), fn: () => copyFiles(tab) },
+    { label: t('ctx.cut'), icon: 'scissors', hint: modKey('Mod+X'), fn: () => copyFiles(tab, true) },
+    ...(fileClipboard ? (one?.isDir ? [{ label: t('ctx.paste_into', { name: one.name }), icon: 'clipboard', fn: () => pasteFiles(tab, full(one)) }] : paste) : []),
+    { label: t('ctx.duplicate'), icon: 'copy', hint: modKey('Mod+D'), fn: () => duplicateFiles(tab, sel) },
+    { label: t('ctx.move_to'), icon: 'folder', fn: () => moveTo(tab, sel) },
+    ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', hint: 'F2', fn: async () => {
+      const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
+      const n = v?.name.trim()
+      if (n && n !== one.name) act(tab, () => api.invoke('sftp:rename', tab.connId, full(one), join(tab.path, n)))
+    } }] : []),
+    { label: t('ctx.copy_text'), icon: 'copy', children: () => [
+      { label: t('ctx.copy_name'), fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
+      { label: t('ctx.copy_path'), hint: modKey('Mod+Shift+C'), fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
+      ...(canUrl(tab.server) ? [{ label: t('ctx.copy_url'), fn: () => copyUrl(tab, sel) }] : []),
+    ] },
+    '-',
     ...(one && !one.isDir ? [{ label: t('ctx.edit_with'), icon: 'edit', children: appsMenu(tab, full(one)) }] : []),
     ...(one && !one.isDir && isShell(tab.server) && archive.kind(one.name)
       ? [{ label: t('ctx.extract_here'), icon: 'archive', fn: () => extractArchive(tab, one, false) },
          ...(archive.kind(one.name).single ? [] : [{ label: t('ctx.extract_to', { name: archive.folderName(one.name) }), icon: 'folder-plus', fn: () => extractArchive(tab, one, true) }])]
       : []),
     ...(isShell(tab.server) ? [{ label: t('ctx.compress'), icon: 'archive', children: () => archive.formats.map(f => ({ label: '.' + f, fn: () => compressItems(tab, sel, f) })) }] : []),
-    ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', fn: async () => {
-      const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
-      const n = v?.name.trim()
-      if (n && n !== one.name) act(tab, () => api.invoke('sftp:rename', tab.connId, full(one), join(tab.path, n)))
-    } }] : []),
+    ...(one && hasPerms(tab.server) ? [{ label: t('ctx.permissions'), icon: 'lock', fn: () => permissionDialog(tab, one, full(one)) }] : []),
+    ...(one && !one.isDir && canLink(tab.server) ? [{ label: t('ctx.share_link'), icon: 'link', fn: () => shareLink(tab, full(one)) }] : []),
+    ...(one && canSymlink(tab.server) ? [{ label: t('ctx.symlink_to'), icon: 'link', fn: () => newSymlink(tab, full(one)) }] : []),
+    ...(one?.isDir && !tab.localPane ? [{ label: t('ctx.open_tab'), icon: 'plus', fn: () => openFiles(tab.server, { path: full(one) }) }] : []),
+    { label: t('ctx.info'), icon: 'info', hint: modKey('Mod+I'), fn: () => showInfo(tab, sel) },
+    '-',
     { label: t('ctx.delete'), icon: 'trash', danger: true, fn: () => confirm(one ? t('dlg.confirm_del_one', { name: one.name }) : t('dlg.confirm_del_many', { n: sel.length })) && act(tab, () => api.invoke('sftp:rm', tab.connId, sel.map(full))) },
     '-',
     ...base,
   ])
+}
+
+// ---------- Filtre (masquer des fichiers par motif) ----------
+// One filter for every explorer, remembered on this computer. The funnel button lights up while it hides something.
+let fileFilter = (() => { try { return { enabled: false, patterns: '', dotfiles: false, ...JSON.parse(localStorage.getItem('cyberdog.filter') || '{}') } } catch { return { enabled: false, patterns: '', dotfiles: false } } })()
+function setFilter(patch) {
+  fileFilter = { ...fileFilter, ...patch }
+  try { localStorage.setItem('cyberdog.filter', JSON.stringify(fileFilter)) } catch {}
+  tabs.forEach(tb => tb.panes?.forEach(p => { if (p.path) draw(p); paintFilterBox(p) }))
+}
+function paintFilterBox(ex) {
+  ex.filterBtn.classList.toggle('on', fileTools.active(fileFilter))
+  if (ex.filterBox.hidden) return
+  ex.filterEnabled.checked = fileFilter.enabled
+  ex.filterDot.checked = fileFilter.dotfiles
+  if (document.activeElement !== ex.filterInput) ex.filterInput.value = fileFilter.patterns
+  const hidden = ex.entries.length - (ex.view?.length ?? ex.entries.length)
+  ex.filterCount.textContent = fileTools.active(fileFilter) ? t('filter.count', { n: hidden }) : t('filter.off')
+}
+function buildFilter(ex) {
+  ex.filterEnabled = h('input', { type: 'checkbox', onchange: () => setFilter({ enabled: ex.filterEnabled.checked }) })
+  ex.filterDot = h('input', { type: 'checkbox', onchange: () => setFilter({ dotfiles: ex.filterDot.checked, enabled: true }) })
+  ex.filterInput = h('input', { spellcheck: false, placeholder: '*.log, node_modules, .DS_Store', oninput: () => setFilter({ patterns: ex.filterInput.value, enabled: true }),
+    onkeydown: e => { if (e.key === 'Escape' || e.key === 'Enter') { ex.filterBox.hidden = true; ex.table?.focus() } } })
+  ex.filterCount = h('small', { className: 'dim' })
+  const label = h('span'); label.dataset.i18n = 'filter.enabled'
+  const dot = h('span'); dot.dataset.i18n = 'filter.dotfiles'
+  const note = h('small', { className: 'dim' }); note.dataset.i18n = 'filter.help'
+  ex.filterBox = h('div', { className: 'filterbox', hidden: true },
+    h('label', { className: 'check' }, ex.filterEnabled, label),
+    ex.filterInput, note,
+    h('label', { className: 'check' }, ex.filterDot, dot),
+    ex.filterCount)
+  ex.filterBtn = ib('filter', 'filter.title', () => {
+    ex.filterBox.hidden = !ex.filterBox.hidden
+    if (!ex.filterBox.hidden) { paintFilterBox(ex); ex.filterInput.focus() }
+  }, 'js-filter-btn filter-btn')
 }
 
 // ---------- Recherche ----------
@@ -1200,30 +1420,34 @@ function makeExplorer(tab) {
   ex.pathsBtn = ib('bookmark', 'paths.title', () => { ex.pathsBox.hidden = !ex.pathsBox.hidden; if (!ex.pathsBox.hidden) paintPathsBox(ex) }, 'pbtn js-paths-btn')
   ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
   buildSearch(ex)
-  const table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
+  buildFilter(ex)
+  const table = ex.table = h('div', { className: 'table', oncontextmenu: e => ctxMenu(ex, e), onclick: e => { if (!e.target.closest('.row')) { ex.sel.clear(); paintSel(ex) } } }, ex.head, ex.body)
   ex.explorer = h('div', { className: 'explorer' + (hasPerms(tab.server) ? '' : ' nofs') },
     h('div', { className: 'toolbar' },
       ex.back, h('div', { className: 'pathbox' }, ex.pathInput, ex.pathsBtn),
+      ex.filterBtn,
       ...(isShell(tab.server) ? [ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn')] : []),
       ex.splitBtn, ex.localBtn,
+      ib('upload', 'tb.upload', e => uploadPicker(ex, e)),
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
       ib('refresh', 'tb.refresh', () => load(ex, ex.path || null, false, true))),
     ex.searchBox,
+    ex.filterBox,
     ex.pathsBox,
     table,
     h('div', { className: 'status' }, ex.statusL, ex.transfer, ex.statusR))
   ex.explorer.addEventListener('mousedown', () => { tab.active = ex; tab.panes.forEach(p => p.explorer.classList.toggle('active', p === ex && tab.panes.length > 1)) })
-  ex.explorer.ondragover = e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); ex.explorer.classList.add('drop') } }
-  ex.explorer.ondragleave = e => { if (!ex.explorer.contains(e.relatedTarget)) ex.explorer.classList.remove('drop') }
-  ex.explorer.ondrop = e => {
+  ex.explorer.ondragover = e => {
+    if (!acceptsDrop(e)) return
     e.preventDefault()
-    ex.explorer.classList.remove('drop')
-    const paths = [...e.dataTransfer.files].map(api.pathOf)
-    // retour d'un glisser sorti de ce volet : ne pas se renvoyer ses propres fichiers (l'autre volet, lui, les reçoit)
-    if (Date.now() - (ex.lastDragAt || 0) < 120000 && paths.every(p => p.includes('cyberdog-drag-'))) return
-    if (paths.length && ex.path) upload(ex, paths)
+    ex.explorer.querySelectorAll('.drop-into').forEach(r => r.classList.remove('drop-into'))
+    // dropping files back where they come from does nothing: no highlight
+    if (dragSource?.ex === ex && Date.now() - dragSource.at < 120000) return
+    ex.explorer.classList.add('drop')
   }
+  ex.explorer.ondragleave = e => { if (!ex.explorer.contains(e.relatedTarget)) ex.explorer.classList.remove('drop') }
+  ex.explorer.ondrop = e => dropFiles(ex, e, ex.path)
   applyI18n(ex.explorer)
   return ex
 }
@@ -1275,7 +1499,7 @@ function toggleLocal(ex) {
 }
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
-function openFiles(server, { terminal = false } = {}) {
+function openFiles(server, { terminal = false, path = null } = {}) {
   if(server.loading)return
   const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
@@ -1318,7 +1542,7 @@ function openFiles(server, { terminal = false } = {}) {
   updateBar(tab)
 
   addTab(tab)
-  load(tab.active, null).finally(() => {
+  load(tab.active, path).finally(() => {
     tab.opening = false
     tab.wsMain.classList.remove('opening')
     tab.wsMain.ariaBusy = 'false'

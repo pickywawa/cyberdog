@@ -14,6 +14,12 @@
     ['newFolder', ['Mod+Shift+N'], 'files'],
     ['newFile', ['Mod+Alt+N'], 'files'],
     ['copyPath', ['Mod+Shift+C'], 'files'],
+    ['copy', ['Mod+C'], 'files'],
+    ['cut', ['Mod+X'], 'files'],
+    ['paste', ['Mod+V'], 'files'],
+    ['duplicate', ['Mod+D'], 'files'],
+    ['info', ['Mod+I'], 'files'],
+    ['switchPane', ['Tab', 'Shift+Tab'], 'files'],
     ['path', ['Mod+L'], 'files'],
     ['search', ['Mod+F'], 'files'],
     ['down', ['ArrowDown', 'Shift+ArrowDown'], 'files'],
@@ -31,7 +37,7 @@
   // Dans le terminal hors macOS, Ctrl appartient au shell (Ctrl+W, Ctrl+R, Ctrl+A…) : seuls ceux-ci passent.
   const TERMINAL_OTHER = new Set(['terminal', 'nextTab', 'prevTab'])
   // Actions sur la liste de fichiers : ignorées quand le focus est ailleurs (panneau, barre latérale, bouton…)
-  const LIST_ONLY = new Set(['open', 'down', 'up', 'first', 'last', 'delete', 'rename', 'selectAll'])
+  const LIST_ONLY = new Set(['open', 'down', 'up', 'first', 'last', 'delete', 'rename', 'selectAll', 'copy', 'cut', 'paste', 'duplicate', 'info', 'switchPane'])
 
   function parse(combo, mac) {
     const parts = combo.split('+')
@@ -121,6 +127,8 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       ['tb.refresh', 'refresh'], ['ex.search', 'search'], ['kb.path', 'path'],
       ['kb.open', 'open'], ['kb.parent', 'parent'], ['ex.back', 'back'],
       ['kb.move', 'down'], ['kb.select_all', 'selectAll'], ['kb.copy_path', 'copyPath'],
+      ['ctx.copy', 'copy'], ['ctx.cut', 'cut'], ['ctx.paste', 'paste'], ['ctx.duplicate', 'duplicate'], ['ctx.info', 'info'],
+      ['kb.switch_pane', 'switchPane'], ['kb.type_select', 'typeSelect'],
       ['ctx.rename', 'rename'], ['ctx.delete', 'delete'],
       ['tb.new_folder', 'newFolder'], ['tb.new_file', 'newFile'],
       ['bar.terminal', 'terminal'], ['kb.next_tab', 'nextTab'], ['kb.prev_tab', 'prevTab'],
@@ -131,6 +139,8 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       if (action === 'tab') return [shortcuts.label('Mod+1', mac).replace(/1$/, '1…9')]
       if (action === 'down') return ['↑ ↓', shortcuts.label('Shift+ArrowDown', mac).replace('↓', '↑↓')]
       if (action === 'help') return [shortcuts.label('Mod+/', mac)]
+      if (action === 'switchPane') return ['Tab']
+      if (action === 'typeSelect') return ['a…z']
       return [...new Set(combos[action].map(c => shortcuts.label(c, mac)))]
     }
     const m = $('#modal')
@@ -181,6 +191,18 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       case 'back': return ex.hist.length && load(ex, ex.hist.pop(), false)
       case 'parent': return ex.path && ex.path !== '/' && load(ex, join(ex.path, '..'))
       case 'newFolder': return newItem(ex, 'dir')
+      case 'copy': return copyFiles(ex)
+      case 'cut': return copyFiles(ex, true)
+      case 'paste': return pasteFiles(ex)
+      case 'switchPane': {
+        const other = tab.panes.find(p => p !== ex)
+        if (!other) return
+        tab.active = other
+        tab.panes.forEach(p => p.explorer.classList.toggle('active', p === other))
+        other.table.tabIndex = -1
+        other.table.focus({ preventScroll: true })
+        return
+      }
       case 'newFile': return newItem(ex, 'file')
       case 'down':
       case 'up': {
@@ -194,6 +216,8 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
     if (!sel.length) return
     const one = sel.length === 1 ? sel[0] : null
     switch (action) {
+      case 'duplicate': return duplicateFiles(ex, sel)
+      case 'info': return showInfo(ex, sel)
       case 'open': {
         if (!one) return
         const i = ex.view.indexOf(one)
@@ -213,6 +237,20 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
     }
   }
 
+  // Taper le début d'un nom sélectionne la ligne (« con » → config/) ; une seule lettre répétée passe à la suivante
+  let typed = '', typedAt = 0
+  function typeToSelect(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1 || (e.key === ' ' && (!typed || Date.now() - typedAt > 900))) return false
+    const tab = activeTab(), ex = tab?.panes.find(p => p.table === document.activeElement?.closest?.('.table')) || tab?.active
+    if (!ex?.view?.length) return false
+    const now = Date.now()
+    typed = now - typedAt > 900 ? e.key : typed + e.key
+    typedAt = now
+    const i = fileTools.typeAhead(ex.view.map(x => x.name), typed, cursorOf(ex))
+    if (i >= 0) moveCursor(ex, i)
+    return true
+  }
+
   // Un clic dans la liste lui donne le focus clavier (sinon le dernier bouton cliqué le garde)
   addEventListener('mousedown', e => {
     const table = e.target.closest?.('.explorer .table')
@@ -228,7 +266,12 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
     // un panneau de droite ou une boîte de recherche/favoris a le focus : pas de navigation dans la liste
     const elsewhere = !!el && el !== document.body && !el.closest?.('.explorer .table')
     const hit = shortcuts.match(e, { mac, editing: isEditing(el), terminal, elsewhere })
-    if (!hit) return
+    if (!hit) {
+      if (!elsewhere && !terminal && !isEditing(el) && el?.closest?.('.explorer .table') && typeToSelect(e)) { e.preventDefault(); e.stopPropagation() }
+      return
+    }
+    // Tab moves between the two panes; with a single pane it keeps its usual role
+    if (hit.action === 'switchPane' && !(activeTab()?.panes.length > 1)) return
     e.preventDefault()
     e.stopPropagation()
     run(hit)

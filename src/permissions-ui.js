@@ -25,6 +25,12 @@ async function permissionDialog(tab, entry, remote) {
     h('tbody', {}, ...[['owner', 6], ['group', 3], ['others', 0]].map(([key, shift]) => h('tr', {}, h('th', { scope: 'row', textContent: t('perm.' + key) }), ...[['read', 4], ['write', 2], ['execute', 1]].map(([k, bit]) => h('td', {}, box(bit << shift, `${t('perm.' + key)} — ${t('perm.' + k)}`, checks)))))))
   const specialRow = h('div', { className: 'permission-special' }, ...[['setuid', 0o4000], ['setgid', 0o2000], ['sticky', 0o1000]].map(([key, bit]) => h('label', { className: 'check' }, box(bit, key, special), key)))
   mode.oninput = syncFromNumber
+  // folders: apply to what they contain as well (everything, only the files or only the folders)
+  let originalUid = null
+  const recursive = h('input', { type: 'checkbox', disabled: true })
+  const scope = h('select', { className: 'lsel', disabled: true, ariaLabel: t('perm.scope') }, ...['all', 'files', 'dirs'].map(k => h('option', { value: k, textContent: t('perm.scope_' + k) })))
+  recursive.onchange = () => { scope.disabled = !recursive.checked }
+  const recursiveRow = entry.isDir ? h('div', { className: 'permission-recursive' }, h('label', { className: 'check' }, recursive, h('span', { textContent: t('perm.recursive') })), scope) : ''
   const form = h('form', {
     className: 'card permission-card', role: 'dialog', ariaModal: 'true', ariaLabel: t('ctx.permissions'),
     onkeydown: e => { if (e.key === 'Escape') close() },
@@ -34,13 +40,17 @@ async function permissionDialog(tab, entry, remote) {
       busy = true; submit.disabled = true; status.textContent = t('perm.saving')
       try {
         await api.invoke('sftp:attributes', tab.connId, remote, { uid: Number(owner.value), mode: mode.value })
+        if (recursive.checked) {
+          status.textContent = t('perm.saving_recursive')
+          await api.invoke('files:chmod-recursive', tab.connId, remote, mode.value, scope.value, Number(owner.value) !== originalUid ? Number(owner.value) : null)
+        }
         busy = false; close()
       } catch (e) { status.textContent = errText(e); status.classList.add('err') }
       finally { busy = false; syncFromNumber(); await load(tab, tab.path, false) }
     },
   }, h('h3', { textContent: t('ctx.permissions') }), h('small', { className: 'dim permission-file', textContent: remote }), ownerLabel,
     h('label', {}, t('perm.owner'), owner), h('small', { className: 'dim', textContent: `${t('perm.group')} : ${entry.group}` }),
-    table, h('label', {}, t('perm.octal'), mode), specialRow, status,
+    table, h('label', {}, t('perm.octal'), mode), specialRow, recursiveRow, status,
     h('div', { className: 'btns' }, h('button', { type: 'button', textContent: t('btn.cancel'), onclick: close }), submit))
   m.onmousedown = e => { if (e.target === m) close() }
   m.replaceChildren(form); m.hidden = false
@@ -53,6 +63,8 @@ async function permissionDialog(tab, entry, remote) {
     if (!accounts.some(u => u.uid === meta.uid)) accounts.push({ uid: meta.uid, name: String(entry.owner || meta.uid) })
     owner.replaceChildren(...accounts.map(u => h('option', { value: String(u.uid), textContent: `${u.name} (UID ${u.uid})` })))
     owner.value = String(meta.uid)
+    originalUid = meta.uid
+    recursive.disabled = false
     ownerLabel.textContent = `${t('perm.current_owner')} : ${accounts.find(u => u.uid === meta.uid).name} (UID ${meta.uid})`
     mode.value = (meta.mode & 0o7777).toString(8).padStart(4, '0')
     ready = true

@@ -36,6 +36,20 @@ assert.strictEqual(act(k('Backspace')), null) // jamais de suppression sans modi
 assert.strictEqual(act(k('N', { ctrlKey: true, shiftKey: true }, 'KeyN')), 'newFolder')
 assert.strictEqual(act(k('/', { metaKey: true }, 'Slash'), { mac: true }), 'help')
 
+// presse-papiers de fichiers, propriétés, volets
+assert.strictEqual(act(k('c', { metaKey: true }), { mac: true }), 'copy')
+assert.strictEqual(act(k('C', { metaKey: true, shiftKey: true }), { mac: true }), 'copyPath')
+assert.strictEqual(act(k('x', { ctrlKey: true }), { mac: false }), 'cut')
+assert.strictEqual(act(k('v', { ctrlKey: true }, 'KeyV'), { mac: false }), 'paste')
+assert.strictEqual(act(k('d', { metaKey: true }), { mac: true }), 'duplicate')
+assert.strictEqual(act(k('i', { metaKey: true }), { mac: true }), 'info')
+assert.strictEqual(act(k('c', { metaKey: true }), { mac: true, editing: true }), null) // copier du texte dans un champ
+assert.strictEqual(act(k('c', { ctrlKey: true }), { mac: false, terminal: true }), null) // Ctrl+C reste au shell
+assert.strictEqual(act(k('v', { metaKey: true }), { mac: true, elsewhere: true }), null) // collage ailleurs que dans la liste
+assert.strictEqual(act(k('Tab')), 'switchPane')
+assert.strictEqual(act(k('Tab'), { elsewhere: true }), null) // Tab garde son rôle hors de la liste
+assert.strictEqual(act(k('Tab', { ctrlKey: true })), 'nextTab')
+
 // libellés
 assert.strictEqual(label('Mod+Shift+N', true), '⇧⌘N')
 assert.strictEqual(label('Mod+Shift+N', false), 'Ctrl+Shift+N')

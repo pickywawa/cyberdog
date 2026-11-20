@@ -270,6 +270,15 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       if (!elsewhere && !terminal && !isEditing(el) && el?.closest?.('.explorer .table') && typeToSelect(e)) { e.preventDefault(); e.stopPropagation() }
       return
     }
+    // In the editor: ⌘/ comments the line, ⌘W closes the file, Ctrl+Tab goes from file to file
+    if (el?.closest?.('.editor-panel')) {
+      if (hit.action === 'help') return
+      if (['closeTab', 'nextTab', 'prevTab'].includes(hit.action)) {
+        e.preventDefault(); e.stopPropagation()
+        const tab = activeTab()
+        return hit.action === 'closeTab' ? closeEditorFile(tab, tab.editor?.active) : cycleEditorFile(tab, hit.action === 'nextTab' ? 1 : -1)
+      }
+    }
     // Tab moves between the two panes; with a single pane it keeps its usual role
     if (hit.action === 'switchPane' && !(activeTab()?.panes.length > 1)) return
     e.preventDefault()

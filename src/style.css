@@ -701,3 +701,39 @@ body.resizing-y { cursor: row-resize; }
 .crumb.current:hover { background: transparent; }
 .crumb.more { flex: none; }
 .crumb.drop-into { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--text); }
+
+/* ---------- Éditeur interne ---------- */
+/* wide, but the explorer keeps ~440 px next to it */
+.rpanel.wide { width: min(var(--epw, 600px), max(420px, calc(100vw - var(--sbw, 290px) - 490px))); }
+.editor-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ed-tabbar { display: flex; flex: none; border-bottom: 1px solid var(--line); background: var(--side); min-width: 0; }
+.ed-tabs { display: flex; flex: 1; min-width: 0; overflow: hidden; }
+.ed-tab[hidden] { display: none; }
+.ed-more { flex: none; display: inline-flex; align-items: center; gap: 3px; height: 32px; padding: 0 8px; border: 0; border-left: 1px solid var(--line); border-radius: 0; color: var(--dim); font-size: 11.5px; }
+.ed-more[hidden] { display: none; }
+.ed-more svg { width: 13px; height: 13px; }
+.ed-tab.other { color: var(--text); box-shadow: inset 0 2px 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+.ed-split { flex: 1; min-height: 0; display: flex; }
+.ed-split .ed-host { flex: 1 1 0; min-width: 0; }
+.ed-split .ed-host + .ed-host { border-left: 1px solid var(--line); }
+.ed-tab { display: flex; align-items: center; gap: 6px; flex: none; max-width: 240px; height: 32px; padding: 0 6px 0 10px; border-right: 1px solid var(--line); color: var(--dim); font-size: 12px; cursor: pointer; user-select: none; }
+.ed-tab:hover { background: var(--hover); color: var(--text); }
+.ed-tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.ed-tab .fi svg { width: 14px; height: 14px; }
+.ed-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-dot { display: none; color: var(--accent); font-size: 10px; }
+.ed-close { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: var(--dim); }
+.ed-close svg { width: 12px; height: 12px; }
+.ed-tab.dirty .ed-dot { display: inline; }
+.ed-tab.dirty:not(:hover) .ed-close { display: none; }
+.ed-host { flex: 1; min-height: 0; }
+.ed-status { display: flex; align-items: center; gap: 12px; flex: none; height: 26px; padding: 0 10px; border-top: 1px solid var(--line); background: var(--side); color: var(--dim); font-size: 11.5px; }
+.ed-spacer { flex: 1; }
+.ed-warn { color: var(--danger); }
+.ed-eol { border: 0; padding: 1px 6px; font-size: 11.5px; color: var(--dim); }
+.ed-lang { font: inherit; font-size: 11.5px; border: 0; background: transparent; color: var(--dim); max-width: 140px; }
+.choice-card { width: 420px; }
+.choice-text { margin: 0; color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
+.settings-subtitle { margin-top: 8px; font-size: 13px; }
+/* editor header toggles: when on, only the colour changes */
+.rp-actions .js-ed-minimap.on, .rp-actions .js-ed-wrap.on, .rp-actions .js-ed-split.on { background: transparent; box-shadow: none; color: var(--accent); }

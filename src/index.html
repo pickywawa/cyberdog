@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Cyberdog</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; worker-src 'self' blob:; font-src 'self' data:">
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="workspace/style.css">
@@ -75,6 +75,7 @@
   <script src="locales/id.js"></script>
   <script src="archive.js"></script>
   <script src="file-tools.js"></script>
+  <script src="editor-files.js"></script>
   <script src="logs.js"></script>
   <script src="icons.js"></script>
   <script src="processes.js"></script>
@@ -93,6 +94,7 @@
   <script src="config-ui.js"></script>
   <script src="permissions-ui.js"></script>
   <script src="security-panels.js"></script>
+  <script src="editor-panel.js"></script>
   <script src="shortcuts.js"></script>
 </body>
 </html>

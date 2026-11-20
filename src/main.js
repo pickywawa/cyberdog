@@ -46,7 +46,7 @@ let actions = []
 const pendingVaultClients = new Set()
 const conns = new Map() // id -> { client, sftp?, stream?, server?, connectMs?, tmp: [dirs] }
 
-const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'system', autoDownload: false, restoreConnections: false, showLocalPane: false, maxTransfers: 2 }
+const DEFAULT_SETTINGS = { lang: 'en', theme: 'dracula', configPath: '', defaultEditor: 'internal', editorWrap: false, editorMinimap: true, editorFontSize: 13, autoDownload: false, restoreConnections: false, showLocalPane: false, maxTransfers: 2 }
 const checkConfigRoot = () => {
   if (settings.configPath && !fs.existsSync(settings.configPath)) throw new Error(t('config.unavailable'))
 }
@@ -113,7 +113,13 @@ function loadSettings() {
   try { Object.assign(settings, JSON.parse(fs.readFileSync(settingsFile(), 'utf8'))) } catch {}
   if (isMas) { settings.configPath = ''; settings.autoDownload = false }
   // Retain custom paths even when an external volume is temporarily unavailable.
-  if (!settings.defaultEditor) settings.defaultEditor = 'system'
+  if (!settings.defaultEditor) settings.defaultEditor = 'internal'
+  // 1.13: files open in the built-in editor, except for people who had picked an application of their own
+  if (!settings.editorMigrated) {
+    if (settings.defaultEditor === 'system') settings.defaultEditor = 'internal'
+    settings.editorMigrated = true
+    try { if (fs.existsSync(settingsFile())) fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2)) } catch {}
+  }
   autoUpdater.autoDownload = !!settings.autoDownload
   transfers.setLimit(settings.maxTransfers)
   applyNativeTheme()
@@ -127,7 +133,10 @@ ipcMain.handle('settings:set', (_, patch) => {
   const previousPath = settings.configPath
   if (patch.lang in i18n.LANGS) settings.lang = patch.lang
   if (typeof patch.theme === 'string') settings.theme = patch.theme
-  if (typeof patch.defaultEditor === 'string') settings.defaultEditor = patch.defaultEditor.trim() || 'system'
+  if (typeof patch.defaultEditor === 'string') settings.defaultEditor = patch.defaultEditor.trim() || 'internal'
+  if (typeof patch.editorWrap === 'boolean') settings.editorWrap = patch.editorWrap
+  if (typeof patch.editorMinimap === 'boolean') settings.editorMinimap = patch.editorMinimap
+  if (Number.isInteger(patch.editorFontSize) && patch.editorFontSize >= 9 && patch.editorFontSize <= 32) settings.editorFontSize = patch.editorFontSize
   if (typeof patch.restoreConnections === 'boolean') {
     settings.restoreConnections = patch.restoreConnections
     if (!settings.restoreConnections) { try { fs.unlinkSync(sessionFile()) } catch (e) { if (e.code !== 'ENOENT') throw e } }
@@ -970,6 +979,49 @@ ipcMain.handle('files:chmod-recursive', async (_, id, root, mode, scope, owner) 
   await walk(root)
 })
 
+// ---------- Éditeur interne ----------
+// Text is decoded and encoded again in the file's own encoding (see editor-files.js): saving never changes the bytes
+// of what was not edited. The date seen when opening protects against overwriting a file changed meanwhile.
+const editorFiles = require('./editor-files')
+const secondsOf = t => Math.floor((typeof t === 'number' ? t : +t / 1000) || 0)
+ipcMain.handle('editor:read', async (_, id, p) => {
+  const s = S(id), st = await P(s, 'stat', p)
+  if (st.isDirectory()) return { error: 'directory' }
+  if (st.size > editorFiles.MAX_SIZE) return { error: 'too_big', size: st.size }
+  const chunks = []
+  let size = 0
+  await new Promise((resolve, reject) => {
+    const r = s.createReadStream(p)
+    r.on('data', c => { size += c.length; if (size > editorFiles.MAX_SIZE) r.destroy(new Error('too_big')); else chunks.push(c) })
+    r.on('end', resolve); r.on('close', resolve); r.on('error', reject)
+  })
+  const file = editorFiles.decode(Buffer.concat(chunks))
+  if (file.binary) return { error: 'binary' }
+  return { ...file, mtime: secondsOf(st.mtime), size: st.size }
+})
+// -> { mtime } once written, or { conflict: true } when the file changed since `seen` (seconds) and `force` is not set
+ipcMain.handle('editor:write', async (_, id, p, text, encoding, seen, force) => {
+  const s = S(id)
+  let bytes
+  try { bytes = editorFiles.encode(String(text), encoding) }
+  catch (e) { if (e.code === 'unencodable') throw new Error(t('editor.unencodable', { char: e.char, encoding: editorFiles.ENCODINGS.includes(encoding) ? encoding : '?' })); throw e }
+  if (!force) {
+    const now = await P(s, 'stat', p).catch(() => null)
+    if (now && seen && secondsOf(now.mtime) !== seen) return { conflict: true }
+  }
+  await P(s, 'writeFile', p, bytes)
+  const after = await P(s, 'stat', p)
+  send('sftp:changed', id, posix.dirname(p), posix.basename(p))
+  return { mtime: secondsOf(after.mtime), size: after.size }
+})
+// Monaco's web workers: their file names carry a hash that changes with each version
+ipcMain.handle('editor:workers', () => {
+  const dir = path.join(__dirname, '..', 'node_modules', 'monaco-editor', 'min', 'vs', 'assets')
+  const files = fs.readdirSync(dir)
+  const pick = prefix => files.find(f => f.startsWith(prefix + '-') && f.endsWith('.js'))
+  return { editor: pick('editor.worker'), json: pick('json.worker'), css: pick('css.worker'), html: pick('html.worker'), ts: pick('ts.worker') }
+})
+
 // Édition : téléchargement en tmp, ouverture dans l'appli, renvoi à chaque sauvegarde
 ipcMain.handle('sftp:edit', async (_, id, remote, appPath) => {
   const c = conns.get(id)
@@ -1484,6 +1536,11 @@ app.whenReady().then(() => {
   })
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}))
   win.webContents.on('will-navigate',event=>event.preventDefault())
+  // files with unsaved changes in the editor: the window asks (beforeunload), here the user decides
+  win.webContents.on('will-prevent-unload', event => {
+    const choice = dialog.showMessageBoxSync(win, { type: 'warning', buttons: [t('editor.quit_anyway'), t('btn.cancel')], defaultId: 1, cancelId: 1, message: t('editor.unsaved_quit') })
+    if (choice === 0) event.preventDefault()
+  })
   win.once('ready-to-show', () => {
     if (windowState?.maximized) win.maximize()
     win.show()

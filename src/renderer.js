@@ -29,12 +29,13 @@ const { LANGS } = i18n
 
 let lang = 'en'
 let theme = 'dracula'
-let settings = { lang: 'en', theme: 'dracula', defaultEditor: 'system', configPath: '', autoDownload: false }
+let settings = { lang: 'en', theme: 'dracula', defaultEditor: 'internal', configPath: '', autoDownload: false }
 let servers = []
 let tabs = []
 let restoringConnections = false
 function rememberConnections() {
-  if (!restoringConnections && settings.restoreConnections) api.send('session:update', tabs.filter(tb => !tb.closed).map(tb => ({ serverId: tb.server.id, terminal: !!tb.term })))
+  // the folder of each explorer (not the local pane); a folder still loading keeps the one it is opening
+  if (!restoringConnections && settings.restoreConnections) api.send('session:update', tabs.filter(tb => !tb.closed).map(tb => ({ serverId: tb.server.id, terminal: !!tb.term, paths: (tb.panes || []).filter(p => !p.localPane).map(p => p.path || p.wantedPath).filter(Boolean) })))
 }
 let activeId = null
 let toastTimer
@@ -59,6 +60,7 @@ const termTheme = () => {
 function applyTheme() {
   document.documentElement.dataset.theme = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme
   tabs.forEach(tb => tb.term && (tb.term.options.theme = termTheme()))
+  if (typeof refreshEditorTheme === 'function') refreshEditorTheme()
   $('#btn-theme .lbl').textContent = t('theme.' + theme)
 }
 mq.onchange = applyTheme
@@ -526,8 +528,8 @@ async function openSettingsModal(initialPage = 'general') {
   const themeSel = h('select', { className: 'lsel full' }, ...Object.keys(THEMES).map(k => h('option', { value: k, selected: k === (current.theme || 'dracula'), textContent: t('theme.' + k) })))
   const configInput = h('input', { type: 'text', value: current.configPath || '', placeholder: t('settings.config_path_ph'), spellcheck: false })
   const browseConfig = h('button', { type: 'button', textContent: t('settings.browse'), onclick: async () => { const dir = await api.invoke('settings:pick-config'); if (dir) configInput.value = dir } })
-  const editorValue = current.defaultEditor || 'system'
-  const editorOptions = [['system', t('settings.editor_system')], ...editors.map(editor => [editor.target, editor.label])]
+  const editorValue = current.defaultEditor || 'internal'
+  const editorOptions = [['internal', t('editor.internal')], ['system', t('settings.editor_system')], ...editors.map(editor => [editor.target, editor.label])]
   if (!editorOptions.some(([value]) => value === editorValue)) editorOptions.push([editorValue, editorValue])
   editorOptions.push(['__other__', t('settings.editor_other')])
   const editorInput = h('select', { className: 'lsel full' }, ...editorOptions.map(([value, label]) => h('option', { value, textContent: label })))
@@ -561,9 +563,17 @@ async function openSettingsModal(initialPage = 'general') {
     h('label', {}, t('settings.theme'), themeSel),
     ...(api.mas ? [] : [h('label', {}, t('settings.config_path'), h('span', { className: 'set-row' }, configInput, browseConfig)),
     h('div', { className: 'note', textContent: t('settings.config_help') })]))
+  const wrapInput = h('input', { type: 'checkbox', checked: !!current.editorWrap })
+  const minimapInput = h('input', { type: 'checkbox', checked: current.editorMinimap !== false })
+  const fontInput = h('select', { className: 'lsel' }, ...[11, 12, 13, 14, 15, 16, 18, 20].map(n => h('option', { value: String(n), textContent: n + ' px' })))
+  fontInput.value = String(current.editorFontSize || 13)
   const editorPage = settingsPage('editor', 'none',
     h('label', {}, t('settings.editor'), editorInput),
-    h('div', { className: 'note', textContent: t('settings.editor_help') }))
+    h('div', { className: 'note', textContent: t('settings.editor_help') }),
+    h('b', { className: 'settings-subtitle', textContent: t('editor.internal') }),
+    h('label', { className: 'check' }, wrapInput, h('span', { textContent: t('editor.wrap') })),
+    h('label', { className: 'check' }, minimapInput, h('span', { textContent: t('editor.minimap') })),
+    h('label', { className: 'inline-setting' }, h('span', { textContent: t('editor.font_size') }), fontInput))
   const updateSummary = h('div', { className: 'update-summary' })
   const updateNotes = h('div', { className: 'update-notes' })
   const updateButton = h('button', {
@@ -626,6 +636,9 @@ async function openSettingsModal(initialPage = 'general') {
         theme: themeSel.value,
         configPath: configInput.value.trim(),
         defaultEditor: editorInput.value,
+        editorWrap: wrapInput.checked,
+        editorMinimap: minimapInput.checked,
+        editorFontSize: +fontInput.value,
         autoDownload: autoDownloadInput.checked,
         restoreConnections: restoreInput.checked,
         showLocalPane: localPaneInput.checked,
@@ -654,7 +667,7 @@ async function openSettingsModal(initialPage = 'general') {
       if (!current.autoDownload && next.autoDownload && updateState?.state === 'available') {
         api.invoke('app:update:download').catch(e => toast(errText(e), true))
       }
-      applyTheme(); refreshLanguage(); close()
+      applyTheme(); refreshLanguage(); if (typeof refreshEditorOptions === 'function') refreshEditorOptions(); close()
     } catch (e) {
       toast(errText(e), true)
     }
@@ -691,6 +704,7 @@ function activate(id) {
 function closeTab(id) {
   const i = tabs.findIndex(tb => tb.id === id)
   const tb = tabs[i]
+  if (typeof editorBeforeClose === 'function' && !editorBeforeClose(tb)) return
   tb.closed = true
   cancelBastionConnection(tb.server.id)
   if (tb.connId) api.invoke('conn:close', tb.connId)
@@ -788,7 +802,14 @@ const PANELS = {
 const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
 
 // Object storage / WebDAV servers have no shell: only the file explorer and saved paths make sense.
-const barFor = server => isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths')
+// The editor's button is there only while files are open in it
+const barFor = (server, tab) => [...(tab?.editor?.files.length ? [['editor', 'file-code', 'editor.title']] : []), ...(isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths'))]
+function rebuildBar(tab) {
+  tab.barItems = barFor(tab.server, tab)
+  for (const [key, ic, title] of tab.barItems) tab.bar[key] ||= ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
+  tab.rightBar.replaceChildren(tab.barToggle, ...tab.barItems.map(([k]) => tab.bar[k]))
+  updateBar(tab)
+}
 
 const leavePanel = tab => { if (tab.panel) PANELS[tab.panel].leave?.(tab) }
 function setPanel(tab, name) {
@@ -800,6 +821,7 @@ function setPanel(tab, name) {
 }
 function renderPanel(tab) {
   tab.rpanel.hidden = !tab.panel
+  tab.rpanel.classList.toggle('wide', tab.panel === 'editor') // the editor has a width of its own, wider
   tab.rpanelActions.replaceChildren()
   tab.rpanelBody.replaceChildren()
   tab.rpanelBody.classList.remove('flush')
@@ -904,6 +926,7 @@ async function load(tab, p, push = true, known = false) {
     if (push && tab.path && tab.path !== r.path) tab.hist.push(tab.path)
     if (r.selected) tab.pendingSelect = r.selected
     Object.assign(tab, { path: r.path, entries: r.entries, sel: new Set(), last: null, error: null })
+    rememberConnections()
   } catch (e) {
     tab.pendingSelect = null
     if (AUTH_FAIL.test(e.message) && !tab.connId && (await askPassword(tab.server))) return load(tab, p, push, known)
@@ -976,7 +999,8 @@ function draw(tab) {
     }
     row.ondblclick = () => {
       if (e.isDir) return load(tab, join(tab.path, e.name), true, true)
-      const editor = settings.defaultEditor && settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
+      if (!settings.defaultEditor || settings.defaultEditor === 'internal') return openInEditor(tab, join(tab.path, e.name))
+      const editor = settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
       act(tab, () => api.invoke('sftp:edit', tab.connId, join(tab.path, e.name), editor), false)
     }
     // glisser : copies locales préparées après 120 ms d'appui (Finder), déplacement / copie directs dans Cyberdog
@@ -1038,6 +1062,8 @@ async function uploadPicker(ex, e) {
 }
 
 const appsMenu = (tab, remote) => async () => [
+  { label: t('editor.internal'), icon: 'file-code', fn: () => openInEditor(tab, remote) },
+  '-',
   ...(await api.invoke('apps:list')).map(a => ({ label: a.label, fn: () => act(tab, () => api.invoke('sftp:edit', tab.connId, remote, a.target), false) })),
   { label: t('ctx.default_app'), fn: () => act(tab, () => api.invoke('sftp:edit', tab.connId, remote), false) },
   '-',
@@ -1538,6 +1564,7 @@ function closePane(tab, pane) {
   tab.panes.splice(tab.panes.indexOf(pane), 1)
   tab.active = tab.panes[0]
   layoutExplorers(tab)
+  rememberConnections()
 }
 function toggleSplit(ex) {
   const tab = ex.root
@@ -1567,7 +1594,8 @@ function toggleLocal(ex) {
 }
 
 // ---------- Onglet serveur : explorateur(s) + terminal (bas) + panneau (droite) + barre d'outils ----------
-function openFiles(server, { terminal = false, path = null } = {}) {
+// path: the folder to open (home otherwise); split: a second explorer at that folder (reopened sessions)
+function openFiles(server, { terminal = false, path = null, split = null } = {}) {
   if(server.loading)return
   const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
@@ -1594,14 +1622,15 @@ function openFiles(server, { terminal = false, path = null } = {}) {
   tab.rpanelActions = h('span', { className: 'rp-actions' })
   tab.rpanelBody = h('div', { className: 'rp-body' })
   const rz = h('div', { className: 'rz rz-left' })
-  dragResize(rz, { axis: 'x', dir: -1, min: 290, max: () => Math.max(290, innerWidth - 560), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--rpw', w + 'px'), done: () => saveSize('rpw', tab.rpanel.offsetWidth) })
+  const panelWidth = () => (tab.panel === 'editor' ? 'epw' : 'rpw')
+  dragResize(rz, { axis: 'x', dir: -1, min: 290, max: () => Math.max(290, innerWidth - (tab.panel === 'editor' ? 420 : 560)), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--' + panelWidth(), w + 'px'), done: () => saveSize(panelWidth(), tab.rpanel.offsetWidth) })
   tab.rpanel = h('div', { className: 'rpanel', hidden: true }, rz,
     h('div', { className: 'rp-head' }, tab.rpanelTitle, tab.rpanelActions, ib('x', 'panel.close', () => setPanel(tab, tab.panel))),
     tab.rpanelBody)
 
   // barre d'outils (tout à droite)
   tab.bar = {}
-  tab.barItems = barFor(server)
+  tab.barItems = barFor(server, tab)
   for (const [key, ic, title] of tab.barItems) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
   tab.barToggle = h('button', { className: 'ib rbar-toggle', onclick: toggleRightBar })
   tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') }, tab.barToggle, ...tab.barItems.map(([k]) => tab.bar[k]))
@@ -1610,7 +1639,17 @@ function openFiles(server, { terminal = false, path = null } = {}) {
   updateBar(tab)
 
   addTab(tab)
-  load(tab.active, path).finally(() => {
+  tab.active.wantedPath = path
+  // a folder that is gone (or not allowed any more) falls back to the home folder
+  const open = (pane, p) => load(pane, p).then(() => { if (p && pane.error && (pane.root || pane).connId) return load(pane, null) })
+  if (split) {
+    const second = makeExplorer(tab)
+    second.wantedPath = split
+    tab.panes.push(second)
+    layoutExplorers(tab)
+    open(second, split)
+  }
+  open(tab.active, path).finally(() => {
     tab.opening = false
     tab.wsMain.classList.remove('opening')
     tab.wsMain.ariaBusy = 'false'
@@ -1626,6 +1665,7 @@ function openFiles(server, { terminal = false, path = null } = {}) {
   $('#app-version').textContent = 'v' + await api.invoke('app:version')
   root.style.setProperty('--sbw', loadSize('sbw', 290) + 'px')
   root.style.setProperty('--rpw', Math.max(290, loadSize('rpw', 480)) + 'px')
+  root.style.setProperty('--epw', Math.max(420, loadSize('epw', Math.max(600, Math.round(innerWidth * 0.42)))) + 'px')
   dragResize($('#sb-rz'), { axis: 'x', min: 200, max: 480, get: () => $('#sidebar').offsetWidth, set: w => root.style.setProperty('--sbw', w + 'px'), done: () => saveSize('sbw', $('#sidebar').offsetWidth) })
   const s = await api.invoke('settings:get')
   settings = s
@@ -1647,7 +1687,7 @@ function openFiles(server, { terminal = false, path = null } = {}) {
   if (settings.restoreConnections) {
     const session = await api.invoke('session:get')
     restoringConnections = true
-    try { for (const item of session) { const server = servers.find(s => s.id === item.serverId); if (server) openFiles(server, { terminal: item.terminal }) } }
+    try { for (const item of session) { const server = servers.find(s => s.id === item.serverId); if (server) openFiles(server, { terminal: item.terminal, path: item.paths?.[0], split: item.paths?.[1] }) } }
     finally { restoringConnections = false; rememberConnections() }
   }
 })()

@@ -226,11 +226,7 @@ if (typeof window !== 'undefined' && typeof module === 'undefined') {
       case 'copyPath':
         navigator.clipboard.writeText(sel.map(x => full(ex, x)).join('\n'))
         return toast(t('kb.copied'))
-      case 'rename': return one && (async () => {
-        const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
-        const name = v?.name.trim()
-        if (name && name !== one.name) act(ex, () => api.invoke('sftp:rename', ex.connId, full(ex, one), join(ex.path, name)))
-      })()
+      case 'rename': return one && renameItem(ex, one)
       case 'delete':
         if (confirm(one ? t('dlg.confirm_del_one', { name: one.name }) : t('dlg.confirm_del_many', { n: sel.length })))
           act(ex, () => api.invoke('sftp:rm', ex.connId, sel.map(x => full(ex, x))))

@@ -8,6 +8,12 @@ async function exportConfiguration() {
     const close = () => { m.hidden = true; m.replaceChildren() }
     const total = h('small', { className: 'dim', role: 'status' })
     const submit = h('button', { type: 'submit', className: 'primary', textContent: t('config.export') })
+    const boxes = {}, syncs = {} // checkboxes by "kind:id", and each section's counter
+    // the actions made for a server follow its checkbox (they are exported with it in any case)
+    const followServer = (serverId, on) => {
+      for (const a of data.actions.filter(a => a.serverId === serverId)) { const box = boxes['actions:' + a.id]; if (box) box.checked = on; on ? selected.actions.add(a.id) : selected.actions.delete(a.id) }
+      syncs.actions?.()
+    }
     const syncTotal = () => { const n = kinds.reduce((n, k) => n + selected[k].size, 0); total.textContent = t('config.selected', { n }); submit.disabled = n === 0 }
     const sections = kinds.filter(k => k !== 'groups' || data.groups.length).map(k => {
       const items = data[k], children = []
@@ -18,13 +24,15 @@ async function exportConfiguration() {
       const section = h('details', { className: 'config-section' }, h('summary', {}, groupCheck, count))
       section.dataset.kind = k
       for (const item of items) {
-        const box = h('input', { type: 'checkbox', checked: true, onchange: () => { if (box.checked) selected[k].add(item.id); else selected[k].delete(item.id); sync() } })
-        const sub = k === 'servers' ? `${item.user}@${item.host}:${item.port}` : k === 'paths' ? `${item.path} · ${item.serverId ? data.servers.find(s => s.id === item.serverId)?.name || t('config.missing_server') : t('config.global')}` : k === 'actions' ? item.script.split('\n')[0].slice(0, 100) : ''
+        const box = h('input', { type: 'checkbox', checked: true, onchange: () => { if (box.checked) selected[k].add(item.id); else selected[k].delete(item.id); if (k === 'servers') followServer(item.id, box.checked); sync() } })
+        boxes[k + ':' + item.id] = box
+        const sub = k === 'servers' ? `${item.user}@${item.host}:${item.port}` : k === 'paths' ? `${item.path} · ${item.serverId ? data.servers.find(s => s.id === item.serverId)?.name || t('config.missing_server') : t('config.global')}` : k === 'actions' ? (item.serverId ? `${data.servers.find(s => s.id === item.serverId)?.name || t('config.missing_server')} · ` : '') + item.script.split('\n')[0].slice(0, 100) : ''
         children.push(box)
         section.append(h('label', { className: 'check config-item' }, box, h('span', {}, h('span', { textContent: item.name || item.path }), sub ? h('small', { className: 'dim', textContent: sub }) : '')))
       }
       if (!items.length) section.append(h('p', { className: 'dim', textContent: t('config.none') }))
-      all.onchange = () => { for (const [i, item] of items.entries()) { children[i].checked = all.checked; if (all.checked) selected[k].add(item.id); else selected[k].delete(item.id) } sync() }
+      all.onchange = () => { for (const [i, item] of items.entries()) { children[i].checked = all.checked; if (all.checked) selected[k].add(item.id); else selected[k].delete(item.id); if (k === 'servers') followServer(item.id, all.checked) } sync() }
+      syncs[k] = sync
       sync()
       return section
     })

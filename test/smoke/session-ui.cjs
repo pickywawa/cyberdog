@@ -26,12 +26,12 @@ app.on('browser-window-created', (_, win) => {
       await wait(`typeof openFiles === 'function' && servers.length === 2`, 'servers listed')
       await js(LOCAL)
       // tab 1: /www/site, split with /etc/nginx; tab 2: /gone (deleted before the restart)
-      await js(`openFiles(servers.find(s => s.id === 's1'), { path: ${JSON.stringify(W + '/www/site')} })`)
+      await js(`void openFiles(servers.find(s => s.id === 's1'), { path: ${JSON.stringify(W + '/www/site')} })`)
       await wait(`tabs[0]?.active.path === ${JSON.stringify(W + '/www/site')}`, 'tab 1')
       await js(`toggleSplit(tabs[0].active)`)
       await wait(`tabs[0].panes[1]?.path`, 'split')
       await js(`load(tabs[0].panes[1], ${JSON.stringify(W + '/etc/nginx')})`)
-      await js(`openFiles(servers.find(s => s.id === 's2'), { path: ${JSON.stringify(W + '/gone')} })`)
+      await js(`void openFiles(servers.find(s => s.id === 's2'), { path: ${JSON.stringify(W + '/gone')} })`)
       await wait(() => JSON.stringify(session()) === JSON.stringify([
         { serverId: 's1', terminal: false, paths: [W + '/www/site', W + '/etc/nginx'] },
         { serverId: 's2', terminal: false, paths: [W + '/gone'] }]), 'session saved with the folders')
@@ -54,7 +54,7 @@ app.on('browser-window-created', (_, win) => {
       // the folder is gone: home instead
       await js(`closeTab(tabs[1].id)`)
       fs.rmSync(at('www/site'), { recursive: true })
-      await js(`openFiles(servers.find(s => s.id === 's1'))`)
+      await js(`void openFiles(servers.find(s => s.id === 's1'))`)
       await wait(`tabs.length === 2 && tabs[1].active.path === ${JSON.stringify(W)} && !tabs[1].active.error`, 'missing last folder: home')
       console.log('Session UI passed: folders saved, tabs and split reopened at their folders, missing folder falls back to home, last folder per server, double-click opens once.')
       app.exit(0)

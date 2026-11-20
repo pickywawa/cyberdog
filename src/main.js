@@ -660,7 +660,7 @@ ipcMain.handle('config:catalog', () => { checkConfigRoot(); if (pathsLoadError) 
 ipcMain.handle('config:export', async (_, selection) => {
   if (pathsLoadError) throw pathsLoadError
   // Add portable server references before filtering: a path can target an existing server on import.
-  let data = configTransfer.select(configTransfer.portable(configData()), selection)
+  let data = configTransfer.select(configTransfer.portable(configData()), configTransfer.withServerItems(configData(), selection))
   if(extension.prepareExport)data=extension.prepareExport(data)
   const count = configTransfer.TYPES.reduce((n, k) => n + data[k].length, 0)
   if (!count) throw new Error(t('config.empty'))
@@ -853,6 +853,34 @@ ipcMain.handle('sftp:upload', async (_, id, locals, dir, opts = {}) => {
   S(id)
   const sid = conns.get(id).server.id
   return transfers.run(id, 'upload', path.basename(locals[0]), { hold: !!opts.hold, refs: { src: { disk: true }, dst: { connId: id, serverId: sid } }, serverIds: [sid], top: locals.map(p => ({ source: p, target: posix.join(dir, path.basename(p)) })) })
+})
+// 'dir', 'file' or null (nothing there): cyberdog:open in an action's output
+ipcMain.handle('files:kind', (_, id, p) => P(S(id), 'stat', p).then(st => st.isDirectory() ? 'dir' : 'file', () => null))
+// cyberdog:url in an action's output: web links only
+ipcMain.handle('link:open', (_, url) => {
+  let u
+  try { u = new URL(String(url)) } catch { throw new Error(t('qa.bad_url')) }
+  if (!['http:', 'https:'].includes(u.protocol)) throw new Error(t('qa.bad_url'))
+  return shell.openExternal(u.href)
+})
+// "Show in Finder / Explorer" for a downloaded file
+ipcMain.handle('files:reveal', (_, p) => {
+  if (typeof p !== 'string' || !path.isAbsolute(p) || !fs.existsSync(p)) throw new Error(t('dl.missing'))
+  shell.showItemInFolder(p)
+})
+// Files a quick action asks for ("cyberdog:download /path" in its output): straight to the server's download folder
+ipcMain.handle('files:fetch', async (_, id, paths) => {
+  S(id)
+  const list = (Array.isArray(paths) ? paths : []).filter(p => typeof p === 'string' && p.startsWith('/') && !p.includes('\0')).slice(0, 20)
+  if (!list.length) return []
+  const dir = downloadsDir(id), sid = conns.get(id).server.id
+  const top = list.map(p => ({ source: p, target: path.join(dir, posix.basename(p)) }))
+  const running = transfers.run(id, 'download', posix.basename(list[0]), { refs: { src: { connId: id, serverId: sid }, dst: { disk: true } }, serverIds: [sid], top })
+  const job = transfers.list().at(-1)
+  await running
+  // where the files really are ("Keep both" renames them); folders are given as such
+  const plan = transfers.items.get(job.id)?.plan || []
+  return top.map(x => plan.find(i => i.source === x.source && !i.skipped)?.target).filter(f => f && fs.existsSync(f))
 })
 // Upload button: pick files (or folders) on this computer
 ipcMain.handle('files:pick', async (_, kind) => {
@@ -1208,13 +1236,19 @@ const MAX_SCRIPT = 60000 // passe dans la ligne de commande (base64)
 
 ipcMain.handle('actions:list', () => allActions())
 ipcMain.handle('actions:save', async (_, d) => {
+  if (d?.teamId && d.serverId) throw new Error(t('qa.server_local_only'))
   if(await extension.routeAsset('actions',d))return allActions()
   const name = d.name?.trim()
   if (!name || !d.script?.trim()) throw new Error(t('err.name_script_required'))
   if (d.script.length > MAX_SCRIPT) throw new Error(t('err.script_too_big'))
+  // an action can be made for one server only (local actions: the shared spaces do not carry it)
+  const serverId = typeof d.serverId === 'string' && d.serverId ? d.serverId : null
+  if (serverId && !servers.some(s => s.id === serverId)) throw new Error(t('err.server_not_found'))
   let a = actions.find(x => x.id === d.id)
   if (!a) actions.push((a = { id: crypto.randomUUID() }))
   Object.assign(a, { name, script: d.script })
+  if (serverId) a.serverId = serverId
+  else delete a.serverId
   persistActions()
   await extension.finishAssetMove(d)
   return allActions()
@@ -1244,10 +1278,12 @@ ipcMain.handle('actions:importZip', async () => {
 })
 
 // le script voyage en base64 dans la commande : stdin reste libre pour les scripts interactifs
-ipcMain.handle('action:run', async (_, id, script) => {
+// vars: the answers to a form the action asked for (cyberdog:select / input / buttons), set before the script runs
+ipcMain.handle('action:run', async (_, id, script, vars) => {
   const c = getConn(id)
   if(script&&typeof script==='object')script=await extension.resolveAction(script,c.server)
   if(typeof script!=='string'||script.length>MAX_SCRIPT)throw new Error('invalid_script')
+  script = require('./action-commands').exports(vars) + script
   const t0 = Date.now()
   const b64 = Buffer.from(script).toString('base64')
   const r = await exec(c.client, `bash -c "$(printf %s ${q(b64)} | base64 -d)"`, { timeout: 120000 })

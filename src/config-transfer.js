@@ -8,6 +8,11 @@ const pick = (o, fields) => Object.fromEntries(fields.filter(k => o[k] !== undef
 const REF = ['host', 'port', 'user', 'type', 'bucket']
 const endpoint = s => JSON.stringify([s.host?.trim().toLowerCase(), Number(s.port) || 22, s.user || '', ...(s.type && s.type !== 'ssh' ? [s.type, s.bucket || ''] : [])])
 const empty = () => Object.fromEntries(TYPES.map(k => [k, []]))
+// The actions of a server go with it: checking a server in the export adds the actions made for it
+function withServerItems(data, selected) {
+  const servers = new Set(selected.servers || [])
+  return { ...selected, actions: [...new Set([...(selected.actions || []), ...data.actions.filter(a => a.serverId && servers.has(a.serverId)).map(a => a.id)])] }
+}
 function select(data, selected) {
   const out = empty()
   for (const k of TYPES) {
@@ -22,10 +27,10 @@ function writeBundle(data, file, options = {}) {
   const zip = new AdmZip()
   zip.addFile('manifest.json', Buffer.from(JSON.stringify({ format: 'cyberdog-config', version: options.version || 1, ...(options.features?.length ? {features:options.features} : {}), created: new Date().toISOString(), counts: Object.fromEntries(TYPES.map(k => [k, data[k].length])) }, null, 2)))
   for (const k of TYPES) for (const [i, value] of data[k].entries()) {
-    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite', 'website', 'tags', 'downloadDir', 'authMode', 'type', 'url', 'region', 'bucket', 'preset', 'virtualHost', 'security', 'insecureTls', 'profile', 'azureAuth', 'tenant', 'clientId'], actions: ['id', 'name', 'script'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
+    const fields = { groups: ['id', 'name', 'favorite', 'collapsed'], servers: ['id', 'name', 'host', 'port', 'user', 'key', 'group', 'favorite', 'website', 'tags', 'downloadDir', 'authMode', 'type', 'url', 'region', 'bucket', 'preset', 'virtualHost', 'security', 'insecureTls', 'profile', 'azureAuth', 'tenant', 'clientId'], actions: ['id', 'name', 'script', 'serverId', 'server'], paths: ['id', 'name', 'path', 'serverId', 'server'] }[k]
     let item = pick(value, fields)
     if(options.transformItem)item=options.transformItem(k,item,value)
-    if (k === 'paths' && item.server) item.server = pick(item.server, REF)
+    if ((k === 'paths' || k === 'actions') && item.server) item.server = pick(item.server, REF)
     const name = String(value.name || 'item').replace(/[^\w.-]+/g, '_').slice(0, 80)
     zip.addFile(`${k}/${String(i + 1).padStart(3, '0')}-${name}.json`, Buffer.from(JSON.stringify(item, null, 2)))
   }
@@ -39,7 +44,8 @@ function linkPaths(paths, servers) {
   })
 }
 function portable(data) {
-  return { ...data, paths: data.paths.map(p => ({ ...p, ...(p.serverId && data.servers.find(s => s.id === p.serverId) ? { server: pick(data.servers.find(s => s.id === p.serverId), REF) } : {}) })) }
+  const withServer = x => ({ ...x, ...(x.serverId && data.servers.find(s => s.id === x.serverId) ? { server: pick(data.servers.find(s => s.id === x.serverId), REF) } : {}) })
+  return { ...data, paths: data.paths.map(withServer), actions: data.actions.map(withServer) }
 }
 function readBundle(file, options = {}) {
   if (fs.statSync(file).size > 32 * 1024 * 1024) throw new Error('Configuration ZIP exceeds 32 MB')
@@ -91,8 +97,14 @@ function merge(current, incoming, finalize) {
   }
   for (const a of incoming.actions) {
     if (!text(a?.name) || !text(a.script) || a.script.length > 60000) throw new Error('Invalid action')
-    if (out.actions.some(x => x.name === a.name.trim() && x.script === a.script)) continue
-    out.actions.push({ id: crypto.randomUUID(), name: a.name.trim(), script: a.script }); added.actions++
+    // an action made for one server follows that server (same ID in the bundle, or same host / port / user here)
+    let serverId
+    if (a.serverId) {
+      serverId = serverIds.get(a.serverId) || (a.server ? out.servers.find(s => endpoint(s) === endpoint(a.server))?.id : undefined)
+      if (!serverId) { skipped++; continue }
+    }
+    if (out.actions.some(x => x.name === a.name.trim() && x.script === a.script && (x.serverId || '') === (serverId || ''))) continue
+    out.actions.push({ id: crypto.randomUUID(), name: a.name.trim(), script: a.script, ...(serverId ? { serverId } : {}) }); added.actions++
   }
   for (const p of incoming.paths) {
     if (typeof p?.path !== 'string' || !(p.path.startsWith('/') || p.path === '~' || p.path.startsWith('~/'))) throw new Error('Invalid saved path')
@@ -107,4 +119,4 @@ function merge(current, incoming, finalize) {
   if(finalize)finalize(out,incoming,serverIds,current)
   return { data: out, added, skipped }
 }
-module.exports = { TYPES, select, writeBundle, portable, readBundle, merge, linkPaths }
+module.exports = { TYPES, select, withServerItems, writeBundle, portable, readBundle, merge, linkPaths }

@@ -32,7 +32,7 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
         row: name => __t.pane().rowEls.find(r => r.dataset.name === name),
       }; true`)
     const W = remotePath(work)
-    await js(`openFiles({ id: 'smoke', type: 'local', name: 'Smoke', host: 'localhost' }, { path: ${JSON.stringify(W)} })`)
+    await js(`void openFiles({ id: 'smoke', type: 'local', name: 'Smoke', host: 'localhost' }, { path: ${JSON.stringify(W)} })`)
     await wait(`__t.pane()?.path === ${JSON.stringify(W)} && __t.names().includes('a.txt')`, 'listing')
     const go = async p => { await js(`__t.go(${JSON.stringify(p)})`); await wait(`__t.pane().path === ${JSON.stringify(p)} && !__t.pane().explorer.classList.contains('loading')`, 'go ' + p) }
 
@@ -157,9 +157,27 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await shot('transfers')
     await js(`document.querySelectorAll('.transfer-widget').forEach(w => w.classList.remove('expanded'))`)
 
+    // a second click on the name of the selected file renames it; a double-click does not
+    fs.writeFileSync(at('rename-me.txt'), 'r')
+    await js(`(() => { const tb = tabs.find(t => t.id === activeId); tb.active = tb.panes[0] })()`)
+    await go(W)
+    await wait(`!!__t.row('rename-me.txt')`, 'rename-me listed')
+    const clickName = detail => js(`(() => { const n = __t.row('rename-me.txt').querySelector('.nt'); n.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); n.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0, detail: ${detail} })) })()`)
+    await clickName(1)                      // selects it
+    await pause(700)
+    assert.equal(await js(`document.querySelector('#modal').hidden`), true, 'the first click only selects')
+    await clickName(1); await clickName(2); await js(`__t.row('rename-me.txt').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+    await pause(800)
+    assert.equal(await js(`document.querySelector('#modal').hidden`), true, 'a double-click does not rename')
+    await clickName(1)
+    await wait(`!document.querySelector('#modal').hidden && document.querySelector('#modal input').value === 'rename-me.txt'`, 'rename dialog')
+    assert.equal(await js(`(() => { const i = document.querySelector('#modal input'); return i.selectionStart + ':' + i.selectionEnd })()`), '0:9', 'name selected without the extension')
+    await js(`(() => { const i = document.querySelector('#modal input'); i.value = 'renamed.txt'; i.form.requestSubmit() })()`)
+    await wait(() => fs.existsSync(at('renamed.txt')) && !fs.existsSync(at('rename-me.txt')), 'renamed')
+
     // a new tab at a folder
     const before = await js(`tabs.length`)
-    await js(`openFiles(tabs.find(t => t.id === activeId).server, { path: ${JSON.stringify(W + '/sub')} })`)
+    await js(`void openFiles(tabs.find(t => t.id === activeId).server, { path: ${JSON.stringify(W + '/sub')} })`)
     await wait(`tabs.length === ${before + 1} && __t.pane().path === ${JSON.stringify(W + '/sub')}`, 'new tab')
 
     // settings: simultaneous transfers
@@ -167,7 +185,7 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await wait(`!!document.querySelector('.inline-setting select')`, 'settings')
     await js(`document.querySelector('.inline-setting select').value = '4'; document.querySelector('.settings-save').click()`)
     await wait(() => JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8')).maxTransfers === 4, 'max transfers saved')
-    console.log('Explorer UI passed: copy/paste, conflict, cut/move, duplicate, drag into folder, move to, context menu, type to select, properties, filter, breadcrumb, recursive permissions, Tab, queue, new tab, settings.')
+    console.log('Explorer UI passed: copy/paste, conflict, cut/move, duplicate, drag into folder, move to, context menu, type to select, properties, filter, breadcrumb, recursive permissions, Tab, queue, click to rename, new tab, settings.')
     app.exit(0)
   } catch (e) { console.error(e); await win.webContents.capturePage().then(i => fs.writeFileSync(path.join(shots, 'explorer-failure.png'), i.toPNG())).catch(() => {}); app.exit(1) }
 }))

@@ -108,9 +108,11 @@ function errText(e) {
 }
 
 // ---------- UI utils ----------
-function toast(msg, err, ms = 3500) {
+// action: { label, fn } adds a button to the message (e.g. "Show in Finder" after a download)
+function toast(msg, err, ms = 3500, action) {
   const el = $('#toast')
   el.textContent = msg
+  if (action) el.append(h('button', { type: 'button', className: 'toast-btn', textContent: action.label, onclick: () => { el.hidden = true; action.fn() } }))
   el.className = err ? 'err' : ''
   el.hidden = false
   clearTimeout(toastTimer)
@@ -150,13 +152,13 @@ function menu(x, y, items, { up = false } = {}) {
     for (const it of items) {
       if (it === '-') { parent.append(h('hr')); continue }
       const lead = it.swatch ? h('span', { className: 'sw', style: `background: linear-gradient(135deg, ${it.swatch[0]} 50%, ${it.swatch[1]} 50%)` }) : h('span', { className: 'mi-ic', innerHTML: it.icon ? icon(it.icon) : '' })
-      const li = h('div', { className: 'mi' + (it.danger ? ' danger' : '') }, lead, h('span', { className: 'mi-t', textContent: it.label }), ...(it.hint ? [h('kbd', { className: 'mi-k', textContent: it.hint })] : []), h('span', { className: 'mi-chk', innerHTML: it.checked ? icon('check') : '' }))
+      const li = h('div', { className: 'mi' + (it.danger ? ' danger' : '') + (it.disabled ? ' disabled' : '') }, lead, h('span', { className: 'mi-t', textContent: it.label }), ...(it.hint ? [h('kbd', { className: 'mi-k', textContent: it.hint })] : []), h('span', { className: 'mi-chk', innerHTML: it.checked ? icon('check') : '' }))
       if (it.children) {
         li.classList.add('sub')
         const sub = h('div', { className: 'submenu' })
         li.append(sub)
         li.onmouseenter = async () => { if (!sub.childElementCount) build(await it.children(), sub) }
-      } else li.onclick = () => { hideMenu(); it.fn() }
+      } else if (!it.disabled) li.onclick = () => { hideMenu(); it.fn() }
       parent.append(li)
     }
   }
@@ -188,13 +190,14 @@ function tabLayout(tabs, fields, rows) {
   }, h('span', { innerHTML: icon(ico) }), h('span', { textContent: label }))))
   return h('div', { className: 'tab-layout' }, nav, h('div', { className: 'tab-pages' }, ...pages))
 }
-function modal(title, fields, okLabel, { wide = false, tabs = [] } = {}) {
+// cls: an extra class for the card; expandable: a button in the title grows the dialog to the window (and back)
+function modal(title, fields, okLabel, { wide = false, tabs = [], cls = '', expandable = false } = {}) {
   return new Promise(resolve => {
     const m = $('#modal')
     const previous = !m.hidden ? {nodes:[...m.childNodes],mousedown:m.onmousedown} : null
     const inputs = fields.map(f => {
       if (f.type === 'checkbox') return h('input', { type: 'checkbox', checked: !!f.value })
-      if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: 12, spellcheck: false, readOnly:!!f.readOnly })
+      if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: f.rows || 12, spellcheck: false, readOnly:!!f.readOnly })
       if (f.type === 'select') {
         const sel = h('select', { className: 'lsel full', disabled:!!f.disabled }, ...f.options.map(([v, label, scope]) => Object.assign(h('option', { value: v, textContent: label }),{_scope:scope})))
         sel.value = f.value || ''
@@ -221,11 +224,12 @@ function modal(title, fields, okLabel, { wide = false, tabs = [] } = {}) {
     }
     const close = v => { if(previous){m.replaceChildren(...previous.nodes);m.hidden=false;m.onmousedown=previous.mousedown}else{m.hidden=true;m.replaceChildren()} resolve(v) }
     const form = h('form', {
-      className: 'card' + (wide ? ' wide' : '') + (tabs.length ? ' tabbed' : ''),
+      className: 'card' + (wide ? ' wide' : '') + (tabs.length ? ' tabbed' : '') + (cls ? ' ' + cls : ''),
       onsubmit: e => { e.preventDefault(); close(Object.fromEntries(fields.map((f, i) => [f.name, f.type === 'checkbox' ? inputs[i].checked : inputs[i].value]))) },
       onkeydown: e => { if (e.key === 'Escape') close(null) },
     },
-      h('h3', { textContent: title }),
+      expandable ? h('div', { className: 'card-head' }, h('h3', { textContent: title }), h('button', { type: 'button', className: 'ib card-expand', innerHTML: icon('maximize'), title: t('dlg.expand'), ariaLabel: t('dlg.expand'),
+        onclick: e => { const card = e.currentTarget.closest('.card'), on = card.classList.toggle('expanded'); e.currentTarget.innerHTML = icon(on ? 'minimize' : 'maximize'); e.currentTarget.title = t(on ? 'dlg.shrink' : 'dlg.expand') } })) : h('h3', { textContent: title }),
       ...(tabs.length ? [tabLayout(tabs, fields, rows)] : rows),
       h('div', { className: 'btns' },
         h('button', { type: 'button', textContent: t('btn.cancel'), onclick: () => close(null) }),
@@ -341,7 +345,8 @@ function serverRow(s, activeServer) {
     e.preventDefault()
     menu(e.clientX, e.clientY, [
       { label: t('srv.open'), icon: 'folder', fn: () => openFiles(s) },
-      ...(isShell(s) ? [{ label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) }] : []),
+      ...(isShell(s) ? [{ label: t('srv.terminal'), icon: 'terminal', fn: () => openFiles(s, { terminal: true }) },
+        { label: t('qa.menu'), icon: 'zap', children: async () => serverActionsMenu(s) }] : []),
       '-',
       ...(!s.teamId&&!s.vaultId ? [{ label: t(s.favorite ? 'fav.remove' : 'fav.add'), icon: 'star', fn: () => setFavorite(s, !s.favorite) }] : []),
       ...(canManage && groups.some(g=>(g.teamId||'')===(s.teamId||'')) ? [{ label: t('f.group'), icon: 'folder', children: async () => [{ label: t('f.group_none'), checked: !groupOf(s), fn: () => moveToGroup(s, '') }, ...groups.filter(g=>(g.teamId||'')===(s.teamId||'')).map(g => ({ label: g.name, checked: s.group === g.id, fn: () => moveToGroup(s, g.id) }))] }] : []),
@@ -998,18 +1003,22 @@ function draw(tab) {
         tab.last = i
       }
       paintSel(tab)
+      // a second click on the name of the selected item renames it (unless it turns into a double-click)
+      clearTimeout(tab.renameTimer)
+      if (tab.renameArmed === e.name && ev.detail === 1) tab.renameTimer = setTimeout(() => { if (tab.sel.size === 1 && tab.sel.has(e.name)) renameItem(tab, e) }, 550)
+      tab.renameArmed = null
     }
-    row.ondblclick = () => {
-      if (e.isDir) return load(tab, join(tab.path, e.name), true, true)
-      if (!settings.defaultEditor || settings.defaultEditor === 'internal') return openInEditor(tab, join(tab.path, e.name))
-      const editor = settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
-      act(tab, () => api.invoke('sftp:edit', tab.connId, join(tab.path, e.name), editor), false)
-    }
+    row.ondblclick = () => { clearTimeout(tab.renameTimer); return e.isDir ? load(tab, join(tab.path, e.name), true, true) : openFile(tab, join(tab.path, e.name)) }
     // glisser : copies locales préparées après 120 ms d'appui (Finder), déplacement / copie directs dans Cyberdog
     row.draggable = true
-    row.onmousedown = ev => { if (ev.button === 0) { clearTimeout(tab.dragTimer); tab.dragTimer = setTimeout(() => prepareDrag(tab, e), 120) } }
+    row.onmousedown = ev => {
+      if (ev.button !== 0) return
+      // already the only selected item, and the press is on its name: the click may rename it
+      tab.renameArmed = !ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.altKey && tab.sel.size === 1 && tab.sel.has(e.name) && ev.target.closest('.nt') ? e.name : null
+      clearTimeout(tab.dragTimer); tab.dragTimer = setTimeout(() => prepareDrag(tab, e), 120)
+    }
     row.onmouseup = () => clearTimeout(tab.dragTimer)
-    row.ondragstart = ev => startRowDrag(tab, e, ev)
+    row.ondragstart = ev => { clearTimeout(tab.renameTimer); tab.renameArmed = null; startRowDrag(tab, e, ev) }
     if (e.isDir) dropTarget(tab, row, join(tab.path, e.name))
     return row
   })
@@ -1041,6 +1050,25 @@ function prepareDrag(tab, e) {
 function paintSel(tab) {
   tab.rowEls?.forEach(r => r.classList.toggle('sel', tab.sel.has(r.dataset.name)))
   updateStatus(tab)
+}
+
+// A file opens in the editor chosen in Settings (the internal one by default)
+function openFile(ex, path) {
+  if (!settings.defaultEditor || settings.defaultEditor === 'internal') return openInEditor(ex, path)
+  const editor = settings.defaultEditor !== 'system' ? settings.defaultEditor : undefined
+  return act(ex, () => api.invoke('sftp:edit', ex.connId, path, editor), false)
+}
+
+// Rename dialog (F2, right-click, or a second click on the name of the selected item)
+async function renameItem(tab, entry) {
+  clearTimeout(tab.renameTimer)
+  const asked = modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: entry.name }], t('btn.rename'))
+  // the name is selected without its extension, as in the Finder
+  const dot = entry.isDir ? -1 : entry.name.lastIndexOf('.')
+  if (dot > 0) $('#modal input')?.setSelectionRange(0, dot)
+  const v = await asked
+  const name = v?.name.trim()
+  if (name && name !== entry.name) act(tab, () => api.invoke('sftp:rename', tab.connId, join(tab.path, entry.name), join(tab.path, name)))
 }
 
 async function newItem(tab, kind) {
@@ -1104,6 +1132,11 @@ async function shareLink(tab, file) {
   if (!v) return
   try { await navigator.clipboard.writeText(await api.invoke('storage:link', tab.connId, file, +v.ttl)); toast(t('t.link_copied')) } catch (e) { toast(errText(e), true) }
 }
+
+// "Downloaded to …" with a button that shows the file in the Finder / Explorer, as browsers do
+const revealLabel = () => t(api.platform === 'darwin' ? 'dl.show_mac' : api.platform === 'win32' ? 'dl.show_win' : 'dl.show_other')
+const revealFile = p => api.invoke('files:reveal', p).catch(e => toast(errText(e), true))
+function downloadedToast(p) { toast(t('t.downloaded', { path: p }), false, 8000, { label: revealLabel(), fn: () => revealFile(p) }) }
 
 // ---------- Copier / couper / coller, glisser-déposer, déplacer ----------
 // Cyberdog's own file clipboard: what was copied or cut, on which connection. Paste copies (or moves) it into the
@@ -1273,8 +1306,8 @@ function ctxMenu(tab, e) {
   const full = x => join(tab.path, x.name)
   const remote = tab.server.type !== 'local'
   menu(e.clientX, e.clientY, [
-    ...(remote ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) toast(t('t.downloaded', { path: r })) }, false) },
-      { label: t('ctx.queue'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full), { hold: true }); if (r) toast(t('t.downloaded', { path: r })) }, false) }] : []),
+    ...(remote ? [{ label: t('ctx.download'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full)); if (r) downloadedToast(r) }, false) },
+      { label: t('ctx.queue'), icon: 'download', fn: () => act(tab, async () => { const r = await api.invoke('sftp:download', tab.connId, sel.map(full), { hold: true }); if (r) downloadedToast(r) }, false) }] : []),
     ...(remote && servers.some(x => !x.loading && !x.vaultId) ? [{ label: t('ctx.copy_to_server'), icon: 'upload', fn: () => copyToServer(tab, sel.map(full)) }] : []),
     '-',
     { label: t('ctx.copy'), icon: 'copy', hint: modKey('Mod+C'), fn: () => copyFiles(tab) },
@@ -1282,11 +1315,7 @@ function ctxMenu(tab, e) {
     ...(fileClipboard ? (one?.isDir ? [{ label: t('ctx.paste_into', { name: one.name }), icon: 'clipboard', fn: () => pasteFiles(tab, full(one)) }] : paste) : []),
     { label: t('ctx.duplicate'), icon: 'copy', hint: modKey('Mod+D'), fn: () => duplicateFiles(tab, sel) },
     { label: t('ctx.move_to'), icon: 'folder', fn: () => moveTo(tab, sel) },
-    ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', hint: 'F2', fn: async () => {
-      const v = await modal(t('ctx.rename'), [{ name: 'name', label: t('dlg.new_name'), value: one.name }], t('btn.rename'))
-      const n = v?.name.trim()
-      if (n && n !== one.name) act(tab, () => api.invoke('sftp:rename', tab.connId, full(one), join(tab.path, n)))
-    } }] : []),
+    ...(one ? [{ label: t('ctx.rename'), icon: 'pencil', hint: 'F2', fn: () => renameItem(tab, one) }] : []),
     { label: t('ctx.copy_text'), icon: 'copy', children: () => [
       { label: t('ctx.copy_name'), fn: () => navigator.clipboard.writeText(sel.map(x => x.name).join('\n')) },
       { label: t('ctx.copy_path'), hint: modKey('Mod+Shift+C'), fn: () => navigator.clipboard.writeText(sel.map(full).join('\n')) },
@@ -1612,6 +1641,7 @@ function rememberFolder(server, path) {
 }
 
 // path: the folder to open (otherwise the last one seen on this server, or home); split: a second explorer at that folder
+// -> the new tab
 function openFiles(server, { terminal = false, path = null, split = null } = {}) {
   path ||= lastFolder(server)
   if(server.loading)return
@@ -1674,6 +1704,7 @@ function openFiles(server, { terminal = false, path = null, split = null } = {})
     tab.openLoader.remove()
   })
   if (terminal && isShell(server)) openTerminal(tab)
+  return tab
 }
 
 // ---------- Init ----------

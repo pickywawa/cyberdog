@@ -6,12 +6,29 @@ const transferWidgets = new Set()
 const QUEUE_STATES = ['running', 'queued', 'paused'], FAILED_STATES = ['error', 'cancelled', 'interrupted']
 const tabOf = x => QUEUE_STATES.includes(x.state) ? 'queue' : FAILED_STATES.includes(x.state) ? 'failed' : 'done'
 const isUp = x => x.direction === 'upload' || x.direction === 'copy'
+// 42 s, 3 min 05 s, 1 h 12 min
+function durationText(ms) {
+  const s = Math.round((ms || 0) / 1000)
+  if (s < 1) return '< 1 s'
+  if (s < 60) return s + ' s'
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`
+  return `${Math.floor(s / 3600)} h ${String(Math.floor(s / 60) % 60).padStart(2, '0')} min`
+}
+const clockText = ms => new Date(ms).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })
+// when it started and ended, how long it took (time spent transferring)
+function timingText(x) {
+  const start = x.firstStart || x.created
+  if (!start) return ''
+  if (x.state === 'running') return t('transfer.since', { time: clockText(start), duration: durationText((x.elapsed || 0) + Date.now() - x.started) })
+  if (!x.finished) return ''
+  return t('transfer.timing', { start: clockText(start), end: clockText(x.finished), duration: durationText(x.elapsed) })
+}
 function transferText(x) {
   if (x.asking) return t('transfer.asking')
-  if (x.state !== 'running') return t('transfer.' + x.state) + (x.skipped ? ' · ' + t('transfer.skipped', { n: x.skipped }) : '')
+  if (x.state !== 'running') return [t('transfer.' + x.state), ...(x.skipped ? [t('transfer.skipped', { n: x.skipped })] : []), ...(timingText(x) ? [timingText(x)] : [])].join(' · ')
   if (!x.scanned) return t('transfer.preparing')
   const left = x.remaining == null ? '…' : x.remaining < 60 ? Math.ceil(x.remaining) + ' s' : Math.ceil(x.remaining / 60) + ' min'
-  return `${sizeOf(x.done)} / ${sizeOf(x.total)} · ${sizeOf(x.speed)}/s · ${t('transfer.remaining', { time: left })}`
+  return `${sizeOf(x.done)} / ${sizeOf(x.total)} · ${sizeOf(x.speed)}/s · ${t('transfer.remaining', { time: left })} · ${timingText(x)}`
 }
 const percentOf = x => x.total > 0 ? Math.min(100, x.done / x.total * 100) : x.state === 'done' ? 100 : 0
 const transferCall = (channel, ...args) => api.invoke(channel, ...args).catch(e => toast(errText(e), true))
@@ -31,6 +48,8 @@ function transferRow(x) {
     tools.append(x.state === 'paused' ? button('play', 'transfer.start', () => transferCall('transfers:resume', x.id)) : button('pause', 'transfer.pause', () => transferCall('transfers:pause', x.id)))
     tools.append(button('x', 'btn.cancel', () => transferCall('transfers:cancel', x.id)))
   } else {
+    // a finished download: show it in the Finder / Explorer, as browsers do
+    if (x.state === 'done' && x.local) tools.append(h('button', { type: 'button', className: 'ib transfer-reveal', innerHTML: icon('folder'), title: revealLabel(), ariaLabel: revealLabel(), onclick: () => revealFile(x.local) }))
     if (x.resumable) tools.append(button('refresh', x.state === 'error' ? 'transfer.retry' : 'transfer.resume', () => transferCall('transfers:resume', x.id)))
     tools.append(button('trash', 'transfer.remove', () => { transferItems.delete(x.id); transferCall('transfers:clear', x.id); paintTransfers() }))
   }
@@ -44,7 +63,7 @@ function transferRow(x) {
     progress.value = percentOf(v)
     progress.ariaLabel = v.name + ' ' + Math.round(percentOf(v)) + '%'
     status.className = v.state === 'error' ? 'err' : 'dim'
-    status.textContent = v.state === 'error' ? v.error : transferText(v)
+    status.textContent = v.state === 'error' ? [v.error, timingText(v)].filter(Boolean).join(' · ') : transferText(v)
     el.querySelector('.transfer-name').textContent = v.name
   }
   update(x)

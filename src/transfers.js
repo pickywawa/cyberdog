@@ -31,6 +31,8 @@ class Transfers {
     v.remaining = v.speed > 0 ? Math.max(0, (x.total - x.done) / v.speed) : null
     v.resumable = RESUMABLE.includes(x.state) && (x.plan ? x.plan.some(i => !i.done) : x.state === 'paused' || !!x.top)
     v.skipped = plan ? plan.filter(i => i.skipped).length : 0
+    // a download on this computer: what "Show in Finder / Explorer" opens
+    if (refs?.dst?.disk && top?.length) v.local = top[0].target
     return v
   }
   emit(x, force = false) { if (force || Date.now() - (x.sent || 0) > 150) { x.sent = Date.now(); this.send('transfer:update', this.view(x)) } this.save() }
@@ -39,7 +41,7 @@ class Transfers {
   // Resolves when the job ends: true when completed, false when cancelled; rejects when it fails.
   run(connId, direction, name, meta = {}) {
     const x = {
-      id: crypto.randomUUID(), connId, direction, name, state: meta.hold ? 'paused' : 'queued', done: 0, total: 0, started: Date.now(), scanned: false, base: 0,
+      id: crypto.randomUUID(), connId, direction, name, state: meta.hold ? 'paused' : 'queued', done: 0, total: 0, started: Date.now(), created: Date.now(), elapsed: 0, scanned: false, base: 0,
       refs: meta.refs, top: meta.top, serverIds: meta.serverIds || [], priority: PRIORITY[meta.priority] ?? 0, order: ++this.seq, policy: meta.policy,
     }
     this.items.set(x.id, x)
@@ -63,6 +65,7 @@ class Transfers {
   async execute(x) {
     const resuming = !!x.plan
     Object.assign(x, { state: 'running', stop: null, error: undefined, started: Date.now(), base: x.done })
+    x.firstStart ||= x.started
     this.emit(x, true)
     let failure
     try { await this.runner(x, resuming); this.check(x); x.state = 'done' }
@@ -70,7 +73,13 @@ class Transfers {
       if (x.stop === 'pause') x.state = 'paused'
       else if (x.stop === 'cancel') x.state = 'cancelled'
       else { x.state = 'error'; x.error = e.message; failure = e }
-    } finally { x.stream = null; x.stop = null; x.asking = false; x.abortAsk = null }
+    } finally {
+      x.stream = null; x.stop = null; x.asking = false; x.abortAsk = null
+      // time spent transferring (pauses and waiting in the queue excluded), and when it ended
+      x.elapsed = (x.elapsed || 0) + (Date.now() - x.started)
+      x.finished = Date.now()
+      x.firstStart ||= x.started
+    }
     this.emit(x, true)
     this.save(true)
     if (x.state !== 'paused') this.settle(x, failure)

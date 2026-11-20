@@ -42,7 +42,7 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
         mod: (key, code) => __t.key(key, { code, ...(api.platform === 'darwin' ? { meta: true } : { ctrl: true }) }),
       }; true`)
     const W = remotePath(work)
-    await js(`openFiles({ id: 'smoke', type: 'local', name: 'Smoke', host: 'localhost' }, { path: ${JSON.stringify(W)} })`)
+    await js(`void openFiles({ id: 'smoke', type: 'local', name: 'Smoke', host: 'localhost' }, { path: ${JSON.stringify(W)} })`)
     await wait(`!!__t.pane()?.rowEls?.length && !!__t.row('app.js')`, 'listing')
     assert.equal(await js(`!!__t.tab().bar.editor && __t.tab().rightBar.contains(__t.tab().bar.editor)`), false, 'no editor button before a file is open')
 

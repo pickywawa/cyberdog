@@ -28,11 +28,12 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 
 | | |
 |---|---|
-| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables (nom, taille, date, propriétaire, groupe, permissions, type, extension), glisser-déposer depuis le bureau, actions au clic droit, **recherche distante instantanée**, **vue scindée** et **désarchivage** en un clic. |
+| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables, chemin cliquable, glisser-déposer, **copier / couper / coller entre serveurs**, une file de transferts qui demande quoi faire des fichiers existants, **recherche distante instantanée**, filtre par nom, **vue scindée**, propriétés et **désarchivage** en un clic. |
+| ✍️ **Éditeur intégré** | Double-cliquez sur un fichier pour le modifier dans l'éditeur de VS Code, avec coloration syntaxique, onglets et vue scindée. Encodages et fins de ligne sont conservés tels quels. |
 | 🖥️ **Terminal inclus** | Un clic ouvre un terminal SSH *sous* l'explorateur, déjà placé dans le dossier que vous parcourez. Fini la jonglerie entre fenêtres. |
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
 | ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
-| ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. |
+| ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. Les actions peuvent poser des questions (listes, texte, boutons), télécharger des fichiers et piloter Cyberdog. |
 | 🔌 **Nombreux protocoles** | SFTP, FTP/FTPS, S3 et compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob et Files, WebDAV, SMB, Dropbox, OneDrive et Google Drive, dans le même explorateur. |
 | 🛡️ **Bastions** | Atteignez les serveurs privés par un bastion réutilisable, avec test du trajet et vérification des empreintes. |
 | 👥 **Équipes gratuites** | Partagez serveurs, scripts et chemins avec des rôles, des liens d'invitation et un historique. Le compte est facultatif. |
@@ -292,6 +293,23 @@ Enregistrez vos scripts bash du quotidien (redémarrer une stack, nettoyer les l
 
 <img src="docs/screenshots/actions.png" alt="Actions rapides" width="100%">
 
+**Commandes Cyberdog.** Une ligne affichée par une action pilote l'application une fois le script terminé : `cyberdog:download /chemin` télécharge un fichier sur cet ordinateur, `cyberdog:open /chemin` ouvre un fichier dans l'éditeur ou un dossier dans l'explorateur, `cyberdog:terminal [/chemin]` ouvre le terminal, `cyberdog:refresh` actualise l'explorateur, `cyberdog:notify texte` affiche un message, `cyberdog:url https://…` ouvre un lien.
+
+**Actions qui demandent.** Affichez un formulaire et arrêtez le script ; Cyberdog l'affiche, puis relance le script avec chaque réponse dans sa variable :
+
+```bash
+if [ -z "$FILE" ]; then
+  echo "cyberdog:title Télécharger un log"
+  echo "cyberdog:select FILE|Application"
+  echo "cyberdog:option FILE|/app/log/wildfly-ideophm/debug.log|ideophm"
+  echo "cyberdog:option FILE|/app/log/wildfly-ideolink/debug.log|ideolink"
+  exit 0
+fi
+echo "cyberdog:download $FILE"
+```
+
+`cyberdog:input VAR|Libellé|défaut` demande un texte et `cyberdog:buttons VAR|Question|Oui=yes|Non=no` affiche des boutons. Une action peut être réservée à un serveur, et un clic droit sur un serveur liste ses actions pour les lancer directement.
+
 ### Gestionnaire de transferts et navigation distante
 
 Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Survolez-le ou cliquez dessus pour voir les transferts simultanés, leur progression, le débit, le temps restant estimé, les boutons d’annulation et les résultats récents. Les dossiers incluent leurs fichiers imbriqués. Une annulation peut laisser un fichier partiel à destination ; les fichiers déjà transférés sont conservés. L’historique récent reste en mémoire et peut être effacé.
@@ -388,6 +406,16 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 ## 📰 Notes de version
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
+
+### 1.14.0
+
+- **Renommer d'un clic** : cliquez de nouveau sur le nom du fichier sélectionné pour le renommer (le nom est sélectionné sans son extension, comme dans le Finder). F2 et clic droit > Renommer fonctionnent toujours.
+- **Afficher dans le Finder / l'Explorateur** : la notification « Téléchargé » et les téléchargements terminés de la liste des transferts ont un bouton qui montre le fichier sur votre ordinateur, comme dans un navigateur. La liste des transferts indique aussi l'heure de début et de fin et la durée de chaque transfert.
+- **Actions propres à un serveur** : une action peut être réservée à un serveur (« Disponible pour » dans son formulaire). Elle n'apparaît que sur ce serveur et s'exporte avec lui.
+- **Clic droit sur un serveur > Actions** : lancez directement une de ses actions (le serveur s'ouvre sur sa vue Actions), ou créez-en une.
+- **Commandes Cyberdog dans les actions** : une ligne affichée par un script peut télécharger un fichier (`cyberdog:download`), ouvrir un fichier ou un dossier (`cyberdog:open`), ouvrir le terminal (`cyberdog:terminal`), actualiser l'explorateur, afficher un message ou ouvrir un lien web.
+- **Actions qui demandent** : `cyberdog:select`, `cyberdog:input` et `cyberdog:buttons` affichent un formulaire (liste, texte, boutons) ; le script est ensuite relancé avec les réponses dans ses variables. Exemple : choisir un log dans une liste, puis le télécharger. Tout est expliqué avec le bouton ⓘ de la vue Actions.
+- **Éditeur d'action plus grand**, avec un bouton qui l'agrandit à toute la fenêtre.
 
 ### 1.13.1
 

@@ -28,11 +28,12 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 
 | | |
 |---|---|
-| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns (name, size, date, owner, group, permissions, type, extension), drag & drop from your desktop, right-click actions, **instant remote search**, **split view** and one-click **archive extraction**. |
+| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns, clickable path, drag & drop, **copy / cut / paste between servers**, a transfer queue that asks what to do with existing files, **instant remote search**, name filter, **split view**, properties and one-click **archive extraction**. |
+| ✍️ **Built-in editor** | Double-click a file to edit it in the editor of VS Code, with syntax colours, tabs and split view. Encodings and line endings are kept as they are. |
 | 🖥️ **Terminal included** | One click opens an SSH terminal *under* the explorer, already `cd`'d into the folder you are browsing. No more juggling windows. |
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
 | ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
-| ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. |
+| ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. Actions can ask questions (lists, text, buttons), download files and drive Cyberdog. |
 | 🔌 **Many protocols** | SFTP, FTP/FTPS, S3 and compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob and Files, WebDAV, SMB, Dropbox, OneDrive and Google Drive, all in the same explorer. |
 | 🛡️ **Bastions** | Reach private servers through a reusable bastion, with a route test and fingerprint checks. |
 | 👥 **Free teams** | Share servers, scripts and paths with roles, invitation links and history. The account is optional. |
@@ -292,6 +293,23 @@ Save your everyday bash snippets (restart a stack, clean logs, disk report…) n
 
 <img src="docs/screenshots/actions.png" alt="Quick actions" width="100%">
 
+**Cyberdog commands.** A line printed by an action drives the app once the script has run: `cyberdog:download /path` downloads a file to this computer, `cyberdog:open /path` opens a file in the editor or a folder in the explorer, `cyberdog:terminal [/path]` opens the terminal, `cyberdog:refresh` refreshes the explorer, `cyberdog:notify text` shows a message, `cyberdog:url https://…` opens a link.
+
+**Actions that ask.** Print a form and stop; Cyberdog shows it, then runs the script again with each answer in its variable:
+
+```bash
+if [ -z "$FILE" ]; then
+  echo "cyberdog:title Download a log"
+  echo "cyberdog:select FILE|Application"
+  echo "cyberdog:option FILE|/app/log/wildfly-ideophm/debug.log|ideophm"
+  echo "cyberdog:option FILE|/app/log/wildfly-ideolink/debug.log|ideolink"
+  exit 0
+fi
+echo "cyberdog:download $FILE"
+```
+
+`cyberdog:input VAR|Label|default` asks for text and `cyberdog:buttons VAR|Question|Yes=yes|No=no` shows buttons. Actions can be made for a single server, and a right-click on a server lists its actions to run them directly.
+
 ### Transfer manager and remote navigation
 
 The explorer footer shows the current upload or download. Hover over it or click it to see concurrent transfers, byte progress, transfer speed, approximate remaining time, cancellation and recent results. Folder transfers include nested files. Cancelling can leave a partial destination file; completed files are kept. Recent transfer history is held in memory and can be cleared.
@@ -388,6 +406,16 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 ## 📰 Release notes
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
+
+### 1.14.0
+
+- **Click to rename**: click the name of the selected file again to rename it (the name is selected without its extension, as in the Finder). F2 and right-click > Rename still work.
+- **Show in Finder / Explorer**: the "Downloaded" notification and the finished downloads of the transfer list have a button that shows the file on your computer, as browsers do. The transfer list also gives the start and end times and how long each transfer took.
+- **Actions for one server**: an action can be made for a single server ("Available for" in its form). It is shown only on that server and exported with it.
+- **Right-click a server > Actions**: run any of its actions directly (the server opens on its Actions view), or create one.
+- **Cyberdog commands in actions**: a line printed by a script can download a file (`cyberdog:download`), open a file or a folder (`cyberdog:open`), open the terminal (`cyberdog:terminal`), refresh the explorer, show a message or open a web link.
+- **Actions that ask**: `cyberdog:select`, `cyberdog:input` and `cyberdog:buttons` show a form (list, text, buttons); the script then runs again with the answers in its variables. Example: pick a log in a list, then download it. Everything is explained with the ⓘ button of the Actions view.
+- **Bigger action editor**, with a button that enlarges it to the whole window.
 
 ### 1.13.1
 

@@ -57,14 +57,17 @@ for (const p of paths) {
     assert.strictEqual(r.status, 0, `${prof.id} ${a}: ${r.stderr}`)
   }
 }
-const env = { PATH: '/nonexistent' }
-// the absolute fallback is pointed elsewhere: CI images (GitHub's Ubuntu) do have /usr/sbin/nginx
-const missing = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'test').cmd.replace('/usr/sbin/nginx', '/nonexistent/nginx')], { encoding: 'utf8', env })
-assert.strictEqual(missing.status, 127)
-assert.ok(missing.stdout.includes('Not installed: nginx'))
-const noUnit = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'status').cmd], { encoding: 'utf8', env })
-assert.strictEqual(noUnit.status, 1)
-assert.ok(noUnit.stdout.includes('Service not found: nginx.service'))
+// run for real where there is a /bin/sh (not on Windows: the commands are for the server)
+if (process.platform !== 'win32') {
+  const env = { PATH: '/nonexistent' }
+  // the absolute fallback is pointed elsewhere: CI images (GitHub's Ubuntu) do have /usr/sbin/nginx
+  const missing = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'test').cmd.replace('/usr/sbin/nginx', '/nonexistent/nginx')], { encoding: 'utf8', env })
+  assert.strictEqual(missing.status, 127)
+  assert.ok(missing.stdout.includes('Not installed: nginx'))
+  const noUnit = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'status').cmd], { encoding: 'utf8', env })
+  assert.strictEqual(noUnit.status, 1)
+  assert.ok(noUnit.stdout.includes('Service not found: nginx.service'))
+}
 
 // ---------- checker output → problems in the edited file ----------
 const P = (out, p) => c.problems(out, p).map(x => [x.line, x.message, x.severity])

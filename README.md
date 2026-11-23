@@ -32,7 +32,8 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 | ✍️ **Built-in editor** | Double-click a file to edit it in the editor of VS Code, with syntax colours, tabs and split view. Encodings and line endings are kept as they are. |
 | 🖥️ **Terminal included** | One click opens an SSH terminal *under* the explorer, already `cd`'d into the folder you are browsing. No more juggling windows. |
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
-| ⚙️ **Services, logs & Docker** | Start/stop/restart `systemctl` services, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, start/stop) and inspect images. |
+| 🔄 **Folder synchronization** | Keep a local folder in sync with the server: compare with a preview of added, modified and deleted files, or let every save go up on its own. |
+| ⚙️ **Services, logs, Docker & Kubernetes** | Start/stop/restart `systemctl` services, read and run **cron jobs and systemd timers**, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, restart, recreate, shell) and browse **Kubernetes** with the server's `kubectl`. Test and reload nginx, Apache or sshd configs right from the editor. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. Actions can ask questions (lists, text, buttons), download files and drive Cyberdog. |
 | 🔌 **Many protocols** | SFTP, FTP/FTPS, S3 and compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob and Files, WebDAV, SMB, Dropbox, OneDrive and Google Drive, all in the same explorer. |
 | 🛡️ **Bastions** | Reach private servers through a reusable bastion, with a route test and fingerprint checks. |
@@ -219,6 +220,8 @@ Double-click a file (or press Enter) to open it in an editor inside Cyberdog, th
 
 Files keep their encoding (UTF-8 with or without BOM, UTF-16, Windows-1252) and their line endings. A file changed on the server in the meantime is never overwritten without asking. Binary files and files over 10 MB open in your usual application instead.
 
+**Test and reload, from the editor**: for a configuration file Cyberdog knows — nginx, Apache, `sshd_config`, HAProxy, Caddy, systemd units, Docker Compose and sudoers — a bar under the tabs shows the service and its state, with **Test** (`nginx -t`, `apachectl configtest`, `sshd -t`, `haproxy -c`, `caddy validate`, `systemd-analyze verify`, `docker compose config`, `visudo -c`), **Reload**, **Restart** and **Save and apply**: save, test, then reload only if the test passes. Errors are underlined on their line, a click jumps there, and **Restore previous version** puts back what was on the server before your last save. `sudo` is used as for services; `sshd` is only reloaded, never restarted, so open sessions stay up.
+
 **Edit with…** downloads the file, opens it in VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (whatever is installed) and **uploads it back every time you save**.
 
 <img src="docs/screenshots/menu.png" alt="Context menu with Edit with submenu" width="100%">
@@ -308,6 +311,10 @@ The ⚙️ button lists your `systemctl` services with their state, a search box
 
 <img src="docs/screenshots/services.png" alt="systemd services" width="100%">
 
+### Scheduled tasks
+
+The 🕒 button gathers your **crontab**, the system crontabs (`/etc/crontab`, `/etc/cron.d`, `/etc/cron.daily`…) and the **systemd timers**, sorted by next run, failed timers first. Each schedule is written in plain words (*Monday to Friday at 09:00*) with its next runs in the server's time. Add, edit, disable or delete tasks of your crontab with a live preview of the schedule and presets; **Run now** any task (as cron would: from your home folder, with the crontab's variables) and see its output; start, enable or disable a timer and follow its service's journal. System crontabs are read-only.
+
 ### Live logs
 
 The 📜 button follows your logs in real time: the **system journal** (`journalctl -f`), a **single unit**, **Nginx** error/access logs, `syslog`, `auth.log` or **any file**. Filter by text and by level, see errors and warnings **highlighted** (with counters), pause by scrolling, and keep **favorite searches** one click away.
@@ -320,6 +327,9 @@ The 📦 button lists your containers with live **CPU / RAM usage**, lets you **
 
 <img src="docs/screenshots/docker.png" alt="Docker containers" width="100%">
 <img src="docs/screenshots/docker-logs.png" alt="Live container logs" width="100%">
+
+**Kubernetes**, in the same panel: switch from *Docker* to *Kubernetes* to browse the cluster with the server's own `kubectl` (or `k3s kubectl`, `microk8s kubectl`), over SSH, nothing to install. Pick the context and namespace, then **pods** (status as in `kubectl get`: *CrashLoopBackOff*, *Init:1/2*, restarts and the last termination reason, CPU/RAM when metrics-server is there), **workloads** (deployments, statefulsets, daemonsets with their ready replicas), **services**, **ingresses**, **nodes** and **events**. Click a pod for its live logs (container by container), open a **shell** in it in the terminal below, **describe** or read the **YAML** of any object, delete a pod so that it is recreated, **restart** (rolling) or **scale** a workload. A kubeconfig only root can read (k3s, microk8s) switches to `sudo` by itself, as for Docker.
+
 
 ### Quick actions
 
@@ -353,6 +363,19 @@ When a file **already exists** at the destination, Cyberdog asks: overwrite, ove
 Finished downloads, in the queue and in the *Downloaded* notification, have a **Show in Finder / Explorer** button that reveals the file on your computer.
 
 The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
+
+### Folder synchronization
+
+Pair a folder on your computer with a folder on the server, the way WinSCP's *Keep remote directory up to date* does. Right-click in the explorer (the background or a folder) > **Synchronize with a local folder…**, choose the local folder, then:
+
+- **Compare and synchronize**: Cyberdog lists both sides and shows what would change — **added**, **modified**, **deleted** and **conflicts** (a file changed on the server since the last sync, or newer there) — with a checkbox per file and per group. Only what you tick is sent.
+- **Keep the server up to date**: after that first review, every file you save, create or delete locally is sent on its own, a few hundred milliseconds later, through the transfer queue (pause, resume, retry). Watching starts again when you open the server, and after the computer wakes up.
+
+Deleting on the server is off by default. A file only on the server that was never synchronized is never deleted unless you tick it, deletions found after a restart wait for your review, and a large batch of deletions (an emptied or unmounted folder) is never applied on its own. `.git`, `node_modules`, `.DS_Store`, `*.swp`… are excluded by default; the list is yours to edit. On SFTP the local date is kept on the server, so the next comparison sees untouched files as identical.
+
+The **Sync** button of the right bar lists the synchronized folders of the server with their state (watching, sending, last sync, deletions waiting) and Compare, Watch / Pause, Edit and Delete. A badge in the path bar shows that the folder you browse is synchronized. With the **local pane** open next to the server, a button compares the two folders shown.
+
+Synchronization goes from your computer to the server; it works with every protocol (SFTP, FTP, S3, Azure, WebDAV…).
 
 ### Themes & languages
 
@@ -447,6 +470,15 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 ## 📰 Release notes
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
+
+### 1.15.0
+
+- **Folder synchronization**: pair a local folder with a folder on the server. **Compare and synchronize** shows the added, modified and deleted files and the conflicts, each one can be unticked; **Keep the server up to date** then sends every local change on its own, through the transfer queue. Deletions on the server are off by default and never applied in bulk without you. Right-click > *Synchronize with a local folder…*, the new **Sync** view of the right bar, a badge on synchronized folders, and a button that compares the local pane with the server pane.
+- **Test and reload from the editor**: for nginx, Apache, `sshd_config`, HAProxy, Caddy, systemd units, Docker Compose and sudoers, a bar shows the service with **Test**, **Reload**, **Restart** and **Save and apply** (reloaded only if the test passes). Errors are underlined on their line; **Restore previous version** puts back what was there before your last save.
+- **Scheduled tasks**: a new view gathers your crontab, the system crontabs and the systemd timers, written in plain words with their next runs. Add, edit, disable, delete and **run now** your cron tasks; start, enable or disable timers and follow their journal.
+- **Kubernetes**, in the Docker view: contexts and namespaces, pods, workloads, services, ingresses, nodes and events with the server's own `kubectl` (or k3s / microk8s). Live pod logs, shell in a pod, describe, YAML, delete a pod, restart or scale a workload.
+- **Container actions in the log view**: restart, pause, stop / start, recreate (`docker compose up -d --force-recreate`) and a shell in the terminal below.
+- **AZERTY-safe shortcuts**: ⌘Z on an AZERTY keyboard no longer closes the tab, and shortcuts no longer fire while typing in the editor.
 
 ### 1.14.0
 

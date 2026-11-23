@@ -32,7 +32,8 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 | ✍️ **Éditeur intégré** | Double-cliquez sur un fichier pour le modifier dans l'éditeur de VS Code, avec coloration syntaxique, onglets et vue scindée. Encodages et fins de ligne sont conservés tels quels. |
 | 🖥️ **Terminal inclus** | Un clic ouvre un terminal SSH *sous* l'explorateur, déjà placé dans le dossier que vous parcourez. Fini la jonglerie entre fenêtres. |
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
-| ⚙️ **Services, logs et Docker** | Démarrez/arrêtez/redémarrez les services `systemctl`, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, démarrage/arrêt) et inspectez les images. |
+| 🔄 **Synchronisation de dossiers** | Gardez un dossier local synchronisé avec le serveur : comparez avec un aperçu des fichiers ajoutés, modifiés et supprimés, ou laissez chaque enregistrement partir tout seul. |
+| ⚙️ **Services, logs, Docker et Kubernetes** | Démarrez/arrêtez/redémarrez les services `systemctl`, lisez et lancez vos **tâches cron et timers systemd**, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, redémarrage, recréation, shell) et parcourez **Kubernetes** avec le `kubectl` du serveur. Testez et rechargez vos configurations nginx, Apache ou sshd depuis l’éditeur. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. Les actions peuvent poser des questions (listes, texte, boutons), télécharger des fichiers et piloter Cyberdog. |
 | 🔌 **Nombreux protocoles** | SFTP, FTP/FTPS, S3 et compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob et Files, WebDAV, SMB, Dropbox, OneDrive et Google Drive, dans le même explorateur. |
 | 🛡️ **Bastions** | Atteignez les serveurs privés par un bastion réutilisable, avec test du trajet et vérification des empreintes. |
@@ -219,6 +220,8 @@ Double-cliquez sur un fichier (ou Entrée) pour l'ouvrir dans un éditeur intég
 
 Les fichiers gardent leur encodage (UTF-8 avec ou sans BOM, UTF-16, Windows-1252) et leurs fins de ligne. Un fichier modifié sur le serveur entre-temps n'est jamais écrasé sans vous demander. Les fichiers binaires et ceux de plus de 10 Mo s'ouvrent plutôt dans votre application habituelle.
 
+**Tester et recharger, depuis l’éditeur** : pour un fichier de configuration connu — nginx, Apache, `sshd_config`, HAProxy, Caddy, unités systemd, Docker Compose et sudoers — une barre sous les onglets affiche le service et son état, avec **Tester** (`nginx -t`, `apachectl configtest`, `sshd -t`, `haproxy -c`, `caddy validate`, `systemd-analyze verify`, `docker compose config`, `visudo -c`), **Recharger**, **Redémarrer** et **Enregistrer et appliquer** : enregistrement, test, puis rechargement seulement si le test réussit. Les erreurs sont soulignées à leur ligne, un clic y mène, et **Restaurer la version précédente** remet ce qui était sur le serveur avant votre dernier enregistrement. `sudo` est géré comme pour les services ; `sshd` est seulement rechargé, jamais redémarré, pour garder les sessions ouvertes.
+
 **Éditer avec…** télécharge le fichier, l'ouvre dans VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (ce qui est installé) et **le renvoie sur le serveur à chaque enregistrement**.
 
 <img src="docs/screenshots/menu.png" alt="Menu contextuel avec le sous-menu Éditer avec" width="100%">
@@ -308,6 +311,10 @@ Le bouton ⚙️ liste vos services `systemctl` avec leur état, une recherche e
 
 <img src="docs/screenshots/services.png" alt="Services systemd" width="100%">
 
+### Tâches planifiées
+
+Le bouton 🕒 réunit votre **crontab**, les crontabs système (`/etc/crontab`, `/etc/cron.d`, `/etc/cron.daily`…) et les **timers systemd**, triés par prochaine exécution, timers en échec en tête. Chaque planification est traduite en clair (*Du lundi au vendredi à 09:00*) avec ses prochaines exécutions à l’heure du serveur. Ajoutez, modifiez, désactivez ou supprimez les tâches de votre crontab avec un aperçu en direct et des préréglages ; **lancez maintenant** n’importe quelle tâche (comme cron : depuis votre dossier personnel, avec les variables de la crontab) et lisez sa sortie ; démarrez, activez ou désactivez un timer et suivez le journal de son service. Les crontabs système sont en lecture seule.
+
 ### Logs en direct
 
 Le bouton 📜 suit vos logs en temps réel : le **journal système** (`journalctl -f`), **une unité**, les logs **Nginx** (erreurs/accès), `syslog`, `auth.log` ou **n'importe quel fichier**. Filtrez par texte et par niveau, repérez les erreurs et avertissements **en surbrillance** (avec compteurs), mettez en pause en remontant, et gardez vos **recherches favorites** à un clic.
@@ -320,6 +327,9 @@ Le bouton 📦 liste vos conteneurs avec leur **utilisation CPU / RAM en direct*
 
 <img src="docs/screenshots/docker.png" alt="Conteneurs Docker" width="100%">
 <img src="docs/screenshots/docker-logs.png" alt="Logs d'un conteneur en direct" width="100%">
+
+**Kubernetes**, dans le même panneau : passez de *Docker* à *Kubernetes* pour parcourir le cluster avec le `kubectl` du serveur (ou `k3s kubectl`, `microk8s kubectl`), via SSH, sans rien installer. Choisissez le contexte et le namespace, puis les **pods** (statut comme `kubectl get` : *CrashLoopBackOff*, *Init:1/2*, redémarrages et raison du dernier arrêt, CPU/RAM si metrics-server est présent), les **workloads** (deployments, statefulsets, daemonsets et leurs réplicas prêts), les **services**, les **ingress**, les **nœuds** et les **événements**. Un clic sur un pod affiche ses logs en direct (conteneur par conteneur) ; ouvrez-y un **shell** dans le terminal du bas, **décrivez** ou lisez le **YAML** de n'importe quel objet, supprimez un pod pour qu'il soit recréé, **redémarrez** (progressivement) ou **mettez à l'échelle** un workload. Un kubeconfig lisible seulement par root (k3s, microk8s) passe tout seul par `sudo`, comme pour Docker.
+
 
 ### Actions rapides
 
@@ -353,6 +363,19 @@ Quand un fichier **existe déjà** à destination, Cyberdog demande : écraser, 
 Les téléchargements terminés, dans la file et dans la notification *Téléchargé*, ont un bouton **Afficher dans le Finder / l’Explorateur** qui montre le fichier sur votre ordinateur.
 
 Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
+
+### Synchronisation de dossiers
+
+Associez un dossier de votre ordinateur à un dossier du serveur, comme le *Garder le répertoire distant à jour* de WinSCP. Clic droit dans l’explorateur (sur le fond ou sur un dossier) > **Synchroniser avec un dossier local…**, choisissez le dossier local, puis :
+
+- **Comparer et synchroniser** : Cyberdog parcourt les deux côtés et montre ce qui changerait — fichiers **ajoutés**, **modifiés**, **supprimés** et **conflits** (un fichier modifié sur le serveur depuis la dernière synchro, ou plus récent là-bas) — avec une case par fichier et par groupe. Seul ce que vous cochez est envoyé.
+- **Garder le serveur à jour** : après cette première vérification, chaque fichier enregistré, créé ou supprimé en local est envoyé tout seul, quelques centaines de millisecondes plus tard, par la file de transferts (pause, reprise, nouvel essai). La surveillance reprend quand vous ouvrez le serveur, et à la sortie de veille.
+
+La suppression côté serveur est désactivée par défaut. Un fichier présent seulement sur le serveur et jamais synchronisé n’est jamais supprimé sans que vous le cochiez, les suppressions trouvées après un redémarrage attendent votre validation, et un grand nombre de suppressions (dossier vidé ou démonté) n’est jamais appliqué tout seul. `.git`, `node_modules`, `.DS_Store`, `*.swp`… sont exclus par défaut ; la liste est modifiable. En SFTP, la date locale est conservée sur le serveur : la comparaison suivante voit les fichiers inchangés comme identiques.
+
+Le bouton **Synchro** de la barre de droite liste les dossiers synchronisés du serveur avec leur état (surveillé, envoi en cours, dernière synchro, suppressions en attente) et les actions Comparer, Surveiller / Pause, Modifier et Supprimer. Un badge dans la barre de chemin signale que le dossier parcouru est synchronisé. Avec le **volet local** ouvert à côté du serveur, un bouton compare les deux dossiers affichés.
+
+La synchronisation va de l’ordinateur vers le serveur ; elle fonctionne avec tous les protocoles (SFTP, FTP, S3, Azure, WebDAV…).
 
 ### Thèmes et langues
 
@@ -447,6 +470,15 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 ## 📰 Notes de version
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
+
+### 1.15.0
+
+- **Synchronisation de dossiers** : associez un dossier local à un dossier du serveur. **Comparer et synchroniser** montre les fichiers ajoutés, modifiés, supprimés et les conflits, chacun pouvant être décoché ; **Garder le serveur à jour** envoie ensuite chaque changement local tout seul, par la file de transferts. La suppression côté serveur est désactivée par défaut et jamais appliquée en masse sans vous. Clic droit > *Synchroniser avec un dossier local…*, nouvelle vue **Synchro** dans la barre de droite, badge sur les dossiers synchronisés, et bouton qui compare le volet local avec celui du serveur.
+- **Tester et recharger depuis l’éditeur** : pour nginx, Apache, `sshd_config`, HAProxy, Caddy, les unités systemd, Docker Compose et sudoers, une barre affiche le service avec **Tester**, **Recharger**, **Redémarrer** et **Enregistrer et appliquer** (rechargé seulement si le test passe). Les erreurs sont soulignées sur leur ligne ; **Restaurer la version précédente** remet ce qu’il y avait avant votre dernier enregistrement.
+- **Tâches planifiées** : une nouvelle vue réunit votre crontab, les crontabs système et les timers systemd, écrits en clair avec leurs prochaines exécutions. Ajoutez, modifiez, désactivez, supprimez et **lancez maintenant** vos tâches cron ; démarrez, activez ou désactivez les timers et suivez leur journal.
+- **Kubernetes**, dans la vue Docker : contextes et namespaces, pods, workloads, services, ingress, nœuds et événements avec le `kubectl` du serveur (ou k3s / microk8s). Logs de pod en direct, shell dans un pod, describe, YAML, suppression d’un pod, redémarrage ou mise à l’échelle d’un workload.
+- **Actions sur le conteneur depuis ses logs** : redémarrer, mettre en pause, arrêter / démarrer, recréer (`docker compose up -d --force-recreate`) et un shell dans le terminal du bas.
+- **Raccourcis compatibles AZERTY** : ⌘Z sur un clavier AZERTY ne ferme plus l’onglet, et les raccourcis ne se déclenchent plus pendant la saisie dans l’éditeur.
 
 ### 1.14.0
 

@@ -58,7 +58,8 @@ for (const p of paths) {
   }
 }
 const env = { PATH: '/nonexistent' }
-const missing = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'test').cmd], { encoding: 'utf8', env })
+// the absolute fallback is pointed elsewhere: CI images (GitHub's Ubuntu) do have /usr/sbin/nginx
+const missing = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'test').cmd.replace('/usr/sbin/nginx', '/nonexistent/nginx')], { encoding: 'utf8', env })
 assert.strictEqual(missing.status, 127)
 assert.ok(missing.stdout.includes('Not installed: nginx'))
 const noUnit = spawnSync('/bin/sh', ['-c', c.command('/etc/nginx/nginx.conf', 'nginx', 'status').cmd], { encoding: 'utf8', env })

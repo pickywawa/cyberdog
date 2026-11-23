@@ -18,7 +18,7 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 
 **English** · [Français](README.fr.md)
 
-<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Cyberdog in 10 seconds: open a server, use the terminal, check server health and run a quick action" width="100%"></a>
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Cyberdog tour: open a server, split view, edit and save a file in the built-in editor, terminal, Docker containers and live logs, a custom action with a form, TLS certificates and SSH keys" width="100%"></a>
 
 </div>
 
@@ -28,7 +28,7 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 
 | | |
 |---|---|
-| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns, clickable path, drag & drop, **copy / cut / paste between servers**, a transfer queue that asks what to do with existing files, **instant remote search**, name filter, **split view**, properties and one-click **archive extraction**. |
+| 📁 **A real file explorer** | Browse any server like a local folder: sortable columns, clickable path, drag & drop, **copy / cut / paste between servers**, a transfer queue that asks what to do with existing files, **instant remote search**, name filter, **split view**, properties, **archives created and extracted on the server** and **keyboard shortcuts** for everything. |
 | ✍️ **Built-in editor** | Double-click a file to edit it in the editor of VS Code, with syntax colours, tabs and split view. Encodings and line endings are kept as they are. |
 | 🖥️ **Terminal included** | One click opens an SSH terminal *under* the explorer, already `cd`'d into the folder you are browsing. No more juggling windows. |
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
@@ -126,7 +126,7 @@ Window size, position and maximized state are restored at the next launch. If a 
 
 An optional **Reopen connections at startup** checkbox restores the server tabs and terminals left open when quitting. It is disabled by default. It stores only server references and whether a terminal was open; terminal commands are never replayed.
 
-Double-clicking a file opens it in the selected editor and uploads every saved change back to the server.
+Double-clicking a file opens it in the built-in editor. Binary files and files over 10 MB open in the external editor chosen in *Settings → Editor*, which uploads every saved change back to the server. *Settings → General* also sets how many transfers run at the same time (up to 10).
 
 ---
 
@@ -199,9 +199,25 @@ Right-click a server and choose **Duplicate** to open a prefilled form without c
 
 ### A modern file explorer
 
-Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shift-click), and a right-click menu with *Download as…, Copy name, Copy full path, Edit with…, Extract, Rename, Delete, New folder, New file*.
+Folders first, colored icons by file type, resizable columns, multi-selection (⌘/Ctrl-click, Shift-click), and a right-click menu with *Download as…, Copy, Cut, Paste, Duplicate, Move to…, Copy name, Copy full path, Copy URL, Edit with…, Compress, Extract, Rename, Delete, Properties, New folder, New file*.
 
 <img src="docs/screenshots/explorer.png" alt="File explorer" width="100%">
+
+**Clickable path**: click a folder of the path to go there; click the current folder (or ⌘/Ctrl-L) to type a path. **Rename** by clicking the name of the selected file again (the name is selected without its extension), with F2 or from the right-click menu.
+
+**Copy, cut and paste** (⌘C / ⌘X / ⌘V, Ctrl on Windows and Linux) between folders, panes and servers; ⌘D duplicates, *Move to…* asks for a destination. Drag onto a folder to move, or from one pane to another to copy directly between two servers.
+
+**Name filter**: a discreet filter (`*.log, node_modules`) hides what you don't need, hidden files included. **Properties** (⌘I) gives the size of a folder.
+
+### Built-in editor
+
+Double-click a file (or press Enter) to open it in an editor inside Cyberdog, the one of VS Code (Monaco): syntax colours for about 80 languages, search and replace, multiple cursors and VS Code shortcuts. Several files open in tabs, side by side if you like, with minimap and line-wrap buttons. ⌘S / Ctrl+S saves to the server, ⌘W / Ctrl+W closes.
+
+<img src="docs/screenshots/editor.png" alt="Built-in editor: server.js open next to the file explorer, with tabs for docker-compose.yml and nginx.conf" width="100%">
+
+<img src="docs/screenshots/editor-split.png" alt="Built-in editor split side by side: server.js and nginx.conf" width="100%">
+
+Files keep their encoding (UTF-8 with or without BOM, UTF-16, Windows-1252) and their line endings. A file changed on the server in the meantime is never overwritten without asking. Binary files and files over 10 MB open in your usual application instead.
 
 **Edit with…** downloads the file, opens it in VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (whatever is installed) and **uploads it back every time you save**.
 
@@ -213,7 +229,7 @@ Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shif
 
 <img src="docs/screenshots/search.png" alt="Remote search with autocomplete" width="100%">
 
-**Extract archives in place**: right-click a `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… and choose *Extract here* or *Extract to "name/"* — it runs on the server, nothing is downloaded.
+**Extract archives in place**: right-click a `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… and choose *Extract here* or *Extract to "name/"* — it runs on the server, nothing is downloaded. **Create archives** the same way: select one or more items, then *Compress → .tar.gz* or *.zip* (SSH servers). The archive is created next to the selection and never overwrites an existing file.
 
 **Split view**: the ⧉ button in the explorer toolbar splits it into **two independent explorers** (own path, history, selection, sort and search) to compare folders or work in two places at once. Drag files from one side to the other to copy them, even across folders. Click ⧉ again to merge.
 
@@ -222,6 +238,24 @@ Folders first, colored icons by file type, multi-selection (⌘/Ctrl-click, Shif
 **Drag & drop** files from your desktop to upload them (folders included), or drag files from Cyberdog to your desktop to download them.
 
 **Everything is resizable**: drag the edge of the server list, of the right-hand panel, of the terminal or between the two explorers. Sizes are remembered.
+
+### Keyboard shortcuts
+
+| | macOS | Windows / Linux |
+|---|---|---|
+| Refresh | ⌘R or F5 | Ctrl+R or F5 |
+| Move / extend the selection | ↑ ↓, ⇧↑ ⇧↓ | ↑ ↓, Shift+↑ Shift+↓ |
+| Open, parent folder, back | Enter, ⌘↑, ⌘[ | Enter, Ctrl+↑, Ctrl+[ |
+| Select all, rename, delete | ⌘A, F2, ⌘⌫ | Ctrl+A, F2, Delete |
+| Copy, cut, paste, duplicate | ⌘C, ⌘X, ⌘V, ⌘D | Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D |
+| New folder, new file | ⇧⌘N, ⌥⌘N | Ctrl+Shift+N, Ctrl+Alt+N |
+| Edit the path, copy the path, properties | ⌘L, ⇧⌘C, ⌘I | Ctrl+L, Ctrl+Shift+C, Ctrl+I |
+| Search the server | ⌘F | Ctrl+F |
+| Tabs | ⌘1…9, Ctrl+Tab, ⌘W | Ctrl+1…9, Ctrl+Tab, Ctrl+W |
+| Toggle the terminal | Ctrl+` | Ctrl+` |
+| All shortcuts | ⌘/ | Ctrl+/ |
+
+Tab moves from one pane to the other, and typing the start of a name selects it. Inside the terminal, Ctrl keys stay with the shell.
 
 ### Permissions and ownership
 
@@ -312,7 +346,11 @@ echo "cyberdog:download $FILE"
 
 ### Transfer manager and remote navigation
 
-The explorer footer shows the current upload or download. Hover over it or click it to see concurrent transfers, byte progress, transfer speed, approximate remaining time, cancellation and recent results. Folder transfers include nested files. Cancelling can leave a partial destination file; completed files are kept. Recent transfer history is held in memory and can be cleared.
+The explorer footer shows the current upload or download. Click it to open the **transfer queue**: up to 10 transfers at the same time (*Settings → General*), pause and resume, priorities, reorder, retry failed transfers, and *Queue / Failed / Done* tabs with progress, speed, remaining time, start and end times and duration. Downloads can be added to the queue without starting. Folder transfers include nested files, and interrupted transfers can be **resumed**.
+
+When a file **already exists** at the destination, Cyberdog asks: overwrite, overwrite if newer, overwrite if the size differs, resume, keep both or skip, with *do the same for the next files*.
+
+Finished downloads, in the queue and in the *Downloaded* notification, have a **Show in Finder / Explorer** button that reveals the file on your computer.
 
 The path field supports `~` and `~/…` for the connected user’s home directory. Entering a file path opens its parent folder and selects that file. Saved paths are available immediately after startup, including in the path dropdown.
 
@@ -394,9 +432,12 @@ src/main.js        main process: SSH/SFTP, storage, IPC
 src/renderer.js    explorer, tabs, terminal, search
 src/panels.js      health dashboard, quick actions
 src/ops.js         services, live logs, Docker
-src/archive.js     archive detection + extraction commands
+src/archive.js     archive detection, extraction and compression commands
 src/health.js      remote health script + parsers
-src/i18n.js        translations (EN/FR/DE/IT)
+src/editor-panel.js  built-in editor (Monaco)
+src/transfers.js   transfer queue, conflicts and resume
+src/shortcuts.js   keyboard shortcuts
+src/i18n.js        translations (14 languages, files in src/locales/)
 ```
 
 ## 🌐 Website

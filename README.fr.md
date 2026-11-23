@@ -18,7 +18,7 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 
 [English](README.md) · **Français**
 
-<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Cyberdog en 10 secondes : ouvrir un serveur, utiliser le terminal, voir la santé du serveur et lancer une action rapide" width="100%"></a>
+<a href="https://pickywawa.github.io/cyberdog/"><img src="docs/demo.gif" alt="Tour de Cyberdog : ouvrir un serveur, vue scindée, modifier et enregistrer un fichier dans l'éditeur intégré, terminal, conteneurs Docker et logs en direct, action personnalisée avec formulaire, certificats TLS et clés SSH" width="100%"></a>
 
 </div>
 
@@ -28,7 +28,7 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 
 | | |
 |---|---|
-| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables, chemin cliquable, glisser-déposer, **copier / couper / coller entre serveurs**, une file de transferts qui demande quoi faire des fichiers existants, **recherche distante instantanée**, filtre par nom, **vue scindée**, propriétés et **désarchivage** en un clic. |
+| 📁 **Un vrai explorateur de fichiers** | Naviguez sur un serveur comme dans un dossier local : colonnes triables, chemin cliquable, glisser-déposer, **copier / couper / coller entre serveurs**, une file de transferts qui demande quoi faire des fichiers existants, **recherche distante instantanée**, filtre par nom, **vue scindée**, propriétés, **archives créées et extraites sur le serveur** et **raccourcis clavier** pour tout. |
 | ✍️ **Éditeur intégré** | Double-cliquez sur un fichier pour le modifier dans l'éditeur de VS Code, avec coloration syntaxique, onglets et vue scindée. Encodages et fins de ligne sont conservés tels quels. |
 | 🖥️ **Terminal inclus** | Un clic ouvre un terminal SSH *sous* l'explorateur, déjà placé dans le dossier que vous parcourez. Fini la jonglerie entre fenêtres. |
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
@@ -126,7 +126,7 @@ La taille, la position et l’état maximisé de la fenêtre sont restaurés au 
 
 La case facultative **Rouvrir les connexions au démarrage** restaure les onglets serveurs et terminaux laissés ouverts à la fermeture. Elle est décochée par défaut. Seules les références aux serveurs et la présence d’un terminal sont enregistrées ; aucune commande n’est rejouée.
 
-Un double-clic sur un fichier l'ouvre dans l'éditeur choisi et chaque enregistrement le renvoie sur le serveur.
+Un double-clic sur un fichier l'ouvre dans l'éditeur intégré. Les fichiers binaires et ceux de plus de 10 Mo s'ouvrent dans l'éditeur externe choisi dans *Paramètres → Éditeur*, et chaque enregistrement les renvoie sur le serveur. *Paramètres → Général* fixe aussi le nombre de transferts simultanés (jusqu'à 10).
 
 ---
 
@@ -199,9 +199,25 @@ Le menu clic droit permet aussi de dupliquer un serveur : les champs sont prére
 
 ### Un explorateur de fichiers moderne
 
-Dossiers d'abord, icônes colorées selon le type de fichier, sélection multiple (⌘/Ctrl-clic, Maj-clic) et un menu clic droit : *Télécharger sous…, Copier le nom, Copier le chemin complet, Éditer avec…, Désarchiver, Renommer, Supprimer, Nouveau dossier, Nouveau fichier*.
+Dossiers d'abord, icônes colorées selon le type de fichier, colonnes redimensionnables, sélection multiple (⌘/Ctrl-clic, Maj-clic) et un menu clic droit : *Télécharger sous…, Copier, Couper, Coller, Dupliquer, Déplacer vers…, Copier le nom, Copier le chemin complet, Copier l'URL, Éditer avec…, Compresser, Désarchiver, Renommer, Supprimer, Propriétés, Nouveau dossier, Nouveau fichier*.
 
 <img src="docs/screenshots/explorer.png" alt="Explorateur de fichiers" width="100%">
+
+**Chemin cliquable** : cliquez sur un dossier du chemin pour y aller ; cliquez sur le dossier courant (ou ⌘/Ctrl-L) pour saisir un chemin. **Renommez** en cliquant à nouveau sur le nom du fichier sélectionné (le nom est sélectionné sans son extension), avec F2 ou depuis le menu clic droit.
+
+**Copier, couper, coller** (⌘C / ⌘X / ⌘V, Ctrl sous Windows et Linux) entre dossiers, volets et serveurs ; ⌘D duplique, *Déplacer vers…* demande une destination. Glissez sur un dossier pour déplacer, ou d'un volet à l'autre pour copier directement entre deux serveurs.
+
+**Filtre par nom** : un filtre discret (`*.log, node_modules`) masque ce qui ne vous sert pas, fichiers cachés compris. **Propriétés** (⌘I) donne la taille d'un dossier.
+
+### Éditeur intégré
+
+Double-cliquez sur un fichier (ou Entrée) pour l'ouvrir dans un éditeur intégré à Cyberdog, celui de VS Code (Monaco) : coloration syntaxique pour environ 80 langages, rechercher et remplacer, curseurs multiples et raccourcis de VS Code. Plusieurs fichiers s'ouvrent en onglets, côte à côte si vous voulez, avec boutons minimap et retour à la ligne. ⌘S / Ctrl+S enregistre sur le serveur, ⌘W / Ctrl+W ferme.
+
+<img src="docs/screenshots/editor.png" alt="Éditeur intégré : server.js ouvert à côté de l'explorateur, avec des onglets docker-compose.yml et nginx.conf" width="100%">
+
+<img src="docs/screenshots/editor-split.png" alt="Éditeur intégré scindé côte à côte : server.js et nginx.conf" width="100%">
+
+Les fichiers gardent leur encodage (UTF-8 avec ou sans BOM, UTF-16, Windows-1252) et leurs fins de ligne. Un fichier modifié sur le serveur entre-temps n'est jamais écrasé sans vous demander. Les fichiers binaires et ceux de plus de 10 Mo s'ouvrent plutôt dans votre application habituelle.
 
 **Éditer avec…** télécharge le fichier, l'ouvre dans VS Code, Cursor, Sublime Text, Notepad++, TextEdit… (ce qui est installé) et **le renvoie sur le serveur à chaque enregistrement**.
 
@@ -213,7 +229,7 @@ Dossiers d'abord, icônes colorées selon le type de fichier, sélection multipl
 
 <img src="docs/screenshots/search.png" alt="Recherche distante avec autocomplétion" width="100%">
 
-**Désarchivez sur place** : clic droit sur un `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… puis *Désarchiver ici* ou *Désarchiver dans « nom/ »* — l'opération s'exécute sur le serveur, rien n'est téléchargé.
+**Désarchivez sur place** : clic droit sur un `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`, `.gz`… puis *Désarchiver ici* ou *Désarchiver dans « nom/ »* — l'opération s'exécute sur le serveur, rien n'est téléchargé. **Créez des archives** de la même façon : sélectionnez un ou plusieurs éléments, puis *Compresser → .tar.gz* ou *.zip* (serveurs SSH). L'archive est créée à côté de la sélection et n'écrase jamais un fichier existant.
 
 **Vue scindée** : le bouton ⧉ de la barre de l'explorateur le scinde en **deux explorateurs indépendants** (chemin, historique, sélection, tri et recherche propres) pour comparer des dossiers ou travailler à deux endroits en même temps. Glissez des fichiers d'un côté à l'autre pour les copier, même entre dossiers distants. Recliquez sur ⧉ pour fusionner.
 
@@ -222,6 +238,24 @@ Dossiers d'abord, icônes colorées selon le type de fichier, sélection multipl
 **Glisser-déposer** : déposez des fichiers du bureau pour les envoyer (dossiers compris), ou glissez des fichiers de Cyberdog vers votre bureau pour les télécharger.
 
 **Tout est redimensionnable** : tirez le bord de la liste des serveurs, du panneau de droite, du terminal ou la séparation entre les deux explorateurs. Les tailles sont mémorisées.
+
+### Raccourcis clavier
+
+| | macOS | Windows / Linux |
+|---|---|---|
+| Actualiser | ⌘R ou F5 | Ctrl+R ou F5 |
+| Déplacer / étendre la sélection | ↑ ↓, ⇧↑ ⇧↓ | ↑ ↓, Maj+↑ Maj+↓ |
+| Ouvrir, dossier parent, précédent | Entrée, ⌘↑, ⌘[ | Entrée, Ctrl+↑, Ctrl+[ |
+| Tout sélectionner, renommer, supprimer | ⌘A, F2, ⌘⌫ | Ctrl+A, F2, Suppr |
+| Copier, couper, coller, dupliquer | ⌘C, ⌘X, ⌘V, ⌘D | Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+D |
+| Nouveau dossier, nouveau fichier | ⇧⌘N, ⌥⌘N | Ctrl+Maj+N, Ctrl+Alt+N |
+| Modifier le chemin, copier le chemin, propriétés | ⌘L, ⇧⌘C, ⌘I | Ctrl+L, Ctrl+Maj+C, Ctrl+I |
+| Rechercher sur le serveur | ⌘F | Ctrl+F |
+| Onglets | ⌘1…9, Ctrl+Tab, ⌘W | Ctrl+1…9, Ctrl+Tab, Ctrl+W |
+| Afficher / masquer le terminal | Ctrl+` | Ctrl+` |
+| Tous les raccourcis | ⌘/ | Ctrl+/ |
+
+Tab passe d'un volet à l'autre, et taper le début d'un nom le sélectionne. Dans le terminal, les touches Ctrl restent au shell.
 
 ### Permissions et propriétaire
 
@@ -312,7 +346,11 @@ echo "cyberdog:download $FILE"
 
 ### Gestionnaire de transferts et navigation distante
 
-Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Survolez-le ou cliquez dessus pour voir les transferts simultanés, leur progression, le débit, le temps restant estimé, les boutons d’annulation et les résultats récents. Les dossiers incluent leurs fichiers imbriqués. Une annulation peut laisser un fichier partiel à destination ; les fichiers déjà transférés sont conservés. L’historique récent reste en mémoire et peut être effacé.
+Le pied de l’explorateur affiche l’envoi ou le téléchargement en cours. Cliquez dessus pour ouvrir la **file de transferts** : jusqu’à 10 transferts simultanés (*Paramètres → Général*), pause et reprise, priorités, réorganisation, nouvel essai des transferts échoués, et onglets *File / Échecs / Terminés* avec progression, débit, temps restant, heures de début et de fin et durée. Un téléchargement peut être ajouté à la file sans démarrer. Les dossiers incluent leurs fichiers imbriqués, et un transfert interrompu peut être **repris**.
+
+Quand un fichier **existe déjà** à destination, Cyberdog demande : écraser, écraser si plus récent, écraser si la taille diffère, reprendre, garder les deux ou ignorer, avec *faire de même pour les fichiers suivants*.
+
+Les téléchargements terminés, dans la file et dans la notification *Téléchargé*, ont un bouton **Afficher dans le Finder / l’Explorateur** qui montre le fichier sur votre ordinateur.
 
 Le champ de chemin reconnaît `~` et `~/…` comme le dossier personnel de l’utilisateur connecté. Saisir le chemin d’un fichier ouvre son dossier parent et sélectionne le fichier. Les chemins enregistrés sont disponibles dès le démarrage, y compris dans le menu du champ de chemin.
 
@@ -394,9 +432,12 @@ src/main.js        process principal : SSH/SFTP, stockage, IPC
 src/renderer.js    explorateur, onglets, terminal, recherche
 src/panels.js      tableau de bord santé, actions rapides
 src/ops.js         services, logs en direct, Docker
-src/archive.js     détection des archives + commandes de désarchivage
+src/archive.js     détection des archives, commandes de désarchivage et de compression
 src/health.js      script de santé distant + parseurs
-src/i18n.js        traductions (EN/FR/DE/IT)
+src/editor-panel.js  éditeur intégré (Monaco)
+src/transfers.js   file de transferts, conflits et reprise
+src/shortcuts.js   raccourcis clavier
+src/i18n.js        traductions (14 langues, fichiers dans src/locales/)
 ```
 
 ## 🌐 Site web

@@ -54,4 +54,13 @@ assert.strictEqual(act(k('Tab', { ctrlKey: true })), 'nextTab')
 assert.strictEqual(label('Mod+Shift+N', true), '⇧⌘N')
 assert.strictEqual(label('Mod+Shift+N', false), 'Ctrl+Shift+N')
 assert.strictEqual(label('Mod+R', false), 'Ctrl+R')
+
+// AZERTY : ⌘Z (touche Z à la place du W QWERTY, code KeyW) reste un « annuler », pas une fermeture d'onglet
+assert.strictEqual(act(k('z', { metaKey: true }, 'KeyW'), { mac: true, editing: true }), null)
+assert.strictEqual(act(k('z', { metaKey: true }, 'KeyW'), { mac: true }), null)
+assert.strictEqual(act(k('Z', { metaKey: true, shiftKey: true }, 'KeyW'), { mac: true, editing: true }), null)
+assert.strictEqual(act(k('w', { metaKey: true }, 'KeyZ'), { mac: true }), 'closeTab')
+assert.strictEqual(act(k('q', { metaKey: true }, 'KeyA'), { mac: true }), null) // ⌘Q AZERTY n'est pas « tout sélectionner »
+// Disposition non latine : la position physique sert toujours
+assert.strictEqual(act(k('ц', { metaKey: true }, 'KeyW'), { mac: true }), 'closeTab')
 console.log('ok')

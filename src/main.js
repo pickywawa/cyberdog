@@ -1444,10 +1444,10 @@ ipcMain.handle('favs:delete', (_, id) => { favs = favs.filter(f => f.id !== id);
 
 // ---------- Docker ----------
 // docker direct ; si « permission denied » (pas dans le groupe docker) on réessaie avec sudo et on s'en souvient pour la connexion
-async function docker(c, args, { timeout = 30000 } = {}) {
+async function docker(c, args, { timeout = 30000, bin = 'docker' } = {}) {
   const run = sudo => {
     const s = sudo ? sudoOf(c) : null
-    return exec(c.client, `${s ? s.prefix + ' ' : ''}docker ${args.map(q).join(' ')}`, { timeout, input: s?.input })
+    return exec(c.client, `${s ? s.prefix + ' ' : ''}${bin} ${args.map(q).join(' ')}`, { timeout, input: s?.input })
   }
   let r = await run(!!c.dockerSudo)
   if (!c.dockerSudo && r.code !== 0 && /permission denied/i.test(r.out)) { c.dockerSudo = true; r = await run(true) }
@@ -1464,7 +1464,7 @@ ipcMain.handle('docker:list', async (_, id) => {
   const stats = new Map(jsonLines(st.out).map(s => [s.ID ?? s.Container, s]))
   return jsonLines(ps.out).map(p => {
     const s = stats.get(p.ID)
-    return { id: p.ID, name: p.Names, image: p.Image, state: p.State, status: p.Status, ports: p.Ports, cpu: s ? parseFloat(s.CPUPerc) : null, mem: s ? parseFloat(s.MemPerc) : null, memUsage: s?.MemUsage }
+    return { id: p.ID, name: p.Names, image: p.Image, state: p.State, status: p.Status, ports: p.Ports, compose: /(^|,)com\.docker\.compose\.service=/.test(p.Labels || ''), sudo: !!c.dockerSudo, cpu: s ? parseFloat(s.CPUPerc) : null, mem: s ? parseFloat(s.MemPerc) : null, memUsage: s?.MemUsage }
   })
 })
 
@@ -1483,8 +1483,26 @@ ipcMain.handle('docker:inspect', async (_, id, kind, target) => {
 })
 
 ipcMain.handle('docker:action', async (_, id, target, action) => {
-  if (!DOCKER_ID.test(target) || !['start', 'stop', 'restart'].includes(action)) throw new Error('invalid')
+  if (!DOCKER_ID.test(target) || !['start', 'stop', 'restart', 'pause', 'unpause'].includes(action)) throw new Error('invalid')
   const r = await docker(getConn(id), [action, target], { timeout: 90000 })
+  if (r.code !== 0) throw new Error(lastLines(r.out))
+})
+
+// docker compose up -d --force-recreate --no-deps <service>, à partir des labels posés par Compose sur le conteneur
+ipcMain.handle('docker:recreate', async (_, id, target) => {
+  if (!DOCKER_ID.test(target)) throw new Error('invalid')
+  const c = getConn(id)
+  const ins = await docker(c, ['inspect', '--format', '{{json .Config.Labels}}', target])
+  if (ins.code !== 0) throw new Error(lastLines(ins.out))
+  const L = JSON.parse(ins.out.trim() || '{}') || {}
+  const svc = L['com.docker.compose.service']
+  if (!svc) throw new Error(t('docker.not_compose'))
+  const files = (L['com.docker.compose.project.config_files'] || '').split(',').filter(Boolean)
+  const dir = L['com.docker.compose.project.working_dir']
+  const args = [...(L['com.docker.compose.project'] ? ['-p', L['com.docker.compose.project']] : []), ...(dir ? ['--project-directory', dir] : []), ...files.flatMap(f => ['-f', f]), 'up', '-d', '--force-recreate', '--no-deps', svc]
+  let r = await docker(c, ['compose', ...args], { timeout: 300000 })
+  // Compose v1 (binaire docker-compose) si le plugin « docker compose » est absent
+  if (r.code !== 0 && /is not a docker command|unknown command|unknown shorthand flag/i.test(r.out)) r = await docker(c, args, { timeout: 300000, bin: 'docker-compose' })
   if (r.code !== 0) throw new Error(lastLines(r.out))
 })
 

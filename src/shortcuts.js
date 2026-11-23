@@ -56,7 +56,11 @@
     const code = key.startsWith('[') && key.slice(1, -1)
     if (code) return e.code === code && !!e.shiftKey === mods.shift
     if (!!e.shiftKey !== mods.shift) return false
-    return String(e.key).toLowerCase() === key.toLowerCase() || (/^[a-z0-9]$/i.test(key) && e.code === (/\d/.test(key) ? 'Digit' : 'Key') + key.toUpperCase())
+    if (String(e.key).toLowerCase() === key.toLowerCase()) return true
+    // Physical position (e.code) only when the key does not give a Latin letter (Cyrillic layout, ⌥ on macOS, digits
+    // on AZERTY…). Otherwise ⌘Z on AZERTY, whose code is KeyW, would be taken for ⌘W.
+    if (/^[a-z]$/i.test(e.key)) return false
+    return /^[a-z0-9]$/i.test(key) && e.code === (/\d/.test(key) ? 'Digit' : 'Key') + key.toUpperCase()
   }
 
   // e : KeyboardEvent (ou objet équivalent) ; ctx : { mac, editing, terminal, elsewhere }
@@ -98,7 +102,8 @@
 if (typeof window !== 'undefined' && typeof module === 'undefined') {
   const mac = api.platform === 'darwin'
   const activeTab = () => tabs.find(tb => tb.id === activeId)
-  const isEditing = el => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) && !el.closest('.term-body')
+  // Monaco's text input is not always a textarea (EditContext): the code view counts as a text field
+  const isEditing = el => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || !!el.closest('.monaco-editor')) && !el.closest('.term-body')
 
   // Même convention que le Maj+clic de renderer.js : ex.last est l'ancre, ex.cursor la ligne courante au clavier.
   function cursorOf(ex) {

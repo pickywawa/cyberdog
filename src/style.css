@@ -402,7 +402,13 @@ body.resizing-y { cursor: row-resize; }
 /* ---------- Docker ---------- */
 .docker-view { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
 .rp-body.flush .docker-view { gap: 0; }
-.dback { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; }
+.dback { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; flex-wrap: wrap; }
+.dback > b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-acts { display: inline-flex; align-items: center; gap: 2px; }
+.dk-acts .ib { width: 28px; height: 28px; }
+.dk-acts .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.dk-state { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 6px; font-size: 12px; }
+.dk.click:active { transform: translateY(1px); }
 .dk { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
 .dk.click { cursor: pointer; }
 .dk.click:hover { background: var(--hover); }

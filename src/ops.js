@@ -287,25 +287,70 @@ function leaveDocker(tab) {
   D.view = null
 }
 
+const NO_CONFIRM = ['start', 'unpause']
+const actLabel = a => t((['start', 'stop', 'restart'].includes(a) ? 'svc.' : 'docker.') + a)
+
+// cible = nom du conteneur : il survit à un --force-recreate (l'id, lui, change)
 async function dockerAct(tab, c, action) {
-  if (action !== 'start' && !confirm(t('docker.confirm.' + action, { name: c.name }))) return
+  if (!NO_CONFIRM.includes(action) && !confirm(t('docker.confirm.' + action, { name: c.name }))) return
   const D = tab.docker
-  D.busy.add(c.id)
+  D.busy.add(c.name)
   paintDocker(tab)
+  let ok = false
   try {
-    await api.invoke('docker:action', tab.connId, c.id, action)
+    if (action === 'recreate') await api.invoke('docker:recreate', tab.connId, c.name)
+    else await api.invoke('docker:action', tab.connId, c.name, action)
+    ok = true
     toast(t('docker.ok.' + action, { name: c.name }))
-  } catch (e) { toast(t('svc.err', { action: t('svc.' + action), unit: c.name, error: errText(e) }), true) }
-  D.busy.delete(c.id)
+  } catch (e) { toast(t('svc.err', { action: actLabel(action), unit: c.name, error: errText(e) }), true) }
+  D.busy.delete(c.name)
   D.polling = false
-  await dockerPoll(tab)
+  const v = D.view
+  if (v?.type !== 'logs' || v.c.name !== c.name) return dockerPoll(tab)
+  // vue journal ouverte sur ce conteneur : rafraîchit l'état et relance le flux (docker logs -f s'arrête avec le conteneur)
+  try {
+    D.containers = await api.invoke('docker:list', tab.connId)
+    v.c = D.containers.find(x => x.name === c.name) || v.c
+  } catch {}
+  if (D.view !== v) return
+  if (ok && ['start', 'restart', 'recreate'].includes(action)) v.lv.start({ kind: 'docker', id: c.name })
+  paintDocker(tab)
 }
 
 function dockerLogs(tab, c) {
   const lv = createLogView(tab)
-  tab.docker.view = { type: 'logs', title: t('docker.logs_of', { name: c.name }), lv }
+  tab.docker.view = { type: 'logs', title: t('docker.logs_of', { name: c.name }), lv, c }
   paintDocker(tab)
-  lv.start({ kind: 'docker', id: c.id })
+  lv.start({ kind: 'docker', id: c.name })
+}
+
+// shell interactif dans le terminal du bas (bash si présent, sinon sh)
+async function dockerShell(tab, c) {
+  const cmd = `${c.sudo ? 'sudo ' : ''}docker exec -it ${c.name} sh -c 'command -v bash >/dev/null && exec bash || exec sh'\r`
+  if (!tab.term) {
+    await openTerminal(tab)
+    if (!tab.termId) return
+  }
+  api.send('term:write', tab.termId, cmd)
+  tab.term.focus()
+}
+
+// barre d'actions de la vue journal
+function dockerLogActions(tab, c) {
+  const busy = tab.docker.busy.has(c.name)
+  const btn = (name, key, fn, extra = {}) => h('button', { className: 'ib', innerHTML: icon(name), title: t(key), disabled: busy, onclick: fn, ...extra })
+  const act = a => () => dockerAct(tab, c, a)
+  const st = c.state
+  return h('span', { className: 'dk-acts' },
+    ...(st === 'running'
+      ? [btn('refresh', 'svc.restart', act('restart')), btn('pause', 'docker.pause', act('pause')), btn('stop', 'svc.stop', act('stop'))]
+      : st === 'paused'
+        ? [btn('play', 'docker.unpause', act('unpause')), btn('stop', 'svc.stop', act('stop'))]
+        : [btn('play', 'svc.start', act('start'))]),
+    btn('recreate', c.compose ? 'docker.recreate' : 'docker.not_compose', act('recreate'), { disabled: busy || !c.compose }),
+    h('span', { className: 'sep' }),
+    btn('terminal', 'docker.shell', () => dockerShell(tab, c), { disabled: st !== 'running' }),
+    btn('info', 'docker.inspect', () => { tab.docker.view?.lv?.stop(); dockerInspect(tab, 'container', c.name, c.name) }))
 }
 
 async function dockerInspect(tab, kind, id, name) {
@@ -331,11 +376,15 @@ function paintDocker(tab) {
   body.replaceChildren()
   const back = () => h('div', { className: 'dback' },
     h('button', { className: 'ib', innerHTML: icon('arrow-left'), title: t('docker.back'), onclick: () => { D.view?.lv?.stop(); D.view = null; D.polling = false; paintDocker(tab); dockerPoll(tab) } }),
-    h('b', { textContent: D.view.title }))
+    h('b', { textContent: D.view.title }),
+    ...(D.view.type === 'logs' ? [dockerLogActions(tab, D.view.c)] : []))
 
   tab.rpanelBody.classList.toggle('flush', D.view?.type === 'logs')
   if (D.view?.type === 'logs') {
-    body.append(back(), D.view.lv.el)
+    const c = D.view.c
+    body.append(back(), h('div', { className: 'dk-state' },
+      h('span', { className: 'dot lv-' + stateLevel(c.state), title: c.state }),
+      h('span', { className: 'dim', textContent: `${c.image} · ${D.busy.has(c.name) ? '…' : c.status}` })), D.view.lv.el)
     return D.view.lv.render()
   }
   if (D.view?.type === 'inspect') {
@@ -370,10 +419,10 @@ function paintDocker(tab) {
   if (!D.containers.length) return msg(t('docker.none'))
   const rank = c => (c.state === 'running' ? 0 : 1)
   for (const c of [...D.containers].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))) {
-    const busy = D.busy.has(c.id)
-    const btn = (name, key, fn) => h('button', { className: 'ib', innerHTML: icon(name), title: t(key), disabled: busy, onclick: fn })
+    const busy = D.busy.has(c.name)
+    const btn = (name, key, fn) => h('button', { className: 'ib', innerHTML: icon(name), title: t(key), disabled: busy, onclick: e => { e.stopPropagation(); fn() } })
     const running = c.state === 'running'
-    body.append(h('div', { className: 'dk' },
+    body.append(h('div', { className: 'dk click', title: t('docker.logs'), onclick: () => dockerLogs(tab, c) },
       h('span', { className: 'dot lv-' + stateLevel(c.state), title: c.state }),
       h('div', { className: 'svc-main' },
         h('b', { textContent: c.name }),
@@ -382,11 +431,12 @@ function paintDocker(tab) {
           h('span', { className: 'mchip lv-' + lvl(c.cpu, 70, 90), textContent: `CPU ${c.cpu.toFixed(1)}%` }),
           h('span', { className: 'mchip lv-' + lvl(c.mem, 70, 90), textContent: `RAM ${c.mem.toFixed(1)}%${c.memUsage ? ' · ' + c.memUsage.split(' / ')[0] : ''}` })) : ''),
       h('span', { className: 'svc-btns' },
-        btn('scroll', 'docker.logs', () => dockerLogs(tab, c)),
         btn('info', 'docker.inspect', () => dockerInspect(tab, 'container', c.id, c.name)),
         ...(running
           ? [btn('refresh', 'svc.restart', () => dockerAct(tab, c, 'restart')), btn('stop', 'svc.stop', () => dockerAct(tab, c, 'stop'))]
-          : [btn('play', 'svc.start', () => dockerAct(tab, c, 'start'))]))))
+          : c.state === 'paused'
+            ? [btn('play', 'docker.unpause', () => dockerAct(tab, c, 'unpause'))]
+            : [btn('play', 'svc.start', () => dockerAct(tab, c, 'start'))]))))
   }
 }
 

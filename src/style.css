@@ -774,3 +774,89 @@ body.resizing-y { cursor: row-resize; }
 .card.expanded { width: calc(100vw - 48px); height: calc(100vh - 48px); max-height: none; }
 .card.expanded > label:has(textarea) { flex: 1; min-height: 0; }
 .card.expanded textarea { flex: 1; min-height: 0; resize: none; }
+
+/* ---------- Scheduled tasks ---------- */
+.sched-list .proc-row > .dot { width: 8px; height: 8px; margin-left: 4px; }
+.sched-list .proc-row.sched-off { opacity: .6; }
+.sched-list .proc-main small { white-space: nowrap; }
+.sched-v { font-family: inherit !important; }
+.sched-output { max-height: 240px; overflow: auto; margin-top: 4px; }
+.sched-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--side); }
+.sched-form label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); font-size: 12px; font-weight: 500; }
+.sched-form textarea { font: 11.5px ui-monospace, Menlo, Consolas, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; resize: vertical; outline: none; }
+.sched-form textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.sched-form .chips { flex-wrap: wrap; margin: 0; }
+.sched-form .btns { display: flex; justify-content: flex-end; gap: 8px; }
+.sched-preview { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); font-size: 12px; }
+.sched-preview.err { background: color-mix(in srgb, var(--danger) 12%, var(--bg)); color: var(--danger); }
+.sched-preview small { font-size: 11px; }
+
+/* ---------- Editor: configuration bar (test / reload / apply) ---------- */
+.ed-cfg { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--accent) 7%, var(--side)); font-size: 12px; }
+.ed-cfg[hidden] { display: none; }
+.ed-cfg .ed-spacer { flex: 1; }
+.ed-cfg-name { display: inline-flex; align-items: center; gap: 6px; }
+.ed-cfg-name svg { width: 15px; height: 15px; color: var(--accent); }
+.ed-cfg-state { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; min-width: 0; }
+.ed-cfg-state .dot { width: 8px; height: 8px; }
+.ed-cfg .chip { padding: 3px 10px; }
+.ed-cfg .chip:disabled { opacity: .55; cursor: default; }
+.ed-cfg-toggle { position: relative; }
+.ed-cfg-toggle span { position: absolute; top: -3px; right: -4px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 9.5px; line-height: 15px; text-align: center; }
+.ed-cfg-toggle.err { color: var(--danger); }
+.ed-cfg-out { display: flex; flex-direction: column; gap: 4px; max-height: 38%; overflow: auto; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--side); font-size: 12px; flex-shrink: 0; }
+.ed-cfg-out.err { box-shadow: inset 3px 0 0 var(--danger); }
+.ed-cfg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-cfg-out pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--dim); user-select: text; }
+.ed-cfg-problem { display: flex; align-items: baseline; gap: 8px; border: 0; background: transparent; color: var(--text); text-align: left; padding: 3px 4px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.ed-cfg-problem:hover { background: var(--hover); }
+.ed-cfg-problem .mchip { flex: none; color: var(--lv); }
+
+/* ---------- Kubernetes (Docker panel) ---------- */
+.engine-seg { margin-bottom: 10px; }
+.kube-tools { display: flex; gap: 6px; margin-bottom: 8px; }
+.kube-tools select { flex: 1; min-width: 0; }
+.docker-view > .s-filter { width: 100%; box-sizing: border-box; margin-bottom: 8px; }
+.kube-kinds { flex-wrap: wrap; margin-bottom: 8px; }
+.kube-kinds .chip { display: inline-flex; align-items: center; gap: 5px; }
+.kube-kinds .chip svg { width: 13px; height: 13px; }
+.kube-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 11px; }
+.kube-summary:empty { display: none; }
+.kube-list .dk-res { flex-wrap: wrap; }
+.kube-event .kube-msg { white-space: normal; overflow-wrap: anywhere; font-size: 11px; }
+.kube-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px ui-monospace, Menlo, Consolas, monospace; background: var(--side); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 8px; user-select: text; }
+
+/* ---------- Synchronized folders (sync-panel.js) ---------- */
+.folder-field { display: flex; gap: 6px; }
+.folder-field input { flex: 1; min-width: 0; cursor: pointer; }
+.folder-field button { flex: none; }
+.card.sync-busy { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.sync-busy .btns { width: 100%; }
+.card.sync-preview { width: min(720px, calc(100vw - 32px)); }
+.sync-preview .small, .sync-intro { font-size: 12px; line-height: 1.4; }
+.sync-route { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.sync-route .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.sync-route svg { width: 14px; height: 14px; flex: none; color: var(--dim); }
+.sync-groups { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+.card label.sync-ghead { color: var(--text); font-size: 12px; }
+.sync-ghead b { font-weight: 600; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k); flex: none; }
+.k-add { --k: #2fb36b; } .k-modify { --k: var(--accent); } .k-delete { --k: var(--danger); } .k-conflict { --k: #e0a100; }
+.sync-rows { display: flex; flex-direction: column; margin-top: 4px; }
+.card label.sync-row { flex-direction: row; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--text); font-weight: 400; }
+.card label.sync-row:hover { background: var(--hover); }
+.sync-row input { width: 14px; height: 14px; flex: none; }
+.sync-ic { display: inline-flex; color: var(--dim); flex: none; }
+.sync-ic svg { width: 14px; height: 14px; }
+.sync-rel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px ui-monospace, Menlo, Consolas, monospace; }
+.sync-row small { flex: none; font-size: 11px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-more { padding: 4px 6px; }
+.sync-same { text-align: center; }
+.sync-pair .sync-state { color: var(--dim); white-space: normal; }
+.sync-pair.on .sync-pic { color: var(--accent); }
+.sync-pair.err .sync-state { color: var(--danger); }
+.sync-badge { position: absolute; right: 29px; top: 2px; width: 24px; height: 24px; }
+.sync-badge svg { width: 14px; height: 14px; }
+.sync-badge.on { color: var(--accent); }
+.sync-badge.err { color: var(--danger); }
+.pathbox:has(.sync-badge:not([hidden])) .crumbs { padding-right: 58px; }

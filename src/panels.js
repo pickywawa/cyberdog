@@ -29,6 +29,7 @@ const POLLS = {
   processes: { every: 5000, run: t => processPoll(t) },
   dashboard: { every: 10000, run: t => dashCheck(t) },
   services: { every: 10000, run: t => svcPoll(t) },
+  schedules: { every: 30000, run: t => schedulePoll(t) },
   docker: { every: 6000, run: t => dockerPoll(t) },
 }
 function pollStop(tab) {

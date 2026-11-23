@@ -197,6 +197,8 @@ function modal(title, fields, okLabel, { wide = false, tabs = [], cls = '', expa
     const previous = !m.hidden ? {nodes:[...m.childNodes],mousedown:m.onmousedown} : null
     const inputs = fields.map(f => {
       if (f.type === 'checkbox') return h('input', { type: 'checkbox', checked: !!f.value })
+      // a folder on this computer: chosen with the system dialog (f.pick(current) -> path | null)
+      if (f.type === 'folder') { const inp = h('input', { type: 'text', value: f.value || '', placeholder: f.placeholder || '', readOnly: true, className: 'folder-input' }); inp.onclick = async () => { const p = await f.pick(inp.value); if (p) inp.value = p }; return inp }
       if (f.type === 'textarea') return h('textarea', { value: f.value || '', placeholder: f.placeholder || '', rows: f.rows || 12, spellcheck: false, readOnly:!!f.readOnly })
       if (f.type === 'select') {
         const sel = h('select', { className: 'lsel full', disabled:!!f.disabled }, ...f.options.map(([v, label, scope]) => Object.assign(h('option', { value: v, textContent: label }),{_scope:scope})))
@@ -207,7 +209,9 @@ function modal(title, fields, okLabel, { wide = false, tabs = [], cls = '', expa
     })
     const locationIndex=fields.findIndex(f=>f.name==='teamId')
     if(locationIndex>=0){const sync=()=>{const scope=inputs[locationIndex].value;fields.forEach((f,i)=>{if(f.name==='group'){for(const option of inputs[i].options){option.disabled=!!option.value&&option._scope!==scope;option.hidden=option.disabled}if(inputs[i].selectedOptions[0]?.disabled)inputs[i].value=''}if(f.requireScope!==undefined){inputs[i].disabled=f.requireScope!==scope;if(inputs[i].disabled)inputs[i].checked=true}})};inputs[locationIndex].onchange=sync;sync()}
-    const rows = fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label })) : h('label', {}, f.label, inputs[i]))
+    const rows = fields.map((f, i) => f.type === 'checkbox' ? h('label', { className: 'check' }, inputs[i], h('span', { textContent: f.label }))
+      : f.type === 'folder' ? h('label', {}, f.label, h('span', { className: 'folder-field' }, inputs[i], h('button', { type: 'button', textContent: f.placeholder, onclick: () => inputs[i].click() })))
+      : h('label', {}, f.label, inputs[i]))
     const typeAt = fields.findIndex(f => f.name === 'type')
     if (typeAt >= 0) {
       // a field is shown for its `types`, and only while its controlling field (`when: [name, value]`) has that value
@@ -798,18 +802,20 @@ const PANELS = {
   dashboard: { title: 'dash.title', render: t => renderDashboard(t) },
   processes: { title: 'proc.title', render: t => renderProcesses(t), leave: t => leaveProcesses(t) },
   services: { title: 'svc.title', render: t => renderServices(t) },
+  schedules: { title: 'cron.title', render: t => renderSchedules(t), leave: t => leaveSchedules(t) },
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
-  docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  docker: { title: 'kube.panel', render: t => renderDocker(t), leave: t => leaveDocker(t) },
   certificates: { title: 'cert.title', render: t => renderCertificates(t) },
   keys: { title: 'keys.title', render: t => renderKeys(t) },
   paths: { title: 'paths.title', render: t => renderPaths(t) },
+  sync: { title: 'sync.title', render: t => renderSync(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'bar.docker'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['schedules', 'clock', 'cron.title'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'kube.panel'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['sync', 'sync', 'bar.sync'], ['actions', 'zap', 'bar.actions']]
 
 // Object storage / WebDAV servers have no shell: only the file explorer and saved paths make sense.
 // The editor's button is there only while files are open in it
-const barFor = (server, tab) => [...(tab?.editor?.files.length ? [['editor', 'file-code', 'editor.title']] : []), ...(isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths'))]
+const barFor = (server, tab) => [...(tab?.editor?.files.length ? [['editor', 'file-code', 'editor.title']] : []), ...(isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths' || k === 'sync'))]
 function rebuildBar(tab) {
   tab.barItems = barFor(tab.server, tab)
   for (const [key, ic, title] of tab.barItems) tab.bar[key] ||= ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
@@ -1296,6 +1302,7 @@ function ctxMenu(tab, e) {
     ...paste,
     { label: t('tb.upload'), icon: 'upload', fn: () => uploadPicker(tab, { currentTarget: { getBoundingClientRect: () => ({ left: e.clientX, bottom: e.clientY }) } }) },
     ...newTab,
+    ...(typeof syncMenuItems === 'function' ? syncMenuItems(tab, tab.path) : []),
     { label: t('tb.refresh'), icon: 'refresh', fn: () => load(tab, tab.path, false, true) },
   ]
   const row = e.target.closest('[data-name]')
@@ -1332,6 +1339,7 @@ function ctxMenu(tab, e) {
     ...(one && !one.isDir && canLink(tab.server) ? [{ label: t('ctx.share_link'), icon: 'link', fn: () => shareLink(tab, full(one)) }] : []),
     ...(one && canSymlink(tab.server) ? [{ label: t('ctx.symlink_to'), icon: 'link', fn: () => newSymlink(tab, full(one)) }] : []),
     ...(one?.isDir && !tab.localPane ? [{ label: t('ctx.open_tab'), icon: 'plus', fn: () => openFiles(tab.server, { path: full(one) }) }] : []),
+    ...(one?.isDir && typeof syncMenuItems === 'function' ? syncMenuItems(tab, full(one), { panes: false }) : []),
     { label: t('ctx.info'), icon: 'info', hint: modKey('Mod+I'), fn: () => showInfo(tab, sel) },
     '-',
     { label: t('ctx.delete'), icon: 'trash', danger: true, fn: () => confirm(one ? t('dlg.confirm_del_one', { name: one.name }) : t('dlg.confirm_del_many', { n: sel.length })) && act(tab, () => api.invoke('sftp:rm', tab.connId, sel.map(full))) },
@@ -1484,6 +1492,9 @@ function makeExplorer(tab) {
   ex.splitBtn = ib('split', 'ex.split', () => toggleSplit(ex))
   ex.localBtn = ib('monitor', 'ex.local', () => toggleLocal(ex), 'js-local-btn')
   ex.localBtn.hidden = !settings.showLocalPane // off by default; Settings -> General
+  // the local pane next to the server: compare the two folders (sync-panel.js)
+  ex.compareBtn = ib('sync', 'sync.compare_panes', () => comparePanes(ex), 'js-compare-btn')
+  ex.compareBtn.hidden = true
   ex.pathsBtn = ib('bookmark', 'paths.title', () => { ex.pathsBox.hidden = !ex.pathsBox.hidden; if (!ex.pathsBox.hidden) paintPathsBox(ex) }, 'pbtn js-paths-btn')
   ex.pathsBox = h('div', { className: 'pathsbox', hidden: true })
   buildSearch(ex)
@@ -1494,7 +1505,7 @@ function makeExplorer(tab) {
       ex.back, (ex.pathBox = h('div', { className: 'pathbox' }, ex.crumbs, ex.pathInput, ex.pathsBtn)),
       ex.filterBtn,
       ...(isShell(tab.server) ? [ib('search', 'ex.search', () => toggleSearch(ex), 'js-search-btn')] : []),
-      ex.splitBtn, ex.localBtn,
+      ex.splitBtn, ex.localBtn, ex.compareBtn,
       ib('upload', 'tb.upload', e => uploadPicker(ex, e)),
       ib('folder-plus', 'tb.new_folder', () => newItem(ex, 'dir')),
       ib('file-plus', 'tb.new_file', () => newItem(ex, 'file')),
@@ -1542,6 +1553,7 @@ function paintCrumbs(ex) {
   ex.crumbMore.title = t('crumbs.more')
   ex.crumbGroups = parts.map((_, i) => h('span', { className: 'crumb-group' }, h('span', { className: 'crumb-sep', textContent: '›' }), crumb(i + 1)))
   ex.crumbs.replaceChildren(...(ex.path ? [crumb(0), ex.crumbMore, ...ex.crumbGroups] : []))
+  if (typeof paintSyncBadge === 'function') paintSyncBadge(ex) // a synchronized folder (sync-panel.js)
   fitCrumbs(ex)
 }
 function fitCrumbs(ex) {
@@ -1587,7 +1599,8 @@ function layoutExplorers(tab) {
   }
   a.explorer.style.flex = ''
   tab.explorers.replaceChildren(...(split ? [a.explorer, divider, b.explorer] : [a.explorer]))
-  tab.panes.forEach(p => { p.splitBtn.classList.toggle('on', split); p.explorer.classList.toggle('active', split && p === tab.active) })
+  const local = tab.panes.some(p => p.localPane) && tab.panes.some(p => !p.localPane)
+  tab.panes.forEach(p => { p.splitBtn.classList.toggle('on', split); p.compareBtn.hidden = !local; p.explorer.classList.toggle('active', split && p === tab.active) })
 }
 
 function closePane(tab, pane) {
@@ -1645,7 +1658,7 @@ function rememberFolder(server, path) {
 function openFiles(server, { terminal = false, path = null, split = null } = {}) {
   path ||= lastFolder(server)
   if(server.loading)return
-  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), svc: newSvc(), docker: newDocker(), logs: newLogs() }
+  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), schedules: newSchedules(), svc: newSvc(), docker: newDocker(), kube: newKube(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
   layoutExplorers(tab)

@@ -264,10 +264,11 @@ function renderLogs(tab) {
 const leaveLogs = tab => { tab.logs.lv?.stop(); tab.logs.userStopped = false }
 
 // ============================================================ Docker
-const newDocker = () => ({ sub: 'containers', containers: [], images: [], error: null, loaded: false, busy: new Set(), view: null, polling: false })
+const newDocker = () => ({ engine: 'docker', sub: 'containers', containers: [], images: [], error: null, loaded: false, busy: new Set(), view: null, polling: false })
 
 async function dockerPoll(tab) {
   const D = tab.docker
+  if (D.engine === 'kube') return kubePoll(tab)
   if (D.view || D.polling) return
   D.polling = true
   try {
@@ -285,6 +286,7 @@ function leaveDocker(tab) {
   const D = tab.docker
   D.view?.lv?.stop()
   D.view = null
+  leaveKube(tab)
 }
 
 const NO_CONFIRM = ['start', 'unpause']
@@ -362,7 +364,7 @@ async function dockerInspect(tab, kind, id, name) {
 }
 
 function renderDocker(tab) {
-  tab.rpanelActions.append(hib('refresh', 'tb.refresh', () => { tab.docker.polling = false; dockerPoll(tab) }))
+  tab.rpanelActions.append(hib('refresh', 'tb.refresh', () => { if (tab.docker.engine === 'kube') return kubeRefresh(tab); tab.docker.polling = false; dockerPoll(tab) }))
   tab.dockerBody = h('div', { className: 'docker-view' })
   tab.rpanelBody.append(tab.dockerBody)
   paintDocker(tab)
@@ -374,6 +376,11 @@ function paintDocker(tab) {
   const D = tab.docker, body = tab.dockerBody
   if (!body || tab.panel !== 'docker') return
   body.replaceChildren()
+  // Docker | Kubernetes, above the lists (not inside a log or inspect view)
+  const inView = D.engine === 'kube' ? tab.kube.view : D.view
+  if (!inView) body.append(h('div', { className: 'seg engine-seg' }, ...[['docker', 'box', 'Docker'], ['kube', 'kube', 'Kubernetes']].map(([k, ic, label]) =>
+    h('button', { className: k === D.engine ? 'on' : '', innerHTML: icon(ic) + `<span>${label}</span>`, onclick: () => { if (D.engine === k) return; D.engine = k; D.polling = false; tab.kube.polling = false; paintDocker(tab); dockerPoll(tab) } }))))
+  if (D.engine === 'kube') return paintKube(tab, body)
   const back = () => h('div', { className: 'dback' },
     h('button', { className: 'ib', innerHTML: icon('arrow-left'), title: t('docker.back'), onclick: () => { D.view?.lv?.stop(); D.view = null; D.polling = false; paintDocker(tab); dockerPoll(tab) } }),
     h('b', { textContent: D.view.title }),

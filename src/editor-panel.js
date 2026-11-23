@@ -70,7 +70,8 @@ function buildEditor(tab) {
   E.current = 0
   E.split = h('div', { className: 'ed-split' })
   E.status = h('div', { className: 'ed-status' })
-  E.el = h('div', { className: 'editor-panel' }, E.tabbar, E.split, E.status)
+  E.cfgbar = h('div', { className: 'ed-cfg', hidden: true })
+  E.el = h('div', { className: 'editor-panel' }, E.tabbar, E.cfgbar, E.split, E.status)
   addEditorView(tab)
   new ResizeObserver(() => fitEditorTabs(tab)).observe(E.tabbar)
 }
@@ -139,7 +140,7 @@ async function openInEditor(ex, path) {
     const name = path.slice(path.lastIndexOf('/') + 1)
     const model = monaco.editor.createModel(r.text, editorFiles.languageFor(name, monaco.languages.getLanguages()), monaco.Uri.from({ scheme: 'cyberdog', path: '/' + uid() + path }))
     model.setEOL(r.eol === 'crlf' ? monaco.editor.EndOfLineSequence.CRLF : monaco.editor.EndOfLineSequence.LF)
-    const f = { id: uid(), ex, path, name, model, encoding: r.encoding, mixedEol: r.mixedEol, mtime: r.mtime, saved: model.getAlternativeVersionId() }
+    const f = { id: uid(), ex, path, name, model, encoding: r.encoding, mixedEol: r.mixedEol, mtime: r.mtime, saved: model.getAlternativeVersionId(), diskText: r.text, previousText: null }
     model.onDidChangeContent(() => paintEditorTabs(tab))
     E.files.push(f)
     rebuildBar(tab)
@@ -185,6 +186,7 @@ function paintEditorTabs(tab) {
   }))
   fitEditorTabs(tab)
   paintEditorActions(tab)
+  paintConfigBar(tab)
 }
 // Tabs that do not fit are hidden (never the current one) and a list at the end of the bar gives every open file
 function fitEditorTabs(tab) {
@@ -248,17 +250,17 @@ async function saveEditorFile(tab, f, force = false) {
     if ((await askChoice(t('editor.mixed_eol'), t('editor.mixed_eol_save', { eol }), [t('editor.save'), t('btn.cancel')])) !== 0) return false
     f.mixedOk = true
   }
-  const version = f.model.getAlternativeVersionId()
+  const version = f.model.getAlternativeVersionId(), text = f.model.getValue(monaco.editor.EndOfLinePreference.TextDefined)
   try {
     await ensure(f.ex)
-    const r = await api.invoke('editor:write', f.ex.connId, f.path, f.model.getValue(monaco.editor.EndOfLinePreference.TextDefined), f.encoding, f.mtime, force)
+    const r = await api.invoke('editor:write', f.ex.connId, f.path, text, f.encoding, f.mtime, force)
     if (r.conflict) {
       const c = await askChoice(t('editor.changed_title'), t('editor.changed', { name: f.name }), [t('editor.overwrite'), t('editor.reload'), t('btn.cancel')], { danger: 0 })
       if (c === 0) return saveEditorFile(tab, f, true)
       if (c === 1) await reloadEditorFile(tab, f)
       return false
     }
-    Object.assign(f, { mtime: r.mtime, saved: version, mixedEol: false })
+    Object.assign(f, { mtime: r.mtime, saved: version, mixedEol: false, previousText: f.diskText, diskText: text })
     paintEditorTabs(tab); paintEditorStatus(tab)
     toast(t('editor.saved', { name: f.name }))
     return true
@@ -272,7 +274,7 @@ async function reloadEditorFile(tab, f) {
     if (r.error) throw new Error(t('editor.' + r.error, { size: sizeOf(r.size || 0) }))
     f.model.setValue(r.text)
     f.model.setEOL(r.eol === 'crlf' ? window.monaco.editor.EndOfLineSequence.CRLF : window.monaco.editor.EndOfLineSequence.LF)
-    Object.assign(f, { encoding: r.encoding, mixedEol: r.mixedEol, mixedOk: false, mtime: r.mtime, saved: f.model.getAlternativeVersionId() })
+    Object.assign(f, { encoding: r.encoding, mixedEol: r.mixedEol, mixedOk: false, mtime: r.mtime, saved: f.model.getAlternativeVersionId(), diskText: r.text, previousText: null })
     paintEditorTabs(tab); paintEditorStatus(tab)
   } catch (e) { toast(errText(e), true) }
 }

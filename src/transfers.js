@@ -37,13 +37,15 @@ class Transfers {
   }
   emit(x, force = false) { if (force || Date.now() - (x.sent || 0) > 150) { x.sent = Date.now(); this.send('transfer:update', this.view(x)) } this.save() }
 
-  // meta: { refs: { src, dst } (each { serverId } or { disk: true }), top: [{ source, target }], serverIds, priority, hold, policy }
+  // meta: { refs: { src, dst } (each { serverId } or { disk: true }), top: [{ source, target }] or plan, serverIds, priority, hold, policy }
   // Resolves when the job ends: true when completed, false when cancelled; rejects when it fails.
   run(connId, direction, name, meta = {}) {
     const x = {
       id: crypto.randomUUID(), connId, direction, name, state: meta.hold ? 'paused' : 'queued', done: 0, total: 0, started: Date.now(), created: Date.now(), elapsed: 0, scanned: false, base: 0,
       refs: meta.refs, top: meta.top, serverIds: meta.serverIds || [], priority: PRIORITY[meta.priority] ?? 0, order: ++this.seq, policy: meta.policy,
     }
+    // a plan made beforehand (synchronization): no scan, exactly these items
+    if (meta.plan) Object.assign(x, { plan: meta.plan, scanned: true, total: meta.plan.reduce((n, i) => n + (i.directory || i.op ? 0 : i.size || 0), 0) })
     this.items.set(x.id, x)
     const finished = this.wait(x)
     this.emit(x, true)

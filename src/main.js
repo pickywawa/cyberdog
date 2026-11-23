@@ -2,7 +2,7 @@ const localSshKeys=require('./local-ssh-keys')
 const {serverOptions}=require('./server-options')
 const serverType=require('./server-type')
 const objectStorage=require('./object-storage')
-const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net, clipboard } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, nativeTheme, nativeImage, shell, screen, net, clipboard, powerMonitor } = require('electron')
 const path = require('path')
 const { hasCyberdogConfig, copyCyberdogConfig, initializeUserData } = require('./config-path')
 app.setName('Cyberdog')
@@ -27,6 +27,8 @@ const archive = require('./archive')
 const logfmt = require('./logs')
 const dockerfmt = require('./docker')
 const processModel = require('./processes')
+const scheduleModel = require('./schedules')
+const kubeModel = require('./kube')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 const { autoUpdater } = require('electron-updater')
 const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./update-version')
@@ -727,7 +729,8 @@ async function openConn(sid) {
     return{id,home}
   }catch(e){client?.end();throw e}finally{extension.endConnection?.(ticket)}
 }
-ipcMain.handle('files:open', (_, sid) => openConn(sid))
+// opening a server starts watching its synchronized folders
+ipcMain.handle('files:open', async (_, sid) => { const r = await openConn(sid); syncManager.serverOpened(sid); return r })
 
 // The local file system as a connection (local pane): '/' is the root, or the list of drives on Windows
 const LOCAL_SERVER = { id: 'local', type: 'local', name: 'Local' }
@@ -813,6 +816,46 @@ async function resolveRef(ref) {
 }
 transferEngine = require('./transfer-files')(transfers, resolveRef)
 const { sftpSide, uniqueTarget } = require('./transfer-files')
+
+// ---------- Synchronized folders (sync-manager.js) ----------
+// A local folder kept in sync with a folder on a server: compare + preview, or watch and send every change.
+const { SyncManager } = require('./sync-manager')
+const pickedBookmarks = new Map() // folder -> security-scoped bookmark (Mac App Store: access after a restart)
+const syncManager = new SyncManager({
+  file: path.join(app.getPath('userData'), 'sync-pairs.json'),
+  dir: path.join(app.getPath('userData'), 'sync'),
+  transfers,
+  side: async ref => { const s = await resolveRef(ref); return s ? sftpSide(s) : require('./transfer-files').diskSide },
+  send: views => send('sync:update', views),
+  notify: (text, error) => send('toast', text, !!error),
+  t: (k, v) => t(k, v),
+  access: pair => {
+    if (!isMas || !pair.bookmark) return () => {}
+    try { return app.startAccessingSecurityScopedResource(pair.bookmark) || (() => {}) } catch { return () => {} }
+  },
+})
+ipcMain.handle('sync:list', (_, serverId) => syncManager.list(serverId || undefined))
+ipcMain.handle('sync:pick-local', async (_, current) => {
+  const r = await dialog.showOpenDialog(win, { title: t('sync.local'), defaultPath: current || os.homedir(), properties: ['openDirectory', 'createDirectory'], securityScopedBookmarks: isMas })
+  if (r.canceled || !r.filePaths[0]) return null
+  if (r.bookmarks?.[0]) pickedBookmarks.set(r.filePaths[0], r.bookmarks[0])
+  return r.filePaths[0]
+})
+ipcMain.handle('sync:save', (_, pair) => {
+  if (!pair || typeof pair !== 'object') throw new Error('Invalid pair')
+  const bookmark = pickedBookmarks.get(pair.local) || (syncManager.get(pair.id)?.local === pair.local ? syncManager.get(pair.id).bookmark : undefined)
+  return syncManager.save({ id: pair.id, serverId: pair.serverId, local: pair.local, remote: pair.remote, deleteRemote: pair.deleteRemote, excludes: pair.excludes, watch: pair.watch, bookmark })
+})
+ipcMain.handle('sync:remove', (_, id) => syncManager.remove(String(id)))
+// target: a pair's id, or { serverId, remote, localConn, localPath } to compare the two panes of a tab
+ipcMain.handle('sync:compare', (_, target) => {
+  if (typeof target === 'string') return syncManager.compare(target)
+  const c = conns.get(target?.localConn)
+  if (!c?.local) throw new Error(t('sync.err_local'))
+  return syncManager.compare({ serverId: target.serverId, remote: target.remote, local: c.local.nativePath(target.localPath), deleteRemote: false })
+})
+ipcMain.handle('sync:apply', (_, token, rels, opts) => syncManager.apply(String(token), Array.isArray(rels) ? rels.map(String) : [], { watch: !!opts?.watch }))
+ipcMain.handle('sync:watch', (_, id, on) => on ? syncManager.start(String(id)) : syncManager.stop(String(id), { keep: false }))
 // A file already exists at the target: the window asks what to do (the answer can apply to the rest of the job)
 const CONFLICT_ACTIONS = ['overwrite', 'newer', 'size', 'resume', 'rename', 'skip', 'cancel']
 const conflictAsks = new Map() // question id -> resolve
@@ -1042,6 +1085,16 @@ ipcMain.handle('editor:write', async (_, id, p, text, encoding, seen, force) => 
   send('sftp:changed', id, posix.dirname(p), posix.basename(p))
   return { mtime: secondsOf(after.mtime), size: after.size }
 })
+// Check / apply a known configuration file on its SSH server (config-profiles.js builds the command from the path)
+const configProfiles = require('./config-profiles')
+ipcMain.handle('editor:config', async (_, id, p, profileId, action) => {
+  const spec = configProfiles.command(p, profileId, action)
+  if (!spec) throw new Error('invalid')
+  const c = getConn(id), s = spec.sudo ? sudoOf(c) : null, run = `sh -c ${q(spec.cmd)}`
+  const cmd = s ? `if [ "$(id -u)" = 0 ]; then ${run}; else ${s.prefix} ${run}; fi` : run
+  const r = await exec(c.client, cmd, { input: s?.input, timeout: action === 'up' ? 600000 : 120000 })
+  return { code: r.code, out: r.out }
+})
 // Monaco's web workers: their file names carry a hash that changes with each version
 ipcMain.handle('editor:workers', () => {
   const dir = path.join(__dirname, '..', 'node_modules', 'monaco-editor', 'min', 'vs', 'assets')
@@ -1128,6 +1181,54 @@ ipcMain.handle('process:details', async (_, id, process) => {
 ipcMain.handle('process:signal', async (_, id, process, signal) => {
   const r = await exec(getConn(id).client, 'sh -s', { input: processModel.signal(process, signal) })
   if (r.code !== 0) throw new Error(r.out || 'Signal failed')
+})
+
+// ---------- Scheduled tasks (crontab + systemd timers) ----------
+const scheduleSnapshot = async c => {
+  const r = await exec(c.client, 'sh -s', { input: scheduleModel.SNAPSHOT, timeout: 30000, max: 4e6 })
+  if (r.code !== 0) throw new Error(r.out.trim() || 'Schedule snapshot failed')
+  return scheduleModel.parse(r.out)
+}
+ipcMain.handle('sched:list', (_, id) => scheduleSnapshot(getConn(id)))
+// Edits only the connected user's crontab; the line must still be what the renderer saw.
+ipcMain.handle('sched:edit', async (_, id, op) => {
+  const c = getConn(id)
+  const cur = await exec(c.client, 'crontab -l 2>/dev/null')
+  const next = scheduleModel.applyEdit(cur.code === 0 ? cur.out : '', op || {})
+  const r = await exec(c.client, 'crontab -', { input: next, timeout: 30000 })
+  if (r.code !== 0) throw new Error(r.out.trim() || `exit ${r.code}`)
+})
+// Runs a task now. The command comes from a fresh snapshot, never from the renderer.
+ipcMain.handle('sched:run', async (_, id, ref) => {
+  const c = getConn(id), snap = await scheduleSnapshot(c), q = scheduleModel.q
+  let cmd, stdin
+  if (ref?.source === 'periodic') {
+    const p = snap.periodic.find(p => p.id === ref.id)
+    if (!p) throw new Error(t('cron.changed'))
+    const s = sudoOf(c)
+    cmd = `if [ "$(id -u)" = 0 ]; then exec ${q(p.file)}; else exec ${s.prefix} ${q(p.file)}; fi`
+    stdin = s.input
+  } else {
+    const e = snap.entries.find(e => e.id === ref?.id && e.raw === ref.raw)
+    if (!e) throw new Error(t('cron.changed'))
+    const script = scheduleModel.runScript(e), input = scheduleModel.cronCommand(e.command).stdin
+    if (!e.user || e.user === snap.me) { cmd = `sh -c ${q(script)}`; stdin = input }
+    else {
+      const s = sudoOf(c)
+      cmd = `if [ "$(id -u)" = 0 ]; then exec su -s /bin/sh ${q(e.user)} -c ${q(script)}; else exec ${s.prefix} -u ${q(e.user)} sh -c ${q(script)}; fi`
+      stdin = (s.input || '') + (input || '') || undefined
+    }
+  }
+  const r = await exec(c.client, cmd, { input: stdin, timeout: 600000 })
+  return { code: r.code, out: r.out }
+})
+ipcMain.handle('sched:timer', async (_, id, unit, action) => {
+  const kind = action === 'start' ? '.service' : '.timer'
+  if (!['start', 'enable', 'disable'].includes(action) || typeof unit !== 'string' || !UNIT_NAME.test(unit) || !unit.endsWith(kind)) throw new Error('invalid')
+  const c = getConn(id), s = sudoOf(c)
+  const sub = action === 'start' ? `start --no-block ${q(unit)}` : `${action} --now ${q(unit)}`
+  const r = await exec(c.client, `if [ "$(id -u)" = 0 ]; then systemctl ${sub}; else ${s.prefix} systemctl ${sub}; fi`, { input: s.input, timeout: 60000 })
+  if (r.code !== 0) throw new Error(r.out.trim().split('\n').slice(-3).join(' ') || `exit ${r.code}`)
 })
 
 // ---------- Certificates and local SSH keys ----------
@@ -1334,7 +1435,7 @@ ipcMain.on('drag:start', (e, files) => {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'assets/drag.png'))
   e.sender.startDrag({ file: files[0], files, icon })
 })
-app.on('will-quit', () => { for (const c of conns.values()) try { c.sftp?.end?.() } catch {} // unmounts SMB shares
+app.on('will-quit', () => { syncManager.close(); for (const c of conns.values()) try { c.sftp?.end?.() } catch {} // unmounts SMB shares
   if (dragRoot) fs.rmSync(dragRoot, { recursive: true, force: true }) })
 
 // sudo : mot de passe enregistré sur stdin (jamais en argument), sinon `sudo -n`
@@ -1387,10 +1488,13 @@ ipcMain.handle('log:start', async (_, connId, spec) => {
   } else if (spec.kind === 'docker') {
     if (!DOCKER_ID.test(spec.id)) throw new Error('invalid id')
     cmd = ['docker', 'logs', '-f', '--tail', '300', spec.id]
+  } else if (spec.kind === 'kube') {
+    cmd = kubeModel.logArgs(spec)
   } else throw new Error('invalid source')
 
-  const s = spec.sudo || (spec.kind === 'docker' && c.dockerSudo) ? sudoOf(c) : null
-  const stream = await new Promise((res, rej) => c.client.exec(`exec ${s ? s.prefix + ' ' : ''}${cmd.map(q).join(' ')}`, (e, st) => (e ? rej(e) : res(st))))
+  const s = spec.sudo || (spec.kind === 'docker' && c.dockerSudo) || (spec.kind === 'kube' && c.kubeSudo) ? sudoOf(c) : null
+  const bin = spec.kind === 'kube' ? (await kubeBin(c)) + ' ' : ''
+  const stream = await new Promise((res, rej) => c.client.exec(`exec ${s ? s.prefix + ' ' : ''}${bin}${cmd.map(q).join(' ')}`, (e, st) => (e ? rej(e) : res(st))))
   if (s?.input) stream.write(s.input)
 
   const id = crypto.randomUUID()
@@ -1506,6 +1610,62 @@ ipcMain.handle('docker:recreate', async (_, id, target) => {
   if (r.code !== 0) throw new Error(lastLines(r.out))
 })
 
+// ---------- Kubernetes (kubectl du serveur : kubectl, k3s ou microk8s) ----------
+// The first kubectl found is kept for the connection; an unreadable kubeconfig (k3s, microk8s) switches to sudo, as Docker does.
+async function kubeBin(c) {
+  if (c.kubeBin) return c.kubeBin
+  const r = await exec(c.client, `for b in kubectl k3s microk8s; do command -v "$b" >/dev/null 2>&1 && { echo "$b"; exit 0; }; done; for b in /snap/bin/microk8s /usr/local/bin/k3s; do [ -x "$b" ] && { echo "$b"; exit 0; }; done; exit 1`)
+  const found = r.code === 0 ? r.out.trim().split('\n').pop() : ''
+  if (!found) throw new Error(t('kube.err.missing'))
+  c.kubeBin = found.endsWith('kubectl') ? found : found + ' kubectl'
+  return c.kubeBin
+}
+async function kubectl(c, args, { timeout = 30000, max = 2e6 } = {}) {
+  const bin = await kubeBin(c)
+  const run = sudo => { const s = sudo ? sudoOf(c) : null; return exec(c.client, `${s ? s.prefix + ' ' : ''}${bin} ${args.map(q).join(' ')}`, { timeout, max, input: s?.input }) }
+  let r = await run(!!c.kubeSudo)
+  if (!c.kubeSudo && r.code !== 0 && kubeModel.errorKind(r.out) === 'permission') {
+    const again = await run(true)
+    if (again.code === 0 || kubeModel.errorKind(again.out) !== 'permission') { c.kubeSudo = true; r = again }
+  }
+  return r
+}
+const kubeError = r => { const k = kubeModel.errorKind(r.out); return new Error(k ? t('kube.err.' + k) : r.out.trim().split('\n').filter(l => !/^W\d{4} /.test(l)).slice(-3).join(' ') || `exit ${r.code}`) }
+// stdout and stderr are mixed: the JSON document is what starts with { at the start of a line
+const kubeJson = out => { const i = out.search(/^\{/m), j = out.lastIndexOf('}'); if (i < 0 || j < i) throw new Error('kubectl: no JSON'); return JSON.parse(out.slice(i, j + 1)) }
+ipcMain.handle('kube:info', async (_, id) => {
+  const c = getConn(id)
+  const [list, cur] = [await kubectl(c, kubeModel.contextsArgs()), await kubectl(c, kubeModel.currentArgs())]
+  if (list.code !== 0 && kubeModel.errorKind(list.out)) throw kubeError(list)
+  const contexts = list.code === 0 ? list.out.split('\n').map(s => s.trim()).filter(s => kubeModel.CONTEXT.test(s) && !/^W\d{4} /.test(s)) : []
+  return { bin: c.kubeBin, sudo: !!c.kubeSudo, contexts, current: cur.code === 0 ? cur.out.trim().split('\n').pop() : '' }
+})
+ipcMain.handle('kube:namespaces', async (_, id, query) => {
+  const r = await kubectl(getConn(id), kubeModel.namespacesArgs(query || {}))
+  if (r.code !== 0) throw kubeError(r)
+  return r.out.trim().split('\n').pop().split(/\s+/).filter(n => kubeModel.NAME.test(n)).sort()
+})
+ipcMain.handle('kube:list', async (_, id, query) => {
+  const c = getConn(id)
+  const [r, top] = await Promise.all([kubectl(c, kubeModel.listArgs(query), { max: 40e6, timeout: 45000 }), query.kind === 'pods' ? kubectl(c, kubeModel.topArgs(query)).catch(() => null) : null])
+  if (r.code !== 0) throw kubeError(r)
+  if (r.out.length >= 40e6) throw new Error(t('kube.err.too_big'))
+  const items = kubeModel.summarize(kubeJson(r.out))
+  const metrics = top?.code === 0 ? kubeModel.parseTop(top.out, query.namespace) : null
+  if (metrics) for (const p of items) Object.assign(p, metrics.get(`${p.namespace}/${p.name}`) || {})
+  return { items, metrics: !!metrics, sudo: !!c.kubeSudo, bin: c.kubeBin }
+})
+ipcMain.handle('kube:text', async (_, id, query) => {
+  const r = await kubectl(getConn(id), kubeModel.textArgs(query))
+  if (r.code !== 0) throw kubeError(r)
+  return r.out
+})
+ipcMain.handle('kube:action', async (_, id, query) => {
+  const r = await kubectl(getConn(id), kubeModel.actionArgs(query), { timeout: 60000 })
+  if (r.code !== 0) throw kubeError(r)
+  return r.out.trim()
+})
+
 // ---------- Terminal ----------
 ipcMain.handle('term:open', async (_, id, sid, cols, rows, cwd) => {
   const ticket=extension.beginConnection?.(sid)
@@ -1543,6 +1703,7 @@ if (app.isPackaged) app.setAsDefaultProtocolClient('cyberdog')
 // ---------- Fenêtre ----------
 app.whenReady().then(() => {
   require('./smb-storage').cleanupStaleMounts().catch(() => {}) // shares left mounted by a crash
+  powerMonitor.on('resume', () => syncManager.rescanAll()) // events may have been missed while asleep
   loadSettings()
   setInterval(() => { extension.refresh().catch(() => {}) }, 6 * 60 * 60 * 1000).unref()
   load()

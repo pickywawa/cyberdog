@@ -18,6 +18,14 @@ const diskSide = {
   size: p => fs.promises.stat(p).then(st => st.size, () => null),
   read: (p, start) => fs.createReadStream(p, start ? { start } : {}),
   write: (p, start) => fs.createWriteStream(p, start ? { flags: 'r+', start } : {}),
+  // a folder's content with sizes and dates (synchronization); a link is followed to a file, never to a folder
+  entries: async p => Promise.all((await fs.promises.readdir(p, { withFileTypes: true })).map(async d => {
+    const st = await fs.promises.stat(path.join(p, d.name)).catch(() => null)
+    if (!st) return { name: d.name, isLink: true }
+    return { name: d.name, isLink: d.isSymbolicLink() && st.isDirectory(), isDirectory: st.isDirectory(), size: st.isDirectory() ? 0 : st.size, mtime: st.mtimeMs }
+  })),
+  remove: p => fs.promises.rm(p, { recursive: true, force: true }),
+  setTime: (p, ms) => fs.promises.utimes(p, ms / 1000, ms / 1000),
 }
 const sftpSide = s => {
   const side = {
@@ -27,10 +35,30 @@ const sftpSide = s => {
     info: p => side.stat(p).catch(() => null),
     real: p => P(s, 'realpath', p),
     list: async p => (await P(s, 'readdir', p)).map(e => e.filename).filter(n => n !== '.' && n !== '..'),
-    mkdir: p => P(s, 'mkdir', p).catch(async e => { if (!(await P(s, 'stat', p)).isDirectory()) throw e }), // already there is fine
+    // already there is fine; a missing parent is created first
+    mkdir: p => P(s, 'mkdir', p).catch(async e => {
+      const st = await P(s, 'stat', p).catch(() => null)
+      if (st?.isDirectory()) return
+      const parent = posix.dirname(p)
+      if (st || parent === p || (await side.info(parent))) throw e
+      await side.mkdir(parent); await P(s, 'mkdir', p)
+    }),
     size: p => P(s, 'stat', p).then(st => st.size, () => null),
     read: (p, start) => s.createReadStream(p, start ? { start } : {}),
     write: (p, start) => s.createWriteStream(p, start ? { flags: 'r+', start } : {}),
+    entries: async p => (await P(s, 'readdir', p)).filter(e => e.filename !== '.' && e.filename !== '..').map(e => ({
+      name: e.filename, isLink: !!e.attrs.isSymbolicLink?.(), isDirectory: !!e.attrs.isDirectory?.(), size: e.attrs.size || 0, mtime: msOf(e.attrs.mtime),
+    })),
+    // a file, or a folder and everything in it; nothing there is fine
+    remove: async p => {
+      const st = await P(s, 'lstat', p).catch(() => null)
+      if (!st) return
+      if (!st.isDirectory()) return P(s, 'unlink', p)
+      for (const e of await P(s, 'readdir', p)) if (e.filename !== '.' && e.filename !== '..') await side.remove(posix.join(p, e.filename))
+      await P(s, 'rmdir', p)
+    },
+    // keeps the local date on the server, so that the next comparison sees the file as unchanged (SFTP only)
+    ...(typeof s.utimes === 'function' ? { setTime: (p, ms) => P(s, 'utimes', p, Math.floor(ms / 1000), Math.floor(ms / 1000)) } : {}),
   }
   return side
 }
@@ -100,6 +128,8 @@ module.exports = (transfers, resolve) => {
     for (const item of job.plan) {
       if (item.done) continue
       transfers.check(job)
+      // synchronization: what was deleted locally goes on the server too
+      if (item.op === 'delete') { await dst.remove(item.target); item.done = true; continue }
       if (item.directory) {
         if ((await dst.info(item.target)) === null) created.add(item.target)
         await dst.mkdir(item.target); item.done = true; continue
@@ -130,6 +160,12 @@ module.exports = (transfers, resolve) => {
       job.stream = writer
       reader.on('data', chunk => { job.done += chunk.length; transfers.emit(job) })
       try { await pipeline(reader, writer) } finally { job.stream = null }
+      // synchronization: the date is carried over and what the server now has is remembered for the next comparison
+      if (item.sync) {
+        if (dst.setTime && item.mtime) await dst.setTime(item.target, item.mtime).catch(() => {})
+        const there = await dst.info(item.target)
+        if (there) item.after = { size: there.size, mtime: there.mtime }
+      }
       item.done = true
     }
     job.done = finished()

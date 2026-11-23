@@ -5,7 +5,7 @@ const transferItems = new Map()
 const transferWidgets = new Set()
 const QUEUE_STATES = ['running', 'queued', 'paused'], FAILED_STATES = ['error', 'cancelled', 'interrupted']
 const tabOf = x => QUEUE_STATES.includes(x.state) ? 'queue' : FAILED_STATES.includes(x.state) ? 'failed' : 'done'
-const isUp = x => x.direction === 'upload' || x.direction === 'copy'
+const isUp = x => x.direction === 'upload' || x.direction === 'copy' || x.direction === 'sync'
 // 42 s, 3 min 05 s, 1 h 12 min
 function durationText(ms) {
   const s = Math.round((ms || 0) / 1000)

@@ -99,8 +99,11 @@ assert.deepStrictEqual(m.cronCommand('mail -s hi root%line one%line two'), { com
 
 // ---------- run script, executed by a real shell ----------
 const script = m.runScript({ command: `printf '\\%s|\\%s' "$GREETING" "$(pwd)"; echo; echo it\\'s \\% ok`, env: { GREETING: "it's me", 'BAD-NAME': 'x' } })
-const r = spawnSync('sh', ['-c', script], { encoding: 'utf8', env: { HOME: __dirname, PATH: process.env.PATH } })
-assert.strictEqual(r.stdout, `it's me|${__dirname}\nit's % ok\n`)
+const shEnv = { HOME: __dirname, PATH: process.env.PATH }
+const r = spawnSync('sh', ['-c', script], { encoding: 'utf8', env: shEnv })
+// the home folder as the shell writes it (Git Bash on Windows turns D:\a\b into /d/a/b)
+const home = spawnSync('sh', ['-c', 'cd "$HOME" && pwd'], { encoding: 'utf8', env: shEnv }).stdout.trim()
+assert.strictEqual(r.stdout, `it's me|${home}\nit's % ok\n`)
 
 // ---------- snapshot ----------
 const raw = `@@NOW

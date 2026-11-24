@@ -1,0 +1,9 @@
+SET site:name "Cyberdog shop"
+SET counter:visits 18342
+SETEX session:abc123 3600 "{\"user\":42}"
+HSET user:42 name "Ada" email "ada@example.com" plan "pro"
+LPUSH queue:mail job1 job2 job3
+SADD tags:popular redis postgres mariadb
+ZADD leaderboard 120 ada 95 linus 300 grace
+SELECT 2
+SET cache:other "db two"

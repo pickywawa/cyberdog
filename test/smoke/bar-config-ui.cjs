@@ -70,5 +70,5 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     app.exit(0)
   } catch (e) { console.error(e); await win.webContents.capturePage().then(i => fs.writeFileSync(path.join(shots, 'bar-failure.png'), i.toPNG())).catch(() => {}); app.exit(1) }
 }))
-const BAR_KEYS = () => ['term', 'dashboard', 'processes', 'services', 'schedules', 'logs', 'docker', 'kube', 'certificates', 'keys', 'paths', 'sync', 'actions']
+const BAR_KEYS = () => ['term', 'dashboard', 'processes', 'services', 'schedules', 'logs', 'docker', 'kube', 'databases', 'certificates', 'keys', 'paths', 'sync', 'actions']
 require(path.join(root, 'src/main.js'))

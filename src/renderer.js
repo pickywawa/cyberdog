@@ -806,13 +806,14 @@ const PANELS = {
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
   docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
   kube: { title: 'kube.title', render: t => renderKube(t), leave: t => leaveKube(t) },
+  databases: { title: 'db.title', render: t => renderDatabases(t), leave: t => leaveDatabases(t) },
   certificates: { title: 'cert.title', render: t => renderCertificates(t) },
   keys: { title: 'keys.title', render: t => renderKeys(t) },
   paths: { title: 'paths.title', render: t => renderPaths(t) },
   sync: { title: 'sync.title', render: t => renderSync(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['schedules', 'clock', 'cron.title'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'docker.title'], ['kube', 'kube', 'kube.title'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['sync', 'sync', 'bar.sync'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['schedules', 'clock', 'cron.title'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'docker.title'], ['kube', 'kube', 'kube.title'], ['databases', 'database', 'db.title'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['sync', 'sync', 'bar.sync'], ['actions', 'zap', 'bar.actions']]
 
 // The bar can be customized (order, hidden views): one layout for every server, kept in localStorage.
 // A view missing from the saved order (added by an update) keeps its default place.
@@ -930,7 +931,7 @@ function setPanel(tab, name) {
 }
 function renderPanel(tab) {
   tab.rpanel.hidden = !tab.panel
-  tab.rpanel.classList.toggle('wide', tab.panel === 'editor') // the editor has a width of its own, wider
+  tab.rpanel.classList.toggle('wide', tab.panel === 'editor' || tab.panel === 'databases') // the editor has a width of its own, wider
   tab.rpanelActions.replaceChildren()
   tab.rpanelBody.replaceChildren()
   tab.rpanelBody.classList.remove('flush')
@@ -1769,7 +1770,7 @@ function rememberFolder(server, path) {
 function openFiles(server, { terminal = false, path = null, split = null } = {}) {
   path ||= lastFolder(server)
   if(server.loading)return
-  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), schedules: newSchedules(), svc: newSvc(), docker: newDocker(), kube: newKube(), logs: newLogs() }
+  const tab = { id: uid(), kind: 'files', opening: true, server, connId: null, panes: [], panel: null, term: null, termId: null, results: [], certificates: newCertificates(), keys: newKeys(), dash: newDash(), processes: newProcesses(), schedules: newSchedules(), svc: newSvc(), docker: newDocker(), kube: newKube(), dbs: newDbs(), logs: newLogs() }
   tab.panes.push((tab.active = makeExplorer(tab)))
   tab.explorers = h('div', { className: 'explorers' })
   layoutExplorers(tab)
@@ -1794,8 +1795,8 @@ function openFiles(server, { terminal = false, path = null, split = null } = {})
   tab.rpanelActions = h('span', { className: 'rp-actions' })
   tab.rpanelBody = h('div', { className: 'rp-body' })
   const rz = h('div', { className: 'rz rz-left' })
-  const panelWidth = () => (tab.panel === 'editor' ? 'epw' : 'rpw')
-  dragResize(rz, { axis: 'x', dir: -1, min: 290, max: () => Math.max(290, innerWidth - (tab.panel === 'editor' ? 420 : 560)), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--' + panelWidth(), w + 'px'), done: () => saveSize(panelWidth(), tab.rpanel.offsetWidth) })
+  const panelWidth = () => (tab.panel === 'editor' || tab.panel === 'databases' ? 'epw' : 'rpw')
+  dragResize(rz, { axis: 'x', dir: -1, min: 290, max: () => Math.max(290, innerWidth - (tab.panel === 'editor' || tab.panel === 'databases' ? 420 : 560)), get: () => tab.rpanel.offsetWidth, set: w => root.style.setProperty('--' + panelWidth(), w + 'px'), done: () => saveSize(panelWidth(), tab.rpanel.offsetWidth) })
   tab.rpanel = h('div', { className: 'rpanel', hidden: true }, rz,
     h('div', { className: 'rp-head' }, tab.rpanelTitle, tab.rpanelActions, ib('x', 'panel.close', () => setPanel(tab, tab.panel))),
     tab.rpanelBody)

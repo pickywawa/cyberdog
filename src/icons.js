@@ -1,6 +1,7 @@
 // Jeu d'icônes (trait 24×24, style Lucide) + association extension → icône/couleur.
 ;(function () {
   const P = {
+    database: '<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.700 3.600 3 8 3s8-1.300 8-3v-13"/><path d="M4 12c0 1.700 3.600 3 8 3s8-1.300 8-3"/>',
     grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
     lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',

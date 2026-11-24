@@ -29,6 +29,7 @@ const dockerfmt = require('./docker')
 const processModel = require('./processes')
 const scheduleModel = require('./schedules')
 const kubeModel = require('./kube')
+const dbModel = require('./databases')
 const { HEALTH_SCRIPT, parseHealth, SERVICES_CMD, parseServices, UNIT_RE, SVC_ACTIONS } = require('./health')
 const { autoUpdater } = require('electron-updater')
 const { isNewerVersion, selectUpdateAsset, openUpdatePackage } = require('./update-version')
@@ -1664,6 +1665,206 @@ ipcMain.handle('kube:action', async (_, id, query) => {
   const r = await kubectl(getConn(id), kubeModel.actionArgs(query), { timeout: 60000 })
   if (r.code !== 0) throw kubeError(r)
   return r.out.trim()
+})
+
+// ---------- Databases (psql, mysql / mariadb, redis-cli of the server or of a Docker container) ----------
+// Logins typed in the panel are kept per server and instance, encrypted like the server passwords.
+const dbLoginsFile = () => path.join(currentConfigRoot(), 'db-logins.json')
+const readDbLogins = () => { try { return JSON.parse(fs.readFileSync(dbLoginsFile(), 'utf8')) } catch { return {} } }
+function dbLogin(server, instId) {
+  const x = readDbLogins()[server.id]?.[instId]
+  if (!x) return null
+  let pass = ''
+  try { pass = x.pass ? safeStorage.decryptString(Buffer.from(x.pass, 'base64')) : '' } catch {}
+  return { user: x.user, database: x.database || '', pass }
+}
+ipcMain.handle('db:login', (_, id, instId, login) => {
+  const c = getConn(id), all = readDbLogins()
+  if (typeof instId !== 'string' || instId.length > 200) throw new Error('invalid instance')
+  const mine = (all[c.server.id] ||= {})
+  if (!login) delete mine[instId]
+  else {
+    const user = String(login.user || '').trim(), database = String(login.database || '').trim()
+    if (!user || user.length > 128 || database.length > 128 || /[\0\r\n]/.test(user + database)) throw new Error('invalid login')
+    if (login.pass && !safeStorage.isEncryptionAvailable()) throw new Error(t('err.keychain'))
+    const prev = mine[instId]
+    mine[instId] = { user, database, pass: login.pass ? safeStorage.encryptString(String(login.pass)).toString('base64') : login.keepPass && prev?.user === user ? prev.pass : '' }
+  }
+  if (!Object.keys(mine).length) delete all[c.server.id]
+  fs.writeFileSync(dbLoginsFile(), JSON.stringify(all, null, 2), { mode: 0o600 })
+})
+
+// stdout and stderr apart: results on one side, errors on the other
+function execSplit(client, cmd, { input, timeout = 120000, max = 20e6 } = {}) {
+  return new Promise((resolve, reject) => {
+    client.exec(cmd, (err, stream) => {
+      if (err) return reject(err)
+      let out = '', errOut = '', cut = false
+      const timer = setTimeout(() => { stream.close(); resolve({ code: 124, out, err: errOut, cut, timeout: true }) }, timeout)
+      stream.setEncoding('utf8')
+      stream.stderr.setEncoding('utf8')
+      stream.on('data', d => { if (out.length < max) out += d; else cut = true })
+      stream.stderr.on('data', d => { if (errOut.length < 1e6) errOut += d })
+      stream.on('close', code => { clearTimeout(timer); resolve({ code, out, err: errOut, cut }) })
+      stream.end(input)
+    })
+  })
+}
+
+async function dbDiscover(c) {
+  const r = await exec(c.client, 'sh -s', { input: dbModel.SNAPSHOT, timeout: 20000 })
+  const snap = dbModel.parseSnapshot(r.out)
+  let containers = []
+  if (snap.bins.includes('docker')) {
+    try {
+      const ps = await docker(c, ['ps', '-a', '--format', '{{json .}}'])
+      const lines = ps.code === 0 ? ps.out.split('\n').filter(l => l.startsWith('{')) : []
+      const names = lines.map(l => { try { return JSON.parse(l) } catch { return {} } }).filter(x => dbModel.imageEngine(x.Image)).map(x => x.Names).filter(n => /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(n || ''))
+      const ins = names.length ? await docker(c, ['inspect', ...names]) : null
+      let inspected = []
+      try { inspected = ins?.code === 0 ? JSON.parse(ins.out.slice(ins.out.indexOf('['))) : [] } catch {}
+      containers = dbModel.parseContainers(lines, inspected)
+    } catch {}
+  }
+  // sudo: without password (NOPASSWD), with the saved password of the server, or not at all
+  c.dbSudo = snap.sudo === 'nopass' ? 'nopass' : secret(c.server) ? 'pass' : 'no'
+  c.dbInstances = new Map([...snap.instances, ...containers].map(x => [x.id, x]))
+  return { sudo: c.dbSudo, bins: snap.bins, instances: [...c.dbInstances.values()].map(x => { const l = dbLogin(c.server, x.id); return { ...dbModel.publicInstance(x), login: l ? { user: l.user, database: l.database, hasPass: !!l.pass } : null } }) }
+}
+ipcMain.handle('db:discover', (_, id) => dbDiscover(getConn(id)))
+
+const dbInst = (c, instId) => c.dbInstances?.get(instId) || (() => { throw new Error(t('db.err.gone')) })()
+async function dbRun(c, inst, { tool = 'client', db, data = '', timeout, max, wrapCmd } = {}) {
+  const login = dbLogin(c.server, inst.id)
+  const { cmd, needsSudoPassword } = dbModel.command({ inst, creds: login, sudo: c.dbSudo, dockerSudo: !!c.dockerSudo }, { tool, db })
+  const pass = login ? login.pass : inst.secret || ''
+  const input = (needsSudoPassword ? (secret(c.server) || '') + '\n' : '') + pass + '\n' + data
+  const r = await execSplit(c.client, wrapCmd ? wrapCmd(cmd) : cmd, { input, timeout, max })
+  if (r.timeout) throw new Error(t('db.err.timeout'))
+  return r
+}
+const dbFail = (inst, r) => {
+  const msg = dbModel.cleanError(inst.engine, r.err) || r.out.trim().split('\n').slice(-3).join(' ') || `exit ${r.code}`
+  if (/sudo: a (terminal|password) is required|sudo: no tty|is not in the sudoers/i.test(msg)) return new Error(t('db.err.sudo'))
+  if (r.code === 127 && /not found/.test(msg)) return new Error(t('db.err.client', { error: msg }))
+  return new Error(msg)
+}
+async function dbSql(c, inst, statements, { db, readOnly = true, maxRows } = {}) {
+  const r = await dbRun(c, inst, { db, data: dbModel.sqlScript(inst.engine, statements, { readOnly }) })
+  const p = dbModel.parseSql(inst.engine, r.out, r.err, statements, { maxRows })
+  // an error in a statement (psql exits with 3, mysql names the line) is a result; anything else is a connection failure
+  const inScript = inst.engine === 'postgres' ? r.code === 3 : /^ERROR \d+ \(\w+\) at line \d+/m.test(r.err)
+  if (!p.results.length && !(inScript && p.error)) throw dbFail(inst, r)
+  p.cut = r.cut
+  return p
+}
+async function dbRedis(c, inst, commands, { db } = {}) {
+  const r = await dbRun(c, inst, { db, data: dbModel.redisScript(commands) })
+  const parts = dbModel.splitRedis(r.out)
+  if (!parts.length && (r.code !== 0 || r.err.trim())) throw dbFail(inst, r)
+  if (parts.length === 1 && /^\(error\) (NOAUTH|WRONGPASS)/.test(parts[0].trim())) throw new Error(parts[0].trim().replace(/^\(error\) /, ''))
+  return parts
+}
+
+// the panel's views: a fixed set of queries, built in databases.js
+ipcMain.handle('db:op', async (_, id, instId, op, a = {}) => {
+  const c = getConn(id), inst = dbInst(c, instId)
+  if (inst.engine === 'redis') {
+    const R = dbModel.REDIS
+    if (op === 'overview') { const [info] = await dbRedis(c, inst, R.overview()); return { info: dbModel.parseInfo(dbModel.parseRedis(info)) } }
+    if (op === 'keys') {
+      const [scan] = await dbRedis(c, inst, R.keys(a.pattern, a.cursor, a.count), { db: a.db })
+      const v = dbModel.parseRedis(scan)
+      if (!Array.isArray(v)) throw new Error(v?.error || String(v))
+      const keys = (v[1] || []).slice(0, 1000), meta = keys.length ? await dbRedis(c, inst, R.meta(keys), { db: a.db }) : []
+      return { cursor: v[0], keys: keys.map((k, i) => ({ key: k, type: dbModel.parseRedis(meta[i * 2] || ''), ttl: dbModel.parseRedis(meta[i * 2 + 1] || '') })) }
+    }
+    if (op === 'key') {
+      if (typeof a.key !== 'string' || a.key.length > 4096) throw new Error('invalid key')
+      const parts = (await dbRedis(c, inst, R.key(a.key), { db: a.db })).map(dbModel.parseRedis)
+      const [type, ttl, memory, get, hash, list, set, zset, stream, ...lens] = parts
+      const value = { string: get, hash, list, set: Array.isArray(set) ? set[1] : set, zset, stream }[type] ?? null
+      const length = { string: lens[0], hash: lens[1], list: lens[2], set: lens[3], zset: lens[4], stream: lens[5] }[type] ?? null
+      return { type, ttl, memory, value, length }
+    }
+    if (op === 'activity') { const [list] = await dbRedis(c, inst, R.activity()); return { clients: dbModel.parseClients(dbModel.parseRedis(list)) } }
+    if (op === 'kill') { const [r] = await dbRedis(c, inst, R.kill(a.pid)); const v = dbModel.parseRedis(r); if (v?.error) throw new Error(v.error); return { ok: true } }
+    if (op === 'users') { const [r] = await dbRedis(c, inst, R.users()); const v = dbModel.parseRedis(r); if (v?.error) throw new Error(v.error); return { users: (Array.isArray(v) ? v : [v]).filter(Boolean) } }
+    throw new Error('invalid operation')
+  }
+  const Q = dbModel.queries(inst.engine)
+  const build = { overview: () => Q.overview(), databases: () => Q.databases(), tables: () => Q.tables(a.db), columns: () => Q.columns(a.db, a.schema, a.table), preview: () => Q.preview(a.db, a.schema, a.table, a),
+    activity: () => Q.activity(), kill: () => Q.kill(a.pid, !!a.hard), users: () => Q.users(), grants: () => Q.grants(a.db, a.user, a.host) }[op]
+  if (!build) throw new Error('invalid operation')
+  // the views read only; stopping a session is the one change, asked for in the panel
+  const p = await dbSql(c, inst, build(), { db: inst.engine === 'postgres' ? a.db : op === 'preview' || op === 'columns' || op === 'tables' ? a.db : undefined, readOnly: op !== 'kill' })
+  if (p.error && op !== 'overview') throw new Error(p.error.message)
+  return p
+})
+
+// the SQL / command editor
+ipcMain.handle('db:run', async (_, id, instId, text, o = {}) => {
+  const c = getConn(id), inst = dbInst(c, instId)
+  if (typeof text !== 'string' || text.length > 1e6) throw new Error('invalid script')
+  if (inst.engine === 'redis') {
+    const lines = dbModel.redisLines(text)
+    if (!lines.length) return { results: [] }
+    if (o.readOnly !== false) { const bad = lines.find(l => !dbModel.isReadRedis(l)); if (bad) throw new Error(t('db.err.readonly_redis', { cmd: bad.split(/\s+/)[0] })) }
+    const t0 = Date.now(), parts = await dbRedis(c, inst, lines, { db: o.db })
+    return { ms: Date.now() - t0, results: lines.map((l, i) => ({ statement: l, text: parts[i] ?? '' })) }
+  }
+  let statements
+  try { statements = dbModel.splitSql(text, inst.engine) } catch (e) { throw new Error(t(e.message === 'psql-meta' ? 'db.err.psql_meta' : e.message === 'mysql-meta' ? 'db.err.mysql_meta' : 'db.err.parse')) }
+  if (!statements.length) return { results: [] }
+  if (o.readOnly !== false) { const bad = statements.find(s => !dbModel.isReadSql(s, inst.engine)); if (bad) throw new Error(t('db.err.readonly', { word: dbModel.firstWord(bad, inst.engine).toUpperCase() })) }
+  const t0 = Date.now(), p = await dbSql(c, inst, statements, { db: o.db || undefined, readOnly: o.readOnly !== false, maxRows: 1000 })
+  return { ...p, ms: Date.now() - t0 }
+})
+
+// backup: dump compressed into ~/cyberdog-backups on the server, then downloaded from the panel if wanted
+ipcMain.handle('db:backup', async (_, id, instId, db) => {
+  const c = getConn(id), inst = dbInst(c, instId)
+  if (inst.engine !== 'redis' && (typeof db !== 'string' || !db)) throw new Error('invalid database')
+  const name = dbModel.backupName(inst, db)
+  const file = `"$HOME/cyberdog-backups/"${q(name)}`
+  const r = await dbRun(c, inst, { tool: 'dump', db, timeout: 3600e3, max: 1e5,
+    wrapCmd: cmd => `mkdir -p "$HOME/cyberdog-backups" && chmod 700 "$HOME/cyberdog-backups" && { ${cmd}; echo "@@RC $?" >&2; } | gzip -c > ${file}; s=$(wc -c < ${file}); echo "$HOME/cyberdog-backups/${name} $s"` })
+  const rc = /@@RC (\d+)/.exec(r.err)?.[1]
+  if (rc !== '0') { await exec(c.client, `rm -f ${file}`).catch(() => {}); throw dbFail(inst, r) }
+  const [, file2, size] = /^(\/.*) (\d+)\s*$/m.exec(r.out.trim()) || []
+  if (!file2) throw new Error(r.out.trim() || 'backup failed')
+  return { path: file2, size: +size }
+})
+
+// where the server writes its log: a file (read with sudo), the systemd journal, or docker logs
+ipcMain.handle('db:log', async (_, id, instId) => {
+  const c = getConn(id), inst = dbInst(c, instId)
+  if (inst.source === 'docker') return { kind: 'docker', id: inst.container }
+  const sudo = c.dbSudo !== 'no'
+  let file = inst.logFile
+  try {
+    if (!file && inst.engine === 'redis') {
+      const [logfile, dir] = (await dbRedis(c, inst, dbModel.REDIS.logInfo())).map(dbModel.parseRedis)
+      const f = Array.isArray(logfile) ? logfile[1] : '', d = Array.isArray(dir) ? dir[1] : ''
+      if (f) file = f.startsWith('/') ? f : posix.join(d || '/', f)
+    } else if (!file && inst.engine === 'mysql') {
+      const p = await dbSql(c, inst, dbModel.queries('mysql').logInfo())
+      const [logError, datadir] = p.results[0]?.rows[0] || []
+      if (logError && logError !== 'stderr') file = logError.startsWith('/') ? logError : posix.join(datadir || '/', logError.replace(/^\.\//, ''))
+    } else if (!file && inst.engine === 'postgres') {
+      const p = await dbSql(c, inst, dbModel.queries('postgres').logInfo())
+      const [collector, dir, data] = p.results[0]?.rows[0] || []
+      if (collector === 'on' && dir) {
+        const base = dir.startsWith('/') ? dir : posix.join(data || '/', dir)
+        const r = await exec(c.client, `${sudo ? sudoOf(c).prefix + ' ' : ''}sh -c ${q(`ls -1t ${q(base)}/*.log 2>/dev/null | head -1`)}`, { input: sudo ? sudoOf(c).input : undefined })
+        const f = r.out.trim().split('\n').pop()
+        if (f?.startsWith('/')) file = f
+      }
+    }
+  } catch {}
+  if (file) return { kind: 'file', path: file, sudo }
+  if (inst.unit) return { kind: 'journal', unit: inst.unit, sudo }
+  throw new Error(t('db.err.nolog'))
 })
 
 // ---------- Terminal ----------

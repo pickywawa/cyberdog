@@ -880,3 +880,54 @@ body.resizing-y { cursor: row-resize; }
 .sync-badge.on { color: var(--accent); }
 .sync-badge.err { color: var(--danger); }
 .pathbox:has(.sync-badge:not([hidden])) .crumbs { padding-right: 58px; }
+
+/* Databases panel */
+.db-view { gap: 10px; }
+.rp-body.flush .db-view > .seg, .rp-body.flush .db-view > .alert { margin: 0 10px 8px; }
+.db-pane { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.rp-body.flush .db-pane { min-height: 0; }
+.db-views button span { font-size: 11.5px; }
+@container (max-width: 560px) { .db-views button span { display: none; } }
+.db-list .dk-ic svg, .dback .dk-ic svg { width: 18px; height: 18px; }
+.db-sys { opacity: .7; }
+.db-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.db-tile { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.db-tile b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-tile small { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; min-width: 0; }
+.db-crumbs b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.linkish { border: 0; padding: 2px 4px; color: var(--accent); background: none; }
+button.linkish.on { color: var(--text); font-weight: 600; }
+.db-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.db-row .seg { flex: 0 1 260px; }
+.db-row .dk-acts { margin-left: auto; }
+.db-h { margin: 6px 0 0; font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.db-grid-wrap { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 8px; flex: none; }
+.db-grid { border-collapse: collapse; font: 12px Menlo, Consolas, "Cascadia Mono", monospace; min-width: 100%; }
+.db-grid th { position: sticky; top: 0; background: var(--side); text-align: left; font-weight: 600; padding: 5px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; z-index: 1; }
+.db-grid td { padding: 4px 9px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); white-space: pre; max-width: 340px; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.db-grid tr:hover td { background: var(--hover); }
+.db-grid td.null { color: var(--dim); font-style: italic; opacity: .7; }
+.db-grid tr.click { cursor: pointer; }
+.db-err { text-align: left; white-space: pre-wrap; font-family: Menlo, Consolas, monospace; }
+.db-backup { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, #2fbf71 45%, var(--line)); border-radius: 10px; }
+.db-backup > span:first-child { color: #2fbf71; display: inline-flex; }
+.db-type { min-width: 44px; text-align: center; }
+.db-editor { gap: 8px; }
+.db-ed-tools { display: flex; align-items: center; gap: 8px; }
+.db-ed-tools .grow { flex: 1; }
+.db-ed-tools .primary { display: inline-flex; align-items: center; gap: 6px; }
+.db-ed-tools .primary svg { width: 14px; height: 14px; }
+.db-ro { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.db-ro input { accent-color: var(--accent); }
+.db-ro.off span { color: var(--danger); font-weight: 600; }
+.db-ed-host { height: 200px; min-height: 120px; resize: vertical; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; flex: none; }
+.db-ed-text { width: 100%; height: 100%; border: 0; resize: none; font: 13px Menlo, Consolas, monospace; background: var(--bg); color: var(--text); padding: 8px; }
+.db-results { display: flex; flex-direction: column; gap: 10px; }
+.db-res { display: flex; flex-direction: column; gap: 6px; }
+.db-stmt { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.db-query { display: block; font-size: 11px; margin-top: 4px; padding: 4px 6px; border-radius: 6px; background: var(--side); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.db-session .svc-main > code { white-space: nowrap; }
+.db-grant { margin: 0; white-space: pre-wrap; }
+.db-view .chip { display: inline-flex; align-items: center; gap: 6px; }
+.db-view .chip svg { width: 13px; height: 13px; flex: none; }

@@ -33,7 +33,7 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 | 🖥️ **Terminal included** | One click opens an SSH terminal *under* the explorer, already `cd`'d into the folder you are browsing. No more juggling windows. |
 | 📈 **Server health at a glance** | Online/offline, CPU, RAM, load, disks with alerts, uptime and SSH latency. |
 | 🔄 **Folder synchronization** | Keep a local folder in sync with the server: compare with a preview of added, modified and deleted files, or let every save go up on its own. |
-| ⚙️ **Services, logs, Docker & Kubernetes** | Start/stop/restart `systemctl` services, read and run **cron jobs and systemd timers**, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, restart, recreate, shell) and browse **Kubernetes** with the server's `kubectl`. Test and reload nginx, Apache or sshd configs right from the editor. |
+| ⚙️ **Services, logs, Docker, Kubernetes & databases** | Start/stop/restart `systemctl` services, read and run **cron jobs and systemd timers**, follow `journalctl` / Nginx / app logs live (level filters, error highlighting, favorite searches), manage Docker containers (live logs, CPU/RAM, restart, recreate, shell) browse **Kubernetes** with the server's `kubectl`, and open the server's **databases** (PostgreSQL, MySQL / MariaDB, Redis). Test and reload nginx, Apache or sshd configs right from the editor. |
 | ⚡ **Quick actions** | Save bash scripts once, run them on one server — or on **all open servers** — with one click. Actions can ask questions (lists, text, buttons), download files and drive Cyberdog. |
 | 🔌 **Many protocols** | SFTP, FTP/FTPS, S3 and compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob and Files, WebDAV, SMB, Dropbox, OneDrive and Google Drive, all in the same explorer. |
 | 🛡️ **Bastions** | Reach private servers through a reusable bastion, with a route test and fingerprint checks. |
@@ -328,7 +328,11 @@ The 📦 button lists your containers with live **CPU / RAM usage**, lets you **
 <img src="docs/screenshots/docker.png" alt="Docker containers" width="100%">
 <img src="docs/screenshots/docker-logs.png" alt="Live container logs" width="100%">
 
-**Kubernetes**, in the same panel: switch from *Docker* to *Kubernetes* to browse the cluster with the server's own `kubectl` (or `k3s kubectl`, `microk8s kubectl`), over SSH, nothing to install. Pick the context and namespace, then **pods** (status as in `kubectl get`: *CrashLoopBackOff*, *Init:1/2*, restarts and the last termination reason, CPU/RAM when metrics-server is there), **workloads** (deployments, statefulsets, daemonsets with their ready replicas), **services**, **ingresses**, **nodes** and **events**. Click a pod for its live logs (container by container), open a **shell** in it in the terminal below, **describe** or read the **YAML** of any object, delete a pod so that it is recreated, **restart** (rolling) or **scale** a workload. A kubeconfig only root can read (k3s, microk8s) switches to `sudo` by itself, as for Docker.
+**Kubernetes**, in its own panel (right below Docker in the bar): browse the cluster with the server's own `kubectl` (or `k3s kubectl`, `microk8s kubectl`), over SSH, nothing to install. Pick the context and namespace, then **pods** (status as in `kubectl get`: *CrashLoopBackOff*, *Init:1/2*, restarts and the last termination reason, CPU/RAM when metrics-server is there), **workloads** (deployments, statefulsets, daemonsets with their ready replicas), **services**, **ingresses**, **nodes** and **events**. Click a pod for its live logs (container by container), open a **shell** in it in the terminal below, **describe** or read the **YAML** of any object, delete a pod so that it is recreated, **restart** (rolling) or **scale** a workload. A kubeconfig only root can read (k3s, microk8s) switches to `sudo` by itself, as for Docker.
+
+### Databases
+
+The database button of the right bar: PostgreSQL, MySQL / MariaDB and Redis are found on their own, installed as services or running in Docker containers, and opened with the server's own clients (`psql`, `mysql`, `redis-cli`) over SSH: no port to open, nothing to install. Most of the time no password is needed: `sudo -u postgres` (peer authentication), MariaDB's root through its socket, the user and password a container was started with. A login can also be typed per database (kept encrypted). Each database shows an **overview** (version, uptime, connections, size, cache hits), a **read-only data browser** (databases, tables with their size and rows, 100 rows per page, structure and indexes; Redis keys with their type, TTL and value), an **SQL editor** (read only by default, enforced by the server too; writing is asked for and confirmed), the **sessions** with their running query (cancel it, end the session), **users and rights**, the server's **log**, and **backups** (`pg_dump`, `mysqldump`, Redis RDB, gzipped into `~/cyberdog-backups` on the server, then downloaded in one click).
 
 
 ### Quick actions
@@ -376,6 +380,10 @@ Deleting on the server is off by default. A file only on the server that was nev
 The **Sync** button of the right bar lists the synchronized folders of the server with their state (watching, sending, last sync, deletions waiting) and Compare, Watch / Pause, Edit and Delete. A badge in the path bar shows that the folder you browse is synchronized. With the **local pane** open next to the server, a button compares the two folders shown.
 
 Synchronization goes from your computer to the server; it works with every protocol (SFTP, FTP, S3, Azure, WebDAV…).
+
+### A right bar of your own
+
+The ⚙️ button at the bottom of the right bar switches it to **configuration mode**: drag the views to put them in your order (the others slide out of the way), click one to hide or show it, **Reset** to go back to the default order. The layout is the same for every server and is kept between launches.
 
 ### Themes & languages
 
@@ -470,6 +478,13 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 ## 📰 Release notes
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
+
+### 1.16.0
+
+- **Databases**: a new view finds PostgreSQL, MySQL / MariaDB and Redis on the server, as services or in Docker containers, and opens them with the server's own clients over SSH, usually without a password (`sudo -u postgres`, MariaDB's root socket, the container's own settings) or with a login saved per database. Overview, read-only data browser (tables, 100 rows per page, structure and indexes; Redis keys and values), SQL / command editor (read only by default, enforced by the server too), sessions with cancel / end, users and rights, the server's log, and backups (`pg_dump`, `mysqldump`, Redis RDB) downloaded in one click.
+- **Kubernetes** gets its own view, right below Docker in the bar.
+- **Customizable right bar**: a configuration mode to reorder the views by drag and drop and hide the ones you never use.
+- *SSH key manager* is now simply **SSH keys**.
 
 ### 1.15.0
 

@@ -33,7 +33,7 @@ Une alternative gratuite et open source à Cyberduck, WinSCP et Termius : explor
 | 🖥️ **Terminal inclus** | Un clic ouvre un terminal SSH *sous* l'explorateur, déjà placé dans le dossier que vous parcourez. Fini la jonglerie entre fenêtres. |
 | 📈 **La santé du serveur d'un coup d'œil** | En ligne/hors ligne, CPU, RAM, charge, disques avec alertes, uptime et latence SSH. |
 | 🔄 **Synchronisation de dossiers** | Gardez un dossier local synchronisé avec le serveur : comparez avec un aperçu des fichiers ajoutés, modifiés et supprimés, ou laissez chaque enregistrement partir tout seul. |
-| ⚙️ **Services, logs, Docker et Kubernetes** | Démarrez/arrêtez/redémarrez les services `systemctl`, lisez et lancez vos **tâches cron et timers systemd**, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, redémarrage, recréation, shell) et parcourez **Kubernetes** avec le `kubectl` du serveur. Testez et rechargez vos configurations nginx, Apache ou sshd depuis l’éditeur. |
+| ⚙️ **Services, logs, Docker, Kubernetes et bases de données** | Démarrez/arrêtez/redémarrez les services `systemctl`, lisez et lancez vos **tâches cron et timers systemd**, suivez en direct `journalctl`, Nginx ou vos logs applicatifs (filtres par niveau, erreurs en évidence, recherches favorites), gérez vos conteneurs Docker (logs en direct, CPU/RAM, redémarrage, recréation, shell) , parcourez **Kubernetes** avec le `kubectl` du serveur et ouvrez les **bases de données** du serveur (PostgreSQL, MySQL / MariaDB, Redis). Testez et rechargez vos configurations nginx, Apache ou sshd depuis l’éditeur. |
 | ⚡ **Actions rapides** | Enregistrez vos scripts bash une fois, lancez-les sur un serveur — ou sur **tous les serveurs ouverts** — en un clic. Les actions peuvent poser des questions (listes, texte, boutons), télécharger des fichiers et piloter Cyberdog. |
 | 🔌 **Nombreux protocoles** | SFTP, FTP/FTPS, S3 et compatibles (AWS, Google Cloud Storage, Backblaze B2, Wasabi…), Azure Blob et Files, WebDAV, SMB, Dropbox, OneDrive et Google Drive, dans le même explorateur. |
 | 🛡️ **Bastions** | Atteignez les serveurs privés par un bastion réutilisable, avec test du trajet et vérification des empreintes. |
@@ -328,7 +328,11 @@ Le bouton 📦 liste vos conteneurs avec leur **utilisation CPU / RAM en direct*
 <img src="docs/screenshots/docker.png" alt="Conteneurs Docker" width="100%">
 <img src="docs/screenshots/docker-logs.png" alt="Logs d'un conteneur en direct" width="100%">
 
-**Kubernetes**, dans le même panneau : passez de *Docker* à *Kubernetes* pour parcourir le cluster avec le `kubectl` du serveur (ou `k3s kubectl`, `microk8s kubectl`), via SSH, sans rien installer. Choisissez le contexte et le namespace, puis les **pods** (statut comme `kubectl get` : *CrashLoopBackOff*, *Init:1/2*, redémarrages et raison du dernier arrêt, CPU/RAM si metrics-server est présent), les **workloads** (deployments, statefulsets, daemonsets et leurs réplicas prêts), les **services**, les **ingress**, les **nœuds** et les **événements**. Un clic sur un pod affiche ses logs en direct (conteneur par conteneur) ; ouvrez-y un **shell** dans le terminal du bas, **décrivez** ou lisez le **YAML** de n'importe quel objet, supprimez un pod pour qu'il soit recréé, **redémarrez** (progressivement) ou **mettez à l'échelle** un workload. Un kubeconfig lisible seulement par root (k3s, microk8s) passe tout seul par `sudo`, comme pour Docker.
+**Kubernetes**, dans son propre panneau (juste sous Docker dans la barre) : parcourez le cluster avec le `kubectl` du serveur (ou `k3s kubectl`, `microk8s kubectl`), via SSH, sans rien installer. Choisissez le contexte et le namespace, puis les **pods** (statut comme `kubectl get` : *CrashLoopBackOff*, *Init:1/2*, redémarrages et raison du dernier arrêt, CPU/RAM si metrics-server est présent), les **workloads** (deployments, statefulsets, daemonsets et leurs réplicas prêts), les **services**, les **ingress**, les **nœuds** et les **événements**. Un clic sur un pod affiche ses logs en direct (conteneur par conteneur) ; ouvrez-y un **shell** dans le terminal du bas, **décrivez** ou lisez le **YAML** de n'importe quel objet, supprimez un pod pour qu'il soit recréé, **redémarrez** (progressivement) ou **mettez à l'échelle** un workload. Un kubeconfig lisible seulement par root (k3s, microk8s) passe tout seul par `sudo`, comme pour Docker.
+
+### Bases de données
+
+Le bouton base de données de la barre de droite : PostgreSQL, MySQL / MariaDB et Redis sont trouvés tout seuls, installés en service ou dans des conteneurs Docker, et ouverts avec les clients du serveur (`psql`, `mysql`, `redis-cli`) via SSH : aucun port à ouvrir, rien à installer. Le plus souvent sans mot de passe : `sudo -u postgres` (authentification peer), le root de MariaDB par son socket, l'utilisateur et le mot de passe avec lesquels un conteneur a été lancé. Des identifiants peuvent aussi être saisis par base (gardés chiffrés). Chaque base offre un **aperçu** (version, durée de marche, connexions, taille, lectures en cache), un **navigateur de données en lecture seule** (bases, tables avec taille et lignes, 100 lignes par page, structure et index ; clés Redis avec type, TTL et valeur), un **éditeur SQL** (lecture seule par défaut, imposée aussi par le serveur ; l'écriture se demande et se confirme), les **sessions** et leur requête en cours (l'annuler, terminer la session), les **utilisateurs et leurs droits**, le **journal** du serveur et les **sauvegardes** (`pg_dump`, `mysqldump`, RDB de Redis, compressées dans `~/cyberdog-backups` sur le serveur, puis téléchargées en un clic).
 
 
 ### Actions rapides
@@ -376,6 +380,11 @@ La suppression côté serveur est désactivée par défaut. Un fichier présent 
 Le bouton **Synchro** de la barre de droite liste les dossiers synchronisés du serveur avec leur état (surveillé, envoi en cours, dernière synchro, suppressions en attente) et les actions Comparer, Surveiller / Pause, Modifier et Supprimer. Un badge dans la barre de chemin signale que le dossier parcouru est synchronisé. Avec le **volet local** ouvert à côté du serveur, un bouton compare les deux dossiers affichés.
 
 La synchronisation va de l’ordinateur vers le serveur ; elle fonctionne avec tous les protocoles (SFTP, FTP, S3, Azure, WebDAV…).
+
+
+### Une barre de droite à votre main
+
+Le bouton ⚙️ en bas de la barre de droite la passe en **mode configuration** : glissez les vues pour les mettre dans votre ordre (les autres s'écartent), cliquez sur une vue pour la masquer ou l'afficher, **Réinitialiser** revient à l'ordre d'origine. La disposition est la même pour tous les serveurs et gardée d'un lancement à l'autre.
 
 ### Thèmes et langues
 
@@ -470,6 +479,13 @@ Le site vitrine bilingue est hébergé sur [pickywawa.github.io/cyberdog](https:
 ## 📰 Notes de version
 
 Chaque version se trouve sur la page des [releases GitHub](https://github.com/pickywawa/cyberdog/releases).
+
+### 1.16.0
+
+- **Bases de données** : une nouvelle vue trouve PostgreSQL, MySQL / MariaDB et Redis sur le serveur, en service ou dans des conteneurs Docker, et les ouvre avec les clients du serveur via SSH, le plus souvent sans mot de passe (`sudo -u postgres`, socket root de MariaDB, réglages du conteneur) ou avec des identifiants enregistrés par base. Aperçu, navigateur de données en lecture seule (tables, 100 lignes par page, structure et index ; clés et valeurs Redis), éditeur SQL / de commandes (lecture seule par défaut, imposée aussi par le serveur), sessions avec annulation / fin, utilisateurs et droits, journal du serveur, et sauvegardes (`pg_dump`, `mysqldump`, RDB de Redis) téléchargées en un clic.
+- **Kubernetes** a sa propre vue, juste sous Docker dans la barre.
+- **Barre de droite personnalisable** : un mode configuration pour réordonner les vues par glisser-déposer et masquer celles qui ne servent pas.
+- *Gestionnaire de clés SSH* devient simplement **Clés SSH**.
 
 ### 1.15.0
 

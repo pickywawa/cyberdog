@@ -1,4 +1,4 @@
-// Kubernetes tab of the Docker panel: the server's kubectl (kubectl, k3s or microk8s) over SSH. Contexts and
+// Kubernetes panel: the server's kubectl (kubectl, k3s or microk8s) over SSH. Contexts and
 // namespaces, pods / workloads / services / ingresses / nodes / events, live logs, shell, describe / YAML, restart
 // and scale. Model: kube.js; reuses h, t, icon, toast, ensure, createLogView, openTerminal, modal, fmtUptime, sizeOf.
 const newKube = () => ({ info: null, context: '', namespace: '', namespaces: [], kind: 'pods', items: [], metrics: false, query: '', error: null, loaded: false, at: 0, busy: new Set(), view: null, polling: false })
@@ -28,13 +28,25 @@ async function kubePoll(tab, force = false) {
     K.info.sudo = r.sudo
   } catch (e) { K.error = errText(e); K.items = [] }
   Object.assign(K, { loaded: true, polling: false, at: Date.now() })
-  if (tab.panel !== 'docker' || tab.docker.engine !== 'kube' || K.view) return
+  if (tab.panel !== 'kube' || K.view) return
   // the list alone is repainted, so that the search box keeps its focus
   if (K.ui?.list.isConnected && kind === K.kind && !first) fillKube(tab)
-  else paintDocker(tab)
+  else paintKubePanel(tab)
 }
-function leaveKube(tab) { tab.kube.view?.lv?.stop(); tab.kube.view = null }
-const kubeRefresh = tab => { const K = tab.kube; K.polling = false; K.loaded = false; paintDocker(tab); kubePoll(tab, true) }
+function leaveKube(tab) { tab.kube.view?.lv?.stop(); tab.kube.view = null; tab.kubeBody = null }
+function renderKube(tab) {
+  tab.rpanelActions.append(hib('refresh', 'tb.refresh', () => kubeRefresh(tab)))
+  tab.kubeBody = h('div', { className: 'docker-view' })
+  tab.rpanelBody.append(tab.kubeBody)
+  paintKubePanel(tab)
+}
+function paintKubePanel(tab) {
+  const body = tab.kubeBody
+  if (!body || tab.panel !== 'kube') return
+  body.replaceChildren()
+  paintKube(tab, body)
+}
+const kubeRefresh = tab => { const K = tab.kube; K.polling = false; K.loaded = false; paintKubePanel(tab); kubePoll(tab, true) }
 
 // ---------- actions ----------
 const kubeTarget = (K, x) => ({ ...kubeScope(K), namespace: x.namespace || undefined, type: x.type, name: x.name })
@@ -43,13 +55,13 @@ async function kubeAction(tab, x, action, extra = {}) {
   const confirmKey = action === 'delete' ? 'confirm_delete' : action === 'restart' ? 'confirm_restart' : null
   if (confirmKey && !confirm(kt(confirmKey, { name: x.name }))) return
   K.busy.add(key)
-  paintDocker(tab)
+  paintKubePanel(tab)
   try {
     await api.invoke('kube:action', tab.connId, { ...kubeTarget(K, x), action, ...extra })
     toast(kt('ok_' + action, { name: x.name, n: extra.replicas }))
   } catch (e) { toast(errText(e), true) }
   K.busy.delete(key)
-  if (K.view) paintDocker(tab)
+  if (K.view) paintKubePanel(tab)
   else kubeRefresh(tab)
 }
 async function kubeScale(tab, x) {
@@ -75,16 +87,16 @@ function kubeLogs(tab, x, container) {
   const lv = createLogView(tab)
   const c = x.type === 'pod' ? container ?? (x.containers.length > 1 ? x.containers[0] : undefined) : undefined
   K.view = { type: 'logs', x, container: c, lv, title: kt('logs_of', { name: x.name }) }
-  paintDocker(tab)
+  paintKubePanel(tab)
   lv.start(x.type === 'pod' ? { kind: 'kube', ...kubeScope(K), namespace: x.namespace, pod: x.name, container: c } : { kind: 'kube', ...kubeTarget(K, x) })
 }
 async function kubeText(tab, x, format = 'describe') {
   const K = tab.kube
   K.view?.lv?.stop()
   const view = (K.view = { type: 'text', x, format, text: null, error: null, title: `${x.kind || x.type} · ${x.name}` })
-  paintDocker(tab)
+  paintKubePanel(tab)
   try { view.text = await api.invoke('kube:text', tab.connId, { ...kubeTarget(K, x), format }) } catch (e) { view.error = errText(e) }
-  if (K.view === view) paintDocker(tab)
+  if (K.view === view) paintKubePanel(tab)
 }
 
 function kubeActions(tab, x, { inView = false } = {}) {
@@ -103,7 +115,7 @@ function kubeActions(tab, x, { inView = false } = {}) {
   return h('span', { className: 'svc-btns' }, ...out)
 }
 
-// ---------- painting (inside the Docker panel body) ----------
+// ---------- painting ----------
 function paintKube(tab, body) {
   const K = tab.kube
   tab.rpanelBody.classList.toggle('flush', K.view?.type === 'logs')

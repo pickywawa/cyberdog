@@ -1,6 +1,11 @@
 // 中文（简体）— pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.zh = L })({
-"kube.panel":"Docker 与 Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"自定义工具栏",
+"bar.done":"完成",
+"bar.reset":"重置",
+"bar.config_hint":"拖动以排序 · 点击以显示或隐藏",
 "kube.context":"上下文",
 "kube.namespace":"命名空间",
 "kube.all_namespaces":"所有命名空间",
@@ -358,7 +363,7 @@
 "cert.renewing":"Certbot 续期进行中…",
 "cert.result":"Certbot 输出",
 "cert.command_done":"Certbot 已完成。刷新后请检查新的日期。",
-"keys.title":"SSH 密钥管理器",
+"keys.title":"SSH 密钥",
 "keys.note":"密钥在本地 ~/.ssh/cyberdog 中生成。只有公钥会安装到远程账户。密码短语仅在本次应用会话期间保留在内存中。",
 "keys.generate":"生成密钥",
 "keys.import":"导入公钥…",

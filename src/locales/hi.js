@@ -1,6 +1,11 @@
 // हिन्दी — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.hi = L })({
-"kube.panel":"Docker और Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"बार अनुकूलित करें",
+"bar.done":"हो गया",
+"bar.reset":"रीसेट करें",
+"bar.config_hint":"क्रम बदलने के लिए खींचें · दिखाने या छिपाने के लिए क्लिक करें",
 "kube.context":"संदर्भ",
 "kube.namespace":"नेमस्पेस",
 "kube.all_namespaces":"सभी नेमस्पेस",
@@ -358,7 +363,7 @@
 "cert.renewing":"Certbot नवीनीकरण जारी है…",
 "cert.result":"Certbot आउटपुट",
 "cert.command_done":"Certbot पूरा हुआ। रीफ़्रेश के बाद नई तिथियाँ जाँचें।",
-"keys.title":"SSH कुंजी प्रबंधक",
+"keys.title":"SSH कुंजियाँ",
 "keys.note":"कुंजियाँ ~/.ssh/cyberdog में स्थानीय रूप से बनाई जाती हैं। रिमोट खाते पर केवल सार्वजनिक कुंजियाँ इंस्टॉल होती हैं। पासफ़्रेज़ इस ऐप सत्र के दौरान ही मेमोरी में रहते हैं।",
 "keys.generate":"कुंजी बनाएँ",
 "keys.import":"सार्वजनिक कुंजी आयात करें…",

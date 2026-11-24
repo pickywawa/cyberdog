@@ -1,6 +1,11 @@
 // Türkçe — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.tr = L })({
-"kube.panel":"Docker ve Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"Çubuğu özelleştir",
+"bar.done":"Bitti",
+"bar.reset":"Sıfırla",
+"bar.config_hint":"Sıralamak için sürükleyin · göstermek ya da gizlemek için tıklayın",
 "kube.context":"Bağlam",
 "kube.namespace":"Ad alanı",
 "kube.all_namespaces":"Tüm ad alanları",
@@ -358,7 +363,7 @@
 "cert.renewing":"Certbot yenilemesi sürüyor…",
 "cert.result":"Certbot çıktısı",
 "cert.command_done":"Certbot tamamlandı. Yeniledikten sonra yeni tarihleri kontrol edin.",
-"keys.title":"SSH anahtar yöneticisi",
+"keys.title":"SSH anahtarları",
 "keys.note":"Anahtarlar ~/.ssh/cyberdog içinde yerel olarak oluşturulur. Uzak hesaba yalnızca açık anahtarlar yüklenir. Parolalar bu uygulama oturumu boyunca bellekte kalır.",
 "keys.generate":"Anahtar oluştur",
 "keys.import":"Açık anahtarı içe aktar…",

@@ -1,6 +1,11 @@
 // العربية — pack de langue (voir i18n.js). Langue RTL : voir i18n.RTL.
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ar = L })({
-"kube.panel":"Docker وKubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"تخصيص الشريط",
+"bar.done":"تم",
+"bar.reset":"إعادة تعيين",
+"bar.config_hint":"اسحب لإعادة الترتيب · انقر للإظهار أو الإخفاء",
 "kube.context":"السياق",
 "kube.namespace":"مساحة الأسماء",
 "kube.all_namespaces":"كل مساحات الأسماء",
@@ -358,7 +363,7 @@
 "cert.renewing":"جارٍ التجديد عبر Certbot…",
 "cert.result":"مخرجات Certbot",
 "cert.command_done":"اكتمل Certbot. تحقّق من التواريخ الجديدة بعد التحديث.",
-"keys.title":"مدير مفاتيح SSH",
+"keys.title":"مفاتيح SSH",
 "keys.note":"تُنشأ المفاتيح محليًا في ‎~/.ssh/cyberdog. تُثبَّت المفاتيح العامة فقط على الحساب البعيد. تبقى عبارات المرور في الذاكرة طوال جلسة التطبيق هذه فقط.",
 "keys.generate":"إنشاء مفتاح",
 "keys.import":"استيراد مفتاح عام…",

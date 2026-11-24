@@ -31,6 +31,7 @@ const POLLS = {
   services: { every: 10000, run: t => svcPoll(t) },
   schedules: { every: 30000, run: t => schedulePoll(t) },
   docker: { every: 6000, run: t => dockerPoll(t) },
+  kube: { every: 6000, run: t => kubePoll(t) },
 }
 function pollStop(tab) {
   clearTimeout(tab.pollTimer)

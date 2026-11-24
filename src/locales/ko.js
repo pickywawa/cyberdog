@@ -1,6 +1,11 @@
 // 한국어 — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ko = L })({
-"kube.panel":"Docker 및 Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"바 사용자 지정",
+"bar.done":"완료",
+"bar.reset":"초기화",
+"bar.config_hint":"드래그하여 순서 변경 · 클릭하여 표시/숨기기",
 "kube.context":"컨텍스트",
 "kube.namespace":"네임스페이스",
 "kube.all_namespaces":"모든 네임스페이스",
@@ -358,7 +363,7 @@
 "cert.renewing":"Certbot 갱신 진행 중…",
 "cert.result":"Certbot 출력",
 "cert.command_done":"Certbot이 완료되었습니다. 새로 고친 후 새 날짜를 확인하세요.",
-"keys.title":"SSH 키 관리자",
+"keys.title":"SSH 키",
 "keys.note":"키는 ~/.ssh/cyberdog에 로컬로 생성됩니다. 원격 계정에는 공개 키만 설치됩니다. 암호 문구는 이 앱 세션 동안에만 메모리에 유지됩니다.",
 "keys.generate":"키 생성",
 "keys.import":"공개 키 가져오기…",

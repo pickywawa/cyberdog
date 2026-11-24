@@ -1,6 +1,11 @@
 // Português (Brasil) — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.pt = L })({
-"kube.panel":"Docker e Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"Personalizar a barra",
+"bar.done":"Concluir",
+"bar.reset":"Redefinir",
+"bar.config_hint":"Arraste para reordenar · clique para mostrar ou ocultar",
 "kube.context":"Contexto",
 "kube.namespace":"Namespace",
 "kube.all_namespaces":"Todos os namespaces",
@@ -358,7 +363,7 @@
 "cert.renewing":"Renovação do Certbot em andamento…",
 "cert.result":"Saída do Certbot",
 "cert.command_done":"Certbot concluído. Verifique as novas datas após atualizar.",
-"keys.title":"Gerenciador de chaves SSH",
+"keys.title":"Chaves SSH",
 "keys.note":"As chaves são geradas localmente em ~/.ssh/cyberdog. Somente as chaves públicas são instaladas na conta remota. As frases secretas ficam na memória durante esta sessão do app.",
 "keys.generate":"Gerar uma chave",
 "keys.import":"Importar chave pública…",

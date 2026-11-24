@@ -1,6 +1,11 @@
 // 日本語 — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ja = L })({
-"kube.panel":"Docker と Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"バーをカスタマイズ",
+"bar.done":"完了",
+"bar.reset":"リセット",
+"bar.config_hint":"ドラッグで並べ替え · クリックで表示/非表示",
 "kube.context":"コンテキスト",
 "kube.namespace":"名前空間",
 "kube.all_namespaces":"すべての名前空間",
@@ -358,7 +363,7 @@
 "cert.renewing":"Certbot で更新中…",
 "cert.result":"Certbot の出力",
 "cert.command_done":"Certbot が完了しました。更新後に新しい日付を確認してください。",
-"keys.title":"SSH 鍵マネージャー",
+"keys.title":"SSH 鍵",
 "keys.note":"鍵は ~/.ssh/cyberdog にローカルで生成されます。リモートアカウントには公開鍵のみがインストールされます。パスフレーズはこのアプリセッションの間だけメモリに保持されます。",
 "keys.generate":"鍵を生成",
 "keys.import":"公開鍵を読み込む…",

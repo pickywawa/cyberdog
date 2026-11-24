@@ -534,6 +534,26 @@ body.resizing-y { cursor: row-resize; }
 .rbar.expanded .rbar-label { display: inline; font-size: 11px; white-space: normal; text-align: left; }
 .rbar:not(.expanded) .rbar-toggle svg { transform: rotate(180deg); }
 .rbar-toggle { margin-bottom: 7px; }
+/* customizable bar: config button at the bottom, then drag to reorder and click to show / hide */
+.rbar-spacer { flex: 1 0 4px; }
+.rbar .rbar-config { flex: 0 0 34px; opacity: .7; }
+.rbar .rbar-config:hover, .rbar .rbar-config.accent { opacity: 1; }
+.rbar.config { width: 220px; }
+.rbar.config .rbar-toggle { display: none; }
+.rbar.config .ib[draggable="true"] { cursor: grab; position: relative; }
+.rbar.config .ib.dragging { opacity: 1; background: color-mix(in srgb, var(--accent) 10%, transparent); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -1px; }
+.rbar.config .ib.dragging > * { opacity: .25; }
+.rbar.config .ib[draggable="true"]:active { cursor: grabbing; }
+.rbar.config .ib { padding-left: 4px; gap: 6px; }
+.rbar .rbar-grip { display: inline-flex; opacity: .45; margin-right: -2px; }
+.rbar .rbar-grip svg { width: 14px; height: 14px; fill: currentColor; }
+.rbar.config .ib:hover .rbar-grip { opacity: .9; }
+.rbar.config .ib.off > svg, .rbar.config .ib.off .rbar-label { opacity: .4; }
+.rbar.config .ib.off .rbar-label { text-decoration: line-through; }
+.rbar .rbar-eye { margin-left: auto; display: inline-flex; opacity: .75; }
+.rbar .rbar-eye svg { width: 15px; height: 15px; }
+.rbar-hint { font-size: 10.5px; line-height: 1.35; padding: 0 6px 6px; }
+.rbar-reset { font-size: 11px; padding: 6px 8px; }
 .security-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .security-tools > input { flex: 1; min-width: 180px; }
 .security-tools label { display: flex; align-items: center; gap: 7px; font-size: 12px; }

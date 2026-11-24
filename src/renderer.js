@@ -804,22 +804,119 @@ const PANELS = {
   services: { title: 'svc.title', render: t => renderServices(t) },
   schedules: { title: 'cron.title', render: t => renderSchedules(t), leave: t => leaveSchedules(t) },
   logs: { title: 'log.title', render: t => renderLogs(t), leave: t => leaveLogs(t) },
-  docker: { title: 'kube.panel', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  docker: { title: 'docker.title', render: t => renderDocker(t), leave: t => leaveDocker(t) },
+  kube: { title: 'kube.title', render: t => renderKube(t), leave: t => leaveKube(t) },
   certificates: { title: 'cert.title', render: t => renderCertificates(t) },
   keys: { title: 'keys.title', render: t => renderKeys(t) },
   paths: { title: 'paths.title', render: t => renderPaths(t) },
   sync: { title: 'sync.title', render: t => renderSync(t) },
   actions: { title: 'qa.title', render: t => renderActions(t) },
 }
-const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['schedules', 'clock', 'cron.title'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'kube.panel'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['sync', 'sync', 'bar.sync'], ['actions', 'zap', 'bar.actions']]
+const BAR = [['term', 'terminal', 'bar.terminal'], ['dashboard', 'activity', 'bar.dashboard'], ['processes', 'processes', 'proc.title'], ['services', 'cog', 'bar.services'], ['schedules', 'clock', 'cron.title'], ['logs', 'scroll', 'bar.logs'], ['docker', 'box', 'docker.title'], ['kube', 'kube', 'kube.title'], ['certificates', 'shield', 'cert.title'], ['keys', 'key', 'keys.title'], ['paths', 'bookmark', 'bar.paths'], ['sync', 'sync', 'bar.sync'], ['actions', 'zap', 'bar.actions']]
 
+// The bar can be customized (order, hidden views): one layout for every server, kept in localStorage.
+// A view missing from the saved order (added by an update) keeps its default place.
+const BAR_KEY = 'cyberdog.rbarLayout'
+let barLayout = (() => { try { const v = JSON.parse(localStorage.getItem(BAR_KEY)); return { order: Array.isArray(v?.order) ? v.order : [], hidden: Array.isArray(v?.hidden) ? v.hidden : [] } } catch { return { order: [], hidden: [] } } })()
+let barConfig = false
+const saveBarLayout = () => localStorage.setItem(BAR_KEY, JSON.stringify(barLayout))
+function orderedBar() {
+  // an unknown view goes right after the view that precedes it by default
+  const rank = new Map()
+  let last = -1
+  BAR.forEach(([k]) => { const r = barLayout.order.indexOf(k); last = r >= 0 ? r : last + 0.01; rank.set(k, last) })
+  return [...BAR].sort((a, b) => rank.get(a[0]) - rank.get(b[0]))
+}
 // Object storage / WebDAV servers have no shell: only the file explorer and saved paths make sense.
-// The editor's button is there only while files are open in it
-const barFor = (server, tab) => [...(tab?.editor?.files.length ? [['editor', 'file-code', 'editor.title']] : []), ...(isShell(server) ? BAR : BAR.filter(([k]) => k === 'paths' || k === 'sync'))]
+// The editor's button is there only while files are open in it (always first, not configurable)
+const barFor = (server, tab) => {
+  const items = orderedBar().filter(([k]) => isShell(server) || k === 'paths' || k === 'sync')
+  return [...(tab?.editor?.files.length ? [['editor', 'file-code', 'editor.title']] : []), ...(barConfig ? items : items.filter(([k]) => !barLayout.hidden.includes(k)))]
+}
+// Drag and drop while configuring: the dragged view moves live in the bar and the others slide out of its way,
+// the order is saved when it is dropped (Escape or a drop outside the bar puts it back).
+let barDrag = null
+function barButton(tab, key, ic, title) {
+  const b = ib(ic, title, () => {
+    if (!barConfig) return key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)
+    if (key !== 'editor') toggleBarItem(key)
+  })
+  b.dataset.key = key
+  b.ondragstart = e => {
+    if (!barConfig || key === 'editor') return e.preventDefault()
+    barDrag = { key, tab, dropped: false, start: barKeysIn(tab) }
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', key)
+    // the placeholder look comes after the browser took its picture of the button
+    requestAnimationFrame(() => b.classList.add('dragging'))
+  }
+  b.ondragend = () => {
+    const d = barDrag
+    barDrag = null
+    b.classList.remove('dragging')
+    if (!d) return
+    if (d.dropped) saveBarOrder(barKeysIn(d.tab))
+    else tabs.forEach(tb => tb.rightBar && rebuildBar(tb))
+  }
+  b.ondragover = e => {
+    if (!barDrag || barDrag.tab !== tab || key === 'editor') return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const moving = tab.bar[barDrag.key]
+    if (moving === b) return
+    const r = b.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2
+    const ref = after ? b.nextSibling : b
+    if (ref === moving || moving.nextSibling === ref) return
+    slideBar(tab, () => tab.rightBar.insertBefore(moving, ref))
+  }
+  return b
+}
+const barKeysIn = tab => [...tab.rightBar.querySelectorAll('[data-key]')].map(x => x.dataset.key).filter(k => k !== 'editor')
+// FLIP: the views keep their old place for a frame, then glide to the new one
+function slideBar(tab, change) {
+  const items = [...tab.rightBar.querySelectorAll('[data-key]')]
+  const before = new Map(items.map(x => [x, x.getBoundingClientRect().top]))
+  change()
+  for (const x of items) {
+    const dy = before.get(x) - x.getBoundingClientRect().top
+    if (!dy) continue
+    x.style.transition = 'none'
+    x.style.transform = `translateY(${dy}px)`
+    requestAnimationFrame(() => { x.style.transition = 'transform .16s ease'; x.style.transform = '' })
+  }
+}
+// The bar may show only some views (servers without a shell): they take the places of the shown ones in the full order
+function saveBarOrder(shown) {
+  const full = orderedBar().map(([k]) => k), set = new Set(shown), next = [...shown]
+  barLayout.order = full.map(k => (set.has(k) ? next.shift() : k))
+  saveBarLayout()
+  tabs.forEach(tb => tb.rightBar && rebuildBar(tb))
+}
+function toggleBarItem(key) {
+  const hidden = new Set(barLayout.hidden)
+  hidden.has(key) ? hidden.delete(key) : hidden.add(key)
+  barLayout.hidden = [...hidden]
+  saveBarLayout()
+  // a view that gets hidden is closed where it is open
+  if (hidden.has(key)) tabs.forEach(tb => { if (tb.panel === key) setPanel(tb, key) })
+  tabs.forEach(tb => tb.rightBar && rebuildBar(tb))
+}
+function setBarConfig(on) {
+  barConfig = on
+  tabs.forEach(tb => tb.rightBar && rebuildBar(tb))
+}
+function resetBarLayout() {
+  barLayout = { order: [], hidden: [] }
+  saveBarLayout()
+  tabs.forEach(tb => tb.rightBar && rebuildBar(tb))
+}
 function rebuildBar(tab) {
   tab.barItems = barFor(tab.server, tab)
-  for (const [key, ic, title] of tab.barItems) tab.bar[key] ||= ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
-  tab.rightBar.replaceChildren(tab.barToggle, ...tab.barItems.map(([k]) => tab.bar[k]))
+  for (const [key, ic, title] of tab.barItems) tab.bar[key] ||= barButton(tab, key, ic, title)
+  tab.barConfigBtn ||= h('button', { className: 'ib rbar-config', onclick: () => setBarConfig(!barConfig) })
+  tab.barReset ||= h('button', { className: 'rbar-reset', onclick: resetBarLayout })
+  tab.barHint ||= h('small', { className: 'rbar-hint dim' })
+  tab.rightBar.replaceChildren(tab.barToggle, ...(barConfig ? [tab.barHint] : []), ...tab.barItems.map(([k]) => tab.bar[k]), h('span', { className: 'rbar-spacer' }), ...(barConfig ? [tab.barReset] : []), tab.barConfigBtn)
   updateBar(tab)
 }
 
@@ -849,17 +946,31 @@ function toggleRightBar() {
 }
 function updateBar(tab) {
   tab.rightBar.ariaLabel = t('bar.views')
-  tab.rightBar.classList.toggle('expanded', rightBarExpanded)
+  tab.rightBar.classList.toggle('expanded', rightBarExpanded || barConfig)
+  tab.rightBar.classList.toggle('config', barConfig)
   tab.barToggle.innerHTML = icon('chevron-right') + `<span class="rbar-label">${t('bar.collapse')}</span>`
   tab.barToggle.title = t(rightBarExpanded ? 'bar.collapse' : 'bar.expand')
   tab.barToggle.ariaExpanded = String(rightBarExpanded)
   for (const [key, ic, title] of tab.barItems) {
     tab.bar[key].title = t(title)
-    tab.bar[key].innerHTML = icon(ic)
+    tab.bar[key].innerHTML = (barConfig && key !== 'editor' ? `<span class="rbar-grip">${icon('grip')}</span>` : '') + icon(ic)
     tab.bar[key].append(h('span', { className: 'rbar-label', textContent: t(title) }))
+    const off = barLayout.hidden.includes(key)
+    tab.bar[key].draggable = barConfig && key !== 'editor'
+    tab.bar[key].classList.toggle('off', barConfig && off)
+    if (barConfig && key !== 'editor') tab.bar[key].append(h('span', { className: 'rbar-eye', innerHTML: icon(off ? 'eye-off' : 'eye') }))
+    if (barConfig) tab.bar[key].ariaPressed = String(!off)
+    else tab.bar[key].removeAttribute('aria-pressed')
   }
-  tab.bar.term?.classList.toggle('on', !!tab.term)
-  for (const [key] of tab.barItems) if (key !== 'term') tab.bar[key].classList.toggle('on', tab.panel === key)
+  if (tab.barConfigBtn) {
+    tab.barConfigBtn.innerHTML = icon(barConfig ? 'check' : 'sliders') + `<span class="rbar-label">${t(barConfig ? 'bar.done' : 'bar.customize')}</span>`
+    tab.barConfigBtn.title = t(barConfig ? 'bar.done' : 'bar.customize')
+    tab.barConfigBtn.classList.toggle('accent', barConfig)
+    tab.barReset.textContent = t('bar.reset')
+    tab.barHint.textContent = t('bar.config_hint')
+  }
+  tab.bar.term?.classList.toggle('on', !barConfig && !!tab.term)
+  for (const [key] of tab.barItems) if (key !== 'term') tab.bar[key].classList.toggle('on', !barConfig && tab.panel === key)
   tab.termTitle.textContent = `${t('term.title')} — ${serverTarget(tab.server)}`
 }
 
@@ -1691,10 +1802,11 @@ function openFiles(server, { terminal = false, path = null, split = null } = {})
 
   // barre d'outils (tout à droite)
   tab.bar = {}
-  tab.barItems = barFor(server, tab)
-  for (const [key, ic, title] of tab.barItems) tab.bar[key] = ib(ic, title, () => (key === 'term' ? toggleTerminal(tab) : setPanel(tab, key)))
   tab.barToggle = h('button', { className: 'ib rbar-toggle', onclick: toggleRightBar })
-  tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') }, tab.barToggle, ...tab.barItems.map(([k]) => tab.bar[k]))
+  tab.rightBar = h('nav', { className: 'rbar', ariaLabel: t('bar.views') })
+  tab.rightBar.ondragover = e => { if (barDrag?.tab === tab) e.preventDefault() }
+  tab.rightBar.ondrop = e => { if (barDrag?.tab !== tab) return; e.preventDefault(); barDrag.dropped = true }
+  rebuildBar(tab)
   tab.el = h('div', { className: 'pane ws' }, tab.wsMain, tab.rpanel, tab.rightBar)
   applyI18n(tab.el)
   updateBar(tab)

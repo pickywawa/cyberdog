@@ -1,4 +1,4 @@
-// Run: npx electron test/smoke/kube-ui.cjs — the Kubernetes tab of the Docker panel in a real window, with kubectl
+// Run: npx electron test/smoke/kube-ui.cjs — the Kubernetes panel in a real window, with kubectl
 // replaced by a fake cluster in main. Docker | Kubernetes switch, contexts and namespaces, pods with status and metrics,
 // search, logs per container, describe / YAML, shell in the terminal, delete, workloads restart and scale, nodes, events.
 const { app, ipcMain } = require('electron'), fs = require('node:fs'), path = require('node:path'), os = require('node:os'), assert = require('node:assert/strict')
@@ -61,7 +61,7 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     win.setSize(1400, 900)
     await js(`window.ensure = async tab => { const T = tab.root || tab; if (T.connId) return; const r = await api.invoke('files:openLocal'); T.connId = r.id; T.home = r.home }
       window.confirm = () => true
-      window.__t = { tab: () => tabs.find(t => t.id === activeId), body: () => __t.tab().dockerBody, text: () => __t.body().innerText,
+      window.__t = { tab: () => tabs.find(t => t.id === activeId), body: () => __t.tab().kubeBody || __t.tab().dockerBody, text: () => __t.body().innerText,
         rows: () => [...__t.body().querySelectorAll('.kube-list .dk')].map(r => r.querySelector('b').textContent),
         row: name => [...__t.body().querySelectorAll('.kube-list .dk')].find(r => r.querySelector('b').textContent === name),
         btn: (name, title) => [...__t.row(name).querySelectorAll('.svc-btns .ib')].find(b => b.title === title),
@@ -69,13 +69,16 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
         chip: label => [...__t.body().querySelectorAll('.kube-kinds .chip')].find(b => b.textContent === label) }; true`)
     await js(`void openFiles({ id: 'smoke', type: 'local', name: 'Smoke', host: 'localhost' }, { path: ${JSON.stringify(os.homedir())} })`)
     await wait(`!!__t.tab()?.connId`, 'tab open')
+    // Docker and Kubernetes are two panels of their own, one button each in the bar (Kubernetes right below Docker)
+    const barKeys = await js(`barFor({ type: 'ssh' }).map(([k]) => k)`)
+    assert.equal(barKeys.indexOf('kube'), barKeys.indexOf('docker') + 1, 'Kubernetes below Docker')
     await js(`setPanel(__t.tab(), 'docker')`)
-    await wait(`!!__t.seg('Kubernetes')`, 'engine switch')
-    assert.equal(await js(`__t.tab().rpanelTitle.textContent`), 'Docker et Kubernetes')
-    assert.equal(await js(`__t.seg('Docker').classList.contains('on')`), true, 'Docker by default')
+    assert.equal(await js(`__t.tab().rpanelTitle.textContent`), 'Docker')
+    assert.equal(await js(`!!__t.seg('Kubernetes')`), false, 'no engine switch in the Docker panel')
 
     // Kubernetes: contexts, namespaces, pods (failing first), metrics, summary
-    await js(`__t.seg('Kubernetes').click()`)
+    await js(`setPanel(__t.tab(), 'kube')`)
+    assert.equal(await js(`__t.tab().rpanelTitle.textContent`), 'Kubernetes')
     await wait(`__t.rows().length === 3`, 'pods')
     assert.deepEqual(await js(`__t.rows()`), ['worker-5c-k8', 'coredns-1', 'api-7d9f-x2'])
     assert.deepEqual(await js(`[...__t.body().querySelectorAll('.kube-tools select')].map(s => [...s.options].map(o => o.value))`), [['default', 'staging'], ['', 'kube-system', 'monitoring', 'web']])
@@ -142,9 +145,9 @@ app.on('browser-window-created', (_, win) => win.webContents.once('did-finish-lo
     await shot('events')
 
     // back to Docker
-    await js(`__t.seg('Docker').click()`)
+    await js(`setPanel(__t.tab(), 'docker')`)
     await wait(`__t.text().includes(${JSON.stringify('Aucun conteneur')}) || !!__t.body().querySelector('.msg')`, 'docker')
-    console.log('Kubernetes UI passed: engine switch, contexts, namespaces, pod status + metrics, search focus, logs per container, shell, describe/YAML, delete, restart, scale, nodes, events.')
+    console.log('Kubernetes UI passed: own panel, contexts, namespaces, pod status + metrics, search focus, logs per container, shell, describe/YAML, delete, restart, scale, nodes, events.')
     app.exit(0)
   } catch (e) { console.error(e); await win.webContents.capturePage().then(i => fs.writeFileSync(path.join(shots, 'kube-failure.png'), i.toPNG())).catch(() => {}); app.exit(1) }
 }))

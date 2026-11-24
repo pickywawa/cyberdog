@@ -1,6 +1,11 @@
 // Русский — pack de langue (voir i18n.js). Pluriel : _one (1, 21…), _few (2–4, 22–24…), clé de base (5–20…).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.ru = L })({
-"kube.panel":"Docker и Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"Настроить панель",
+"bar.done":"Готово",
+"bar.reset":"Сбросить",
+"bar.config_hint":"Перетащите для сортировки · нажмите, чтобы показать или скрыть",
 "kube.context":"Контекст",
 "kube.namespace":"Пространство имён",
 "kube.all_namespaces":"Все пространства имён",
@@ -358,7 +363,7 @@
 "cert.renewing":"Выполняется обновление Certbot…",
 "cert.result":"Вывод Certbot",
 "cert.command_done":"Certbot завершил работу. Проверьте новые даты после обновления.",
-"keys.title":"Менеджер SSH-ключей",
+"keys.title":"SSH-ключи",
 "keys.note":"Ключи создаются локально в ~/.ssh/cyberdog. В удалённую учётную запись устанавливаются только открытые ключи. Парольные фразы хранятся в памяти только в течение этого сеанса приложения.",
 "keys.generate":"Создать ключ",
 "keys.import":"Импортировать открытый ключ…",

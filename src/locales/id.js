@@ -1,6 +1,11 @@
 // Bahasa Indonesia — pack de langue (voir i18n.js).
 ;(function (L) { if (typeof module !== 'undefined') module.exports = L; else i18n.PACKS.id = L })({
-"kube.panel":"Docker & Kubernetes",
+"docker.title":"Docker",
+"kube.title":"Kubernetes",
+"bar.customize":"Sesuaikan bilah",
+"bar.done":"Selesai",
+"bar.reset":"Atur ulang",
+"bar.config_hint":"Seret untuk mengurutkan · klik untuk menampilkan atau menyembunyikan",
 "kube.context":"Konteks",
 "kube.namespace":"Namespace",
 "kube.all_namespaces":"Semua namespace",
@@ -358,7 +363,7 @@
 "cert.renewing":"Pembaruan Certbot sedang berlangsung…",
 "cert.result":"Keluaran Certbot",
 "cert.command_done":"Certbot selesai. Periksa tanggal baru setelah penyegaran.",
-"keys.title":"Pengelola kunci SSH",
+"keys.title":"Kunci SSH",
 "keys.note":"Kunci dibuat secara lokal di ~/.ssh/cyberdog. Hanya kunci publik yang dipasang di akun jarak jauh. Frasa sandi tetap di memori selama sesi aplikasi ini.",
 "keys.generate":"Buat kunci",
 "keys.import":"Impor kunci publik…",

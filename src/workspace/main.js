@@ -18,6 +18,8 @@ const cloud = require('./cloud-account').createCloudAccount({config:cloudConfig,
   send('servers:changed',list())
   send('shared:changed',{groups:allGroups(),actions:allActions(),paths:allPaths()})
 }})
+// The Mac App Store edition ships an account stub (available:false) and registers no account channel.
+if(cloud.available!==false){
 accountIPC('account:sign-in',value=>cloud.signIn(value))
 accountIPC('account:sign-up',value=>cloud.signUp(value))
 accountIPC('account:verify-code',value=>cloud.verifyCode(value))
@@ -28,11 +30,13 @@ accountIPC('account:delete',()=>cloud.deleteAccount())
 accountIPC('teams:status',()=>cloud.init())
 accountIPC('teams:refresh',()=>cloud.refresh())
 accountIPC('teams:action',(action,payload)=>cloud.action(action,payload))
+}
 // Vault credentials never enter cloud payloads or the ordinary server store.
 const vaults=require('./secret-vaults').createVaults({directory:app.getPath('userData'),safeStorage,fetch:(...args)=>net.fetch(...args),authorize:async()=>{}})
 const vaultPins=()=>{try{return vaults.pins()}catch{return[]}}
 const vaultChanged=()=>{send('servers:changed',list());send('vaults:changed')}
 const closeVaultConnections=id=>{if(typeof routes!=='undefined'){if(id)routes.closeDependency(null,id);else routes.closeAll()}for(const c of [...conns.values(),...pendingVaultClients])if(c.server?.vaultId&&(!id||c.server.vaultId===id))c.client.end()}
+if(vaults.available!==false){
 accountIPC('vaults:list',()=>vaults.list())
 accountIPC('vaults:save',async value=>{const result=await vaults.saveConnector(value);closeVaultConnections(result.id);vaultChanged();return result})
 accountIPC('vaults:browse',id=>vaults.browse(id))
@@ -42,6 +46,7 @@ accountIPC('vaults:unpin',id=>{beforeDeleteServer(id);vaults.unpin(id);for(const
 accountIPC('vaults:remove',async id=>{for(const pin of vaultPins().filter(s=>s.vaultId===id))beforeDeleteServer(pin.id);await vaults.remove(id);closeVaultConnections(id);vaultChanged()})
 accountIPC('vaults:unlock',async (id,token)=>{const result=await vaults.unlock(id,token);vaultChanged();return result})
 accountIPC('vaults:lock',id=>{vaults.lock(id);closeVaultConnections(id);vaultChanged()})
+}
 
 // SSH routes own their sockets, trust decisions and authorization leases.
 const routeTools=require('./bastions/route')

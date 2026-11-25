@@ -22,6 +22,8 @@ const removed = [
 module.exports = {
   ...base,
   publish: null,
+  // team invitation links (cyberdog://): no account in this edition
+  protocols: [],
   files: [
     {
       filter: [
@@ -33,6 +35,5 @@ module.exports = {
     { from: 'build/mas/stubs', to: '.', filter: ['**/*'] },
     { from: 'build/mas/generated', to: '.', filter: ['**/*'] },
   ],
-  mac: { ...base.mac, protocols: [] },
-  mas: { ...base.mas, files: undefined, protocols: [] },
+  mas: { ...base.mas, files: undefined },
 }

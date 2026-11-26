@@ -39,7 +39,7 @@ A free, open-source alternative to Cyberduck, WinSCP and Termius: SFTP explorer,
 | 🛡️ **Bastions** | Reach private servers through a reusable bastion, with a route test and fingerprint checks. |
 | 👥 **Free teams** | Share servers, scripts and paths with roles, invitation links and history. The account is optional. |
 | 🔐 **Secret vaults** | 1Password, Bitwarden, HashiCorp Vault, AWS Secrets Manager, Azure Key Vault and five more: credentials are read at connection time. |
-| 🔁 **Share your setup** | Selectively export groups, servers, actions and paths to ZIP. Import configuration, **Cyberduck**, **FileZilla XML** and **WinSCP INI**. |
+| 🔁 **Share your setup** | Selectively export groups, servers, actions and paths to ZIP. Import from **Cyberduck, FileZilla, WinSCP, Transmit, WebSSH, MobaXterm, SecureCRT, PuTTY, Tabby, rclone** and your SSH config, found on their own, passwords included when the client allows it. |
 | 🎨 **Made to look good** | 7 themes, 14 languages, discreet scrollbars, tabs for as many servers as you like. |
 
 ---
@@ -66,7 +66,7 @@ FTP, S3, Azure, WebDAV and the cloud drives can go through an **HTTP (CONNECT) o
 
 ## 🔁 Coming from Cyberduck, WinSCP, FileZilla or Termius?
 
-- **Import your servers:** the import menu reads **Cyberduck** bookmarks, **FileZilla** (`sitemanager.xml` or an XML export), **WinSCP** (INI from *Tools → Export/Backup configuration*) and Cyberdog ZIP files. Third-party passwords are not imported.
+- **Import your servers:** Cyberdog finds Cyberduck, FileZilla, WinSCP, Transmit, WebSSH, MobaXterm, SecureCRT, PuTTY, Tabby, rclone and your SSH config (VS Code Remote-SSH) on this computer and shows how many servers are waiting on the home page. A summary lets you pick them before importing; saved passwords come along when the client keeps them readable.
 - **Comparisons, including where the others are better:** [Cyberdog vs Cyberduck](https://pickywawa.github.io/cyberdog/cyberduck-alternative.html) · [Cyberdog vs WinSCP](https://pickywawa.github.io/cyberdog/winscp-alternative.html) · [Cyberdog vs Termius](https://pickywawa.github.io/cyberdog/termius-alternative.html).
 
 ---
@@ -178,7 +178,13 @@ The ZIP contains a `manifest.json` and `groups/`, `servers/`, `actions/` and `pa
 
 **Import → Configuration ZIP** restores these categories together and also accepts legacy server or action ZIPs. Imports merge without overwriting existing connection credentials. Saved paths are mapped to matching servers even when their internal IDs differ. A server-specific path exported without its server requires that server to already exist at the destination; unmatched paths are skipped and counted in the result.
 
-The import menu retains **Cyberduck** and adds SFTP sites from **FileZilla** (`sitemanager.xml` or an XML export) and **WinSCP** (INI via [Tools → Export/Backup configuration](https://winscp.net/eng/docs/config)). Third-party passwords are not imported. Transmit and SolarWinds formats are not supported yet.
+### Import from other clients
+
+Cyberdog looks for the clients installed on this computer: **Cyberduck**, **FileZilla**, **WinSCP**, **Transmit**, **WebSSH**, **MobaXterm**, **SecureCRT**, **PuTTY**, **Tabby**, **rclone** and your **SSH config** (the one VS Code Remote-SSH reads). The home page shows a card for each one with the number of servers still to import (highlighted until they are all in), and the import menu lists them too. Any of them can also be read from a file (*Import → From a file*), for example a WinSCP INI from [Tools → Export/Backup configuration](https://winscp.net/eng/docs/config).
+
+Before anything is written, a **summary** lists the new servers (ticked) and the ones already imported (unticked: tick them to update them instead of creating a copy). Groups and folders follow, and SFTP, FTP/FTPS, S3, WebDAV, Azure and cloud drives are recognized.
+
+**Passwords** come along when the client keeps them readable: FileZilla, WinSCP, WebSSH and rclone (even an encrypted `rclone.conf`, with its password), SecureCRT and MobaXterm (with their master password / passphrase). They are encrypted with the system keychain, like the ones you type. The summary says why the others stay behind: Cyberduck and Transmit keep them in the system keychain, Tabby in its own vault, and FileZilla / WinSCP master passwords use a format Cyberdog does not read yet. Termius (encrypted database, no export) and Commander One cannot be imported.
 
 Saved paths live in the version-independent user data directory. Writes are atomic, with a `paths.json.bak` copy for recovery if the primary file becomes unreadable. An unavailable external configuration directory retains its saved location and shows a message instead of silently switching directories.
 
@@ -186,7 +192,7 @@ Saved paths live in the version-independent user data directory. Writes are atom
 
 Click a server (or press Enter on a focused server) to open it. An animated Cyberdog and opening status appear in the central workspace while connecting.
 
-Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import everything from Cyberduck** in one click. The welcome page walks you through the options.
+Add servers with a name, host, login and password (or rely on your SSH agent / key). Drag them to reorder, sort A→Z, and **import your servers from the clients you already use** in one click. The welcome page walks you through the options.
 
 Keep a long list tidy: **groups** (collapsible, remembered between launches), **favorites** (★ on a server or a whole group: they float to the top under a *Favorites* separator), a **live search** box (🔍) that filters servers and groups as you type, and **Duplicate** in the right-click menu to create a new server pre-filled from an existing one. Drag a server onto a group to move it.
 
@@ -478,6 +484,12 @@ The bilingual showcase is hosted at [pickywawa.github.io/cyberdog](https://picky
 ## 📰 Release notes
 
 Every version is on the [GitHub releases](https://github.com/pickywawa/cyberdog/releases) page.
+
+### 1.17.0
+
+- **Import from other clients**: Cyberdog finds Cyberduck, FileZilla, WinSCP, Transmit, WebSSH, MobaXterm, SecureCRT, PuTTY, Tabby, rclone and your SSH config (VS Code Remote-SSH) on its own. The home page shows a card per client with the servers still to import; a summary lets you untick servers, and update the ones already imported instead of duplicating them.
+- **Passwords** are imported when the client keeps them readable (FileZilla, WinSCP, WebSSH, rclone, SecureCRT and MobaXterm with their master password), encrypted with the system keychain; the summary explains why the others are not.
+- S3, WebDAV, Azure and cloud drives are imported too, not only SFTP and FTP.
 
 ### 1.16.0
 

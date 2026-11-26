@@ -464,7 +464,7 @@ function renderServers() {
   }
   appendExtensionServers(ul,{sharedServers,srvMatch,grpMatch,q,activeServer})
   if (q && !ul.childElementCount) ul.append(h('li', { className: 'srv-empty', textContent: t('srvs.no_match') }))
-  $('#card-export').hidden = false
+  if (typeof paintImportCards === 'function') paintImportCards()
 }
 
 async function sortServers() {
@@ -484,31 +484,19 @@ $('#btn-group').onclick = () => groupForm()
 $('#srv-q').oninput = e => { srvQuery = e.target.value; renderServers() }
 $('#srv-q').onkeydown = e => { if (e.key === 'Escape') toggleSrvSearch(false) }
 
-const importFrom = ch => async () => {
-  try {
-    const r = await api.invoke(ch)
-    if (!r) return
-    servers = r.servers
-    renderServers()
-    toast(r.added ? `${t('t.imported', { n: r.added })} ${t('t.pw_hint')}` : t('t.nothing'), false, 6000)
-  } catch (e) { toast(errText(e), true) }
-}
 const importZip = () => importConfiguration()
-const importCyberduck = importFrom('servers:import')
 const exportZip = () => exportConfiguration()
 
 $('#btn-add').onclick = $('#card-add').onclick = () => serverForm()
 $('#btn-sort').onclick = sortServers
 $('#btn-export').onclick = $('#card-export').onclick = exportZip
-$('#card-cyberduck').onclick = importCyberduck
 $('#card-zip').onclick = importZip
 $('#btn-import').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect()
   menu(r.left, r.bottom + 4, [
     { label: t('menu.import_zip'), icon: 'archive', fn: importZip },
-    { label: t('menu.import_cyberduck'), icon: 'download', fn: importCyberduck },
-    { label: 'FileZilla (XML)…', icon: 'download', fn: () => importConfiguration('filezilla') },
-    { label: 'WinSCP (INI)…', icon: 'download', fn: () => importConfiguration('winscp') },
+    '-',
+    ...importMenuItems(),
   ])
 }
 $('#btn-theme').onclick = e => {

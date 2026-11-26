@@ -55,9 +55,9 @@ async function exportConfiguration() {
     syncTotal(); form.querySelector('input,button')?.focus()
   } catch (e) { toast(errText(e), true) }
 }
-async function importConfiguration(source) {
+async function importConfiguration() {
   try {
-    const r = source ? await api.invoke('config:import-client', source) : await api.invoke('config:import')
+    const r = await api.invoke('config:import')
     if (!r) return
     servers = r.servers; groups = r.groups; quickActions = r.actions; savedPaths = r.paths
     renderServers(); repaintPaths(); repaintActions()

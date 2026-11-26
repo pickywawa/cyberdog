@@ -13,10 +13,8 @@ const { execFile } = require('child_process')
 const fs = require('fs')
 const os = require('os')
 const crypto = require('crypto')
-const { parseDuck } = require('./duck')
 const { exportZip, readZip } = require('./share')
 const configTransfer = require('./config-transfer')
-const clientImport = require('./client-import')
 const permissions = require('./permissions')
 const certificateTools = require('./certificates')
 const sshKeys = require('./ssh-keys')
@@ -260,7 +258,7 @@ const S = id => conns.get(id)?.sftp ?? (() => { throw new Error(t('err.lost')) }
 ipcMain.handle('servers:list', () => { Promise.resolve(extension.init()).catch(()=>{}); return list() })
 ipcMain.handle('app:downloads',()=>app.getPath('downloads'))
 
-ipcMain.handle('servers:save', async (_, d) => {
+async function saveServer(d) {
   if(extension.handlesServerData(d))return extension.saveServer(d)
 
   if(d.authMode!==undefined&&!['password','key'].includes(d.authMode))throw Error('invalid_auth_mode')
@@ -308,7 +306,8 @@ ipcMain.handle('servers:save', async (_, d) => {
   }
   persist()
   return list()
-})
+}
+ipcMain.handle('servers:save', (_, d) => saveServer(d))
 
 ipcMain.handle('servers:delete', async (_,id)=>{await extension.beforeDeleteServer?.(id);if(extension.owns(id))return extension.removeServer(id);servers=servers.filter(s=>s.id!==id);persist();return list()})
 
@@ -409,54 +408,8 @@ ipcMain.handle('paths:save', async (_, d) => {
 ipcMain.handle('paths:delete', async (_, id) => { if(await extension.deleteAsset('paths',id))return allPaths();if (pathsLoadError) throw pathsLoadError; savedPaths = savedPaths.filter(x => x.id !== id); writePaths(); return allPaths() })
 
 // ajoute un serveur venant d'un import (Cyberduck ou zip) sauf doublon host/port/user
-function addImported(b) {
-  if (typeof b?.host !== 'string' || !b.host.trim()) return false
-  let ftp = null
-  if (b.type === 'ftp') { try { ftp = serverType.storageFields({ type: 'ftp', host: b.host, port: b.port, security: b.security }) } catch { return false } }
-  const s = { name: String(b.name || b.host), host: b.host.trim(), port: +b.port || 22, user: String(b.user ?? ''), key: typeof b.key === 'string' ? b.key : undefined, ...ftp }
-  if (servers.some(x => x.host === s.host && x.port === s.port && x.user === s.user && (x.type || 'ssh') === (s.type || 'ssh'))) return false
-  const gname = typeof b.group === 'string' ? b.group.trim() : ''
-  if (gname) {
-    const g = groupByName(gname) ?? (groups.push({ id: crypto.randomUUID(), name: gname }), groups.at(-1))
-    s.group = g.id
-    saveGroups()
-  }
-  servers.push({ id: crypto.randomUUID(), ...s })
-  return true
-}
-
-// favoris Cyberduck (.duck) : macOS (version directe puis App Store/sandbox) ou Windows (%APPDATA%)
-const cyberduckDirs = () => {
-  if (isWin) return [path.join(process.env.APPDATA || '', 'Cyberduck', 'Bookmarks')]
-  const lib = path.join(os.homedir(), 'Library')
-  return [path.join(lib, 'Application Support/duck/Bookmarks'), path.join(lib, 'Group Containers/G69SCX94XU.duck/Library/Application Support/duck/Bookmarks')]
-}
-// XML tel quel ; plist binaire (macOS) converti par plutil
-async function readPlist(f) {
-  const raw = fs.readFileSync(f)
-  if (raw.includes('<plist')) return raw.toString('utf8')
-  return new Promise(res => execFile('plutil', ['-convert', 'xml1', '-o', '-', f], (e, out) => res(e ? '' : out)))
-}
-
-ipcMain.handle('servers:import', async () => {
-  let files = cyberduckDirs().filter(d => fs.existsSync(d)).flatMap(d => fs.readdirSync(d).filter(f => f.endsWith('.duck')).map(f => path.join(d, f)))
-  if (!files.length) {
-    const r = await dialog.showOpenDialog(win, {
-      title: t('dlg.cyberduck_title'),
-      message: t('dlg.cyberduck_msg'),
-      defaultPath: app.getPath('home'),
-      properties: ['openFile', 'multiSelections'],
-      filters: [{ name: t('dlg.cyberduck_filter'), extensions: ['duck'] }],
-    })
-    files = r.filePaths
-  }
-  let added = 0
-  for (const f of files) {
-    if (addImported(parseDuck(await readPlist(f)))) added++
-  }
-  persist()
-  return { servers: list(), added }
-})
+// ---------- Import from other clients (FileZilla, WinSCP, Cyberduck...) : see import-main.js ----------
+require('./import-main').register({ ipcMain, dialog, safeStorage, getWin: () => win, t, servers: () => servers, groups: () => groups, groupByName, addGroup: name => { const g = { id: crypto.randomUUID(), name }; groups.push(g); saveGroups(); return g }, saveServer, list, isMas })
 
 // ---------- Configuration bundles ----------
 const configData = () => ({ groups, servers, actions, paths: savedPaths })
@@ -493,16 +446,6 @@ ipcMain.handle('config:import', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'Cyberdog configuration ZIP', extensions: ['zip'] }] })
   if (r.canceled) return null
   return mergeConfiguration(configTransfer.readBundle(r.filePaths[0],extension.readBundleOptions?.()))
-})
-ipcMain.handle('config:import-client', async (_, source) => {
-  if (!['filezilla', 'winscp'].includes(source)) throw new Error('Unsupported import source')
-  const r = await dialog.showOpenDialog(win, { title: source === 'filezilla' ? 'FileZilla — XML' : 'WinSCP — INI', properties: ['openFile'], filters: [{ name: source, extensions: [source === 'filezilla' ? 'xml' : 'ini'] }] })
-  if (r.canceled) return null
-  const file = r.filePaths[0]
-  if (fs.statSync(file).size > 8e6) throw new Error('Import exceeds 8 MB')
-  const bytes = fs.readFileSync(file)
-  const text = bytes[0] === 0xff && bytes[1] === 0xfe ? bytes.subarray(2).toString('utf16le') : bytes.toString('utf8')
-  return mergeConfiguration({ groups: [], servers: clientImport[source](text), actions: [], paths: [] })
 })
 
 // ---------- SFTP ----------

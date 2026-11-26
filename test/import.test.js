@@ -114,8 +114,8 @@ assert.deepStrictEqual(imp.mobaxterm(moba).map(e => [e.name, e.group, e.type, e.
 assert.strictEqual(imp.mobaxterm(moba, { master: 'master!' })[0].pass, 'mobapw')
 
 // ---------- Tabby ----------
-const tab = imp.tabby(`groups:\n  - id: g1\n    name: Lab\nprofiles:\n  - type: ssh\n    name: pi\n    group: g1\n    options:\n      host: 10.0.0.9\n      user: pi\n      privateKeys:\n        - file:///home/me/.ssh/id_ed25519\n  - type: local\n    name: shell\n`)
-assert.deepStrictEqual(tab.map(e => [e.name, e.group, e.host, e.key, e.pw]), [['pi', 'Lab', '10.0.0.9', '/home/me/.ssh/id_ed25519', 'external']])
+const tab = imp.tabby(`groups:\n  - id: g1\n    name: Lab\nprofiles:\n  - type: ssh\n    name: pi\n    group: g1\n    options:\n      host: 10.0.0.9\n      user: pi\n      privateKeys:\n        - ${require('url').pathToFileURL(require('path').resolve('/keys/id_ed25519')).href}\n  - type: local\n    name: shell\n`)
+assert.deepStrictEqual(tab.map(e => [e.name, e.group, e.host, e.key, e.pw]), [['pi', 'Lab', '10.0.0.9', require('path').resolve('/keys/id_ed25519'), 'external']])
 
 // ---------- WebSSH ----------
 const rows = [['c1', 'objectType', 'connection'], ['c1', 'host', '10.30.40.20'], ['c1', 'port', 2222], ['c1', 'name', 'test'], ['c1', 'groupName', 'G'], ['c1', 'authentication.user', 'u'], ['c1', 'authentication.password', 'pw'], ['c1', 'roles', 'SSH,SFTP'], ['s1', 'objectType', 'setting'], ['d1', 'objectType', 'connection'], ['d1', 'host', 'gone'], ['d1', 'objectIsDeleted', 1]]

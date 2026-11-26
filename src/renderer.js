@@ -305,7 +305,7 @@ const isDrive = s => ['dropbox', 'onedrive', 'gdrive'].includes(s.type)
 const LOCAL_PANE_SERVER = { id: 'local', type: 'local', name: 'Local' }
 const serverTarget = s => s.type === 'local' ? t('ex.local_name') : ({
   s3: `S3 · ${s.bucket || s.host}`, webdav: `WebDAV · ${s.host}`, azure: `Azure · ${s.user}${s.bucket ? '/' + s.bucket : ''}`, azurefiles: `Azure Files · ${s.user}${s.bucket ? '/' + s.bucket : ''}`,
-  ftp: `${s.security === 'none' ? 'FTP' : 'FTPS'} · ${s.user}@${s.host}`, smb: `SMB · ${s.host}/${s.bucket}`, dropbox: 'Dropbox', onedrive: 'OneDrive', gdrive: 'Google Drive',
+  ftp: `${s.security === 'none' ? 'FTP' : 'FTPS'} · ${s.user}@${s.host}`, smb: `SMB · ${s.host}/${s.bucket}`, dropbox: t('type.dropbox'), onedrive: t('type.onedrive'), gdrive: t('type.gdrive'),
 }[s.type] ?? `${s.user}@${s.host}`)
 const hue = name => Math.abs([...name].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7)) % 360
 let dragId = null
@@ -519,7 +519,7 @@ $('#btn-lang').onclick = e => {
   const r = e.currentTarget.getBoundingClientRect()
   menu(r.left, r.top - 4, Object.entries(LANGS).map(([k, name]) => ({ label: name, checked: k === lang, fn: () => setLang(k) })), { up: true })
 }
-$('#btn-account').onclick = () => openSettingsModal('account')
+if ($('#btn-account')) $('#btn-account').onclick = () => openSettingsModal('account')
 $('#btn-settings').onclick = () => openSettingsModal()
 api.on('app:open-settings', openSettingsModal)
 function setTheme(name) { theme = name; settings.theme = name; applyTheme(); api.invoke('settings:set', { theme }) }
@@ -622,7 +622,9 @@ async function openSettingsModal(initialPage = 'general') {
   const vaultsPage=settingsPage('vaults','none')
   let vaultsMounted=false
   const pages=[generalPage,accountPage,editorPage,updatesPage,vaultsPage]
-  const sections=[['general','cog','settings.tab.general'],['account','user','account.connect'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']].filter(([name])=>!(api.mas&&(name==='updates'||name==='vaults')))
+  const sections=[['general','cog','settings.tab.general'],['account','user','account.connect'],['editor','file','settings.tab.editor'],['updates','download','settings.tab.updates'],['vaults','key','settings.vaults']]
+    // Sections whose code is absent from this edition (Mac App Store: no account, no secret vaults, App Store updates).
+    .filter(([name])=>!((name==='updates'&&api.mas)||(name==='vaults'&&typeof buildVaultSettings!=='function')||(name==='account'&&typeof buildAccountSettings!=='function')))
   const buttons=new Map()
   const sidebar=h('nav',{className:'settings-nav',role:'tablist',ariaLabel:t('settings.title'),ariaOrientation:'vertical'})
   const switchTab=name=>{
@@ -1856,7 +1858,7 @@ function openFiles(server, { terminal = false, path = null, split = null } = {})
   groups = await api.invoke('groups:list')
   savedPaths = await api.invoke('paths:list')
   renderServers()
-  await api.invoke('teams:status').then(updateAccount).catch(()=>{})
+  if (typeof buildAccountSettings === 'function') await api.invoke('teams:status').then(updateAccount).catch(()=>{})
   servers=await api.invoke('servers:list')
   renderServers()
   if (settings.restoreConnections) {

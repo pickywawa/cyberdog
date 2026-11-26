@@ -10,3 +10,4 @@ dist
 build/*.provisionprofile
 
 __pycache__/
+build/mas/generated/
